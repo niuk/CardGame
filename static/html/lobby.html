@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+    <link rel="android-chrome" sizes="192x192" href="favicon_io/android-chrome-192x192.png">
+    <link rel="android-chrome" sizes="512x512" href="favicon_io/android-chrome-512x512.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="favicon_io/apple-touch-icon.png">
+    <link rel="favicon" sizes="16x16" href="favicon_io/favicon-16x16.png">
+    <link rel="favicon" sizes="32x32" href="favicon_io/favicon-32x32.png">
+    <link rel="favicon" href="favicon_io/favicon.ico">
+    <form action="/game">
+        <label>Enter your name:</label>
+        <input type="text" name="playerName" id="playerName">
+        <br>
+        <br>
+        <button name="newGame" value="true">New Game</button>
+        <br>
+        <br>
+        <label>Or, join an existing game with identifier:</label>
+        <input type="text" name="gameId" id="gameId">
+        <button name="newGame" value="false">Enter</button>
+    </form>
+    <link rel="stylesheet" href="css/lobby.css" />
+    <script src="js/hax.js"></script>
+    <script type="module" src="js/lobby.js"></script>
+</html>
