@@ -17,17 +17,16 @@ class Game {
         this.cardsInDeck = [];
         this.turn = 0;
         this.gameId = gameId;
-        let cardId = 0;
         for (let i = 0; i < 4; ++i) {
             for (let j = 1; j <= 13; ++j) {
-                this.cardsInDeck.push([cardId++, [i, j]]);
-                this.cardsInDeck.push([cardId++, [i, j]]);
+                this.cardsInDeck.push([i, j]);
+                this.cardsInDeck.push([i, j]);
             }
         }
-        this.cardsInDeck.push([cardId++, util_1.Util.Joker.Big]);
-        this.cardsInDeck.push([cardId++, util_1.Util.Joker.Big]);
-        this.cardsInDeck.push([cardId++, util_1.Util.Joker.Small]);
-        this.cardsInDeck.push([cardId++, util_1.Util.Joker.Small]);
+        this.cardsInDeck.push(util_1.Util.Joker.Big);
+        this.cardsInDeck.push(util_1.Util.Joker.Big);
+        this.cardsInDeck.push(util_1.Util.Joker.Small);
+        this.cardsInDeck.push(util_1.Util.Joker.Small);
         this.run();
     }
     async run() {
@@ -64,10 +63,10 @@ class Game {
                 }
                 this.turn++;
                 this.players.forEach((player, playerName) => {
-                    const otherPlayerCardCounts = new Map();
+                    let otherPlayerCardCounts = {};
                     this.players.forEach((otherPlayer, otherPlayerName) => {
                         if (playerName !== otherPlayerName) {
-                            otherPlayerCardCounts.set(otherPlayerName, otherPlayer.cardsInHand.length);
+                            otherPlayerCardCounts[otherPlayerName] = otherPlayer.cardsInHand.length;
                         }
                     });
                     // send game state
@@ -93,6 +92,7 @@ const wssPort = port + 1111;
 const wss = new ws_1.default.Server({ port: wssPort });
 console.log(`WebSocket listening on port ${wssPort}`);
 wss.on('connection', function (ws) {
+    console.log(`new websocket connection from ${ws}`);
     // new websocket connection
     ws.on('message', function incoming(message) {
         // received heartbeat
@@ -100,7 +100,7 @@ wss.on('connection', function (ws) {
             const obj = JSON.parse(message);
             if ('timestamp' in obj) {
                 const playerState = obj;
-                //console.log(playerState);
+                console.log(playerState);
                 const game = gamesById.get(playerState.gameId);
                 if (game !== undefined) {
                     const player = game.players.get(playerState.playerName);
@@ -108,6 +108,7 @@ wss.on('connection', function (ws) {
                         game.players.set(playerState.playerName, new Player(ws, playerState));
                     }
                     else {
+                        player.ws = ws;
                         player.state = playerState;
                     }
                 }

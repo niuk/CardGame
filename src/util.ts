@@ -45,5 +45,5 @@ export namespace Util {
     }
 
     // because there can be duplicate cards, each card has a numerical id for easier handling
-    export type Card = [number, [Suit, Rank] | Joker];
+    export type Card = ([Suit, Rank] | Joker);
 }

@@ -24,8 +24,6 @@ html, body {
     height: 100%;
 }
 
-.card-image {
-    height: 100px;
-    width: 66px;
-    object-fit: cover;
+.card-area {
+    position: relative;
 }
