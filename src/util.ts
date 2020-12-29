@@ -46,4 +46,47 @@ export namespace Util {
 
     // because there can be duplicate cards, each card has a numerical id for easier handling
     export type Card = ([Suit, Rank] | Joker);
+    
+    export interface OtherPlayer {
+        name: string;
+        cardCount: number;
+    }
+
+    export interface GameStateMessage {
+        playerIndex: number;
+        cardsInDeck: number;
+        cardsInHand: Util.Card[];
+        cardsPlayed: Util.Card[];
+        otherPlayers: Record<number, OtherPlayer>;
+        activePlayerIndex: number;
+    }
+
+    export interface JoinMessage {
+        gameId: string;
+        playerName: string;
+    }
+
+    export interface HeartbeatMessage {
+        timestamp: Date;
+    }
+
+    export interface ShuffleMessage {
+        cardsInHand: Util.Card[];
+    }
+
+    export interface PlayMessage {
+        cardsToPlay: Util.Card[];
+    }
+
+    export interface FullGameError {
+        gameId: string;
+    }
+
+    export interface NoSuchGameError {
+        gameId: string;
+    }
+
+    export interface ErrorMessage {
+        errorDescription: string;
+    }
 }

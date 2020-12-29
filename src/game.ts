@@ -17,45 +17,38 @@ if (gameId === undefined) {
 // refreshing should rejoin the same game
 window.history.pushState(undefined, gameId, `/game?gameId=${gameId}&playerName=${playerName}`);
 
-// open websocket connection to get game state updates
-let wsuri = `ws://${window.location.hostname}:${JSON.parse(window.location.port) + 1111}`;
-console.log(`new WebSocket('${wsuri}')`);
-let ws = new WebSocket(wsuri);
-
-interface GameState {
-    cardsInDeck: number;
-    cardsInHand: Util.Card[];
-    otherPlayerCardCounts: Record<string, number>;
-}
-
 function clear(element: HTMLElement | null) {
     while (element !== null && element.firstChild !== null) {
         element.removeChild(element.firstChild);
     }
 }
 
-ws.onmessage = ev => {
-    const gameState = <GameState>JSON.parse(ev.data);
-    console.log(gameState);
+// open websocket connection to get game state updates
+let wsuri = `ws://${window.location.hostname}:${JSON.parse(window.location.port) + 1111}`;
+console.log(`new WebSocket('${wsuri}')`);
+let ws = new WebSocket(wsuri);
 
+function renderGameState(gameStateMessage: Util.GameStateMessage) {
+    // render cards still in the deck
     const topRight = document.getElementById("top-right");
     clear(topRight);
 
-    for (let i = 0; i < gameState.cardsInDeck; ++i) {
+    for (let i = 0; i < gameStateMessage.cardsInDeck; ++i) {
         let cardImg = document.createElement("img");
         cardImg.setAttribute("src", "assets/BackColor_Black.png");
         cardImg.setAttribute("class", "card-image");
-        cardImg.setAttribute("style", `position: absolute; top: calc(${100 * i / gameState.cardsInDeck}% - ${i / gameState.cardsInDeck} * ${cardSize}); right: calc(${100 * i / gameState.cardsInDeck}% - ${i / gameState.cardsInDeck} * ${cardSize}); height: ${cardSize};`);
+        cardImg.setAttribute("style", `position: absolute; top: calc(${100 * i / gameStateMessage.cardsInDeck}% - ${i / gameStateMessage.cardsInDeck} * ${cardSize}); right: calc(${100 * i / gameStateMessage.cardsInDeck}% - ${i / gameStateMessage.cardsInDeck} * ${cardSize}); height: ${cardSize};`);
         topRight?.appendChild(cardImg);
     }
 
+    // render the player's cards
     const bottom = document.getElementById("bottom");
     clear(bottom);
 
-    for (let i = 0; i < gameState.cardsInHand.length; ++i) {
-        const cardInfo = gameState.cardsInHand[i];
+    for (let i = 0; i < gameStateMessage.cardsInHand.length; ++i) {
+        const cardInfo = gameStateMessage.cardsInHand[i];
         if (cardInfo === undefined) {
-            throw new Error(`Bad index: ${i}, gameState.cardsInHand.length: ${gameState.cardsInHand.length}`);
+            throw new Error(`Bad index: ${i}, gameState.cardsInHand.length: ${gameStateMessage.cardsInHand.length}`);
         }
 
         const cardImg = document.createElement("img");
@@ -70,55 +63,81 @@ ws.onmessage = ev => {
         }
 
         cardImg.setAttribute("class", "card-image");
-        cardImg.setAttribute("style", `position: absolute; bottom: calc(50% - 0.5 * ${cardSize}); left: calc(${100 * i / gameState.cardsInHand.length}% - ${i / gameState.cardsInHand.length} * ${cardSize}); height: ${cardSize};`);
+        cardImg.setAttribute("style", `position: absolute; bottom: calc(50% - 0.5 * ${cardSize}); left: calc(${100 * i / gameStateMessage.cardsInHand.length}% - ${i / gameStateMessage.cardsInHand.length} * ${cardSize}); height: ${cardSize};`);
         bottom?.appendChild(cardImg);
     }
 
-    console.log(gameState.otherPlayerCardCounts);
-
+    // render other players
     const elementIds = ["left", "top", "right"];
-    let elementIdIndex = 0;
-    Object.entries(gameState.otherPlayerCardCounts).forEach(([playerName, count]) => {
-        const elementId = elementIds[elementIdIndex];
-        if (elementId === undefined) {
-            throw new Error(`Unknown elementId for index: ${elementIdIndex}`);
+    for (let i = 1; i < 4; ++i) {
+        const otherPlayerIndex = (gameStateMessage.playerIndex + i) % 4;
+        const otherPlayer = gameStateMessage.otherPlayers[otherPlayerIndex];
+        if (otherPlayer === undefined) {
+            continue;
         }
-
-        elementIdIndex++;
-        const element = document.getElementById(elementId);
-        clear(element);
 
         const nameLabel = document.createElement("div");
         nameLabel.setAttribute("style", "position: absolute;");
-        nameLabel.innerHTML = playerName;
+        nameLabel.innerHTML = otherPlayer.name;
+
+        const elementId = elementIds[i - 1];
+        if (elementId === undefined) {
+            throw new Error(`Unknown elementId for index: ${i - 1}`);
+        }
+
+        const element = document.getElementById(elementId);
+        clear(element);
         element?.appendChild(nameLabel);
 
-        for (let i = 0; i < count; ++i) {
+        for (let i = 0; i < otherPlayer.cardCount; ++i) {
             let cardImg = document.createElement("img");
             cardImg.setAttribute("src", "assets/BackColor_Black.png");
             cardImg.setAttribute("class", "card-image");
 
             if (elementId === "left") {
-                cardImg.setAttribute("style", `position: absolute; left: calc(50% - 0.5 * ${cardSize}); top: calc(${100 * i / count}% - ${i / count} * ${cardSize}); transform: rotate(90deg); height: ${cardSize}`);
+                cardImg.setAttribute("style", `position: absolute; left: calc(50% - 0.5 * ${cardSize}); top: calc(${100 * i / otherPlayer.cardCount}% - ${i / otherPlayer.cardCount} * ${cardSize}); transform: rotate(90deg); height: ${cardSize}`);
             } else if (elementId === "top") {
-                cardImg.setAttribute("style", `position: absolute; top: calc(50% - 0.5 * ${cardSize}); left: calc(${100 * i / count}% - ${i / count} * ${cardSize}); transform: rotate(180deg); height: ${cardSize}`);
+                cardImg.setAttribute("style", `position: absolute; top: calc(50% - 0.5 * ${cardSize}); left: calc(${100 * i / otherPlayer.cardCount}% - ${i / otherPlayer.cardCount} * ${cardSize}); transform: rotate(180deg); height: ${cardSize}`);
             } else if (elementId === "right") {
-                cardImg.setAttribute("style", `position: absolute; left: calc(50% - 0.5 * ${cardSize}); top: calc(${100 * i / count}% - ${i / count} * ${cardSize}); transform: rotate(-90deg); height: ${cardSize}`);
+                cardImg.setAttribute("style", `position: absolute; left: calc(50% - 0.5 * ${cardSize}); top: calc(${100 * i / otherPlayer.cardCount}% - ${i / otherPlayer.cardCount} * ${cardSize}); transform: rotate(-90deg); height: ${cardSize}`);
             }
 
             element?.appendChild(cardImg);
         }
-    });
+    }
+}
+
+ws.onmessage = ev => {
+    const obj = JSON.parse(ev.data);
+    if ('errorDescription' in obj && typeof obj.errorDescription === 'string') {
+        const errorMessage = <Util.ErrorMessage>obj;
+        console.error(errorMessage.errorDescription);
+    } else {
+        const gameStateMessage = <Util.GameStateMessage>obj;
+        console.log(gameStateMessage);
+
+        renderGameState(gameStateMessage);
+    }
 };
 
 (async function() {
+    while (ws.readyState != ws.OPEN) {
+        await Util.delay(1000);
+        console.log(`ws.readyState: ${ws.readyState}`);
+    }
+
+    console.log(`ws.OPEN: ${ws.OPEN}`);
+
+    ws.send(JSON.stringify(<Util.JoinMessage>{
+        gameId: gameId,
+        playerName: playerName
+    }));
+    
     while (true) {
         await Util.delay(1000);
-        const data = {
-            "playerName": playerName,
-            "gameId": Util.getCookie("gameId"),
-            "timestamp": new Date()
-        };
-        ws.send(JSON.stringify(data));
+
+        ws.send(JSON.stringify(<Util.HeartbeatMessage>{
+            timestamp: new Date()
+        }))
     }
 })();
