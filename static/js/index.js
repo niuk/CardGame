@@ -5,10 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const promises_1 = __importDefault(require("fs/promises"));
-const nanoid_1 = require("nanoid");
+const async_1 = require("nanoid/async");
 const ws_1 = __importDefault(require("ws"));
-const moment_1 = __importDefault(require("moment"));
 const util_1 = require("./util");
+const nanoid = async_1.customAlphabet('1234567890abcdef', 5);
 const app = express_1.default();
 const port = 8888;
 class Game {
@@ -32,19 +32,6 @@ class Game {
     async run() {
         while (true) {
             await util_1.Util.delay(1000);
-            // broadcast game state and kick inactive players
-            const timedOutPlayers = [];
-            this.players.forEach((player, playerName) => {
-                const timeout = moment_1.default(player.state.timestamp).add(2, 'seconds');
-                //console.log(`${gameId}.${player} heartbeat timestamp is ${timestamp.toString()}; timeout at ${timeout.toString()}; moment is ${moment().toString()}`);
-                if (timeout.isBefore(moment_1.default())) {
-                    timedOutPlayers.push(playerName);
-                }
-            });
-            timedOutPlayers.forEach(player => {
-                console.log(`${player} in ${this.gameId} timed out`);
-                this.players.delete(player);
-            });
             process.stdout.write(`gameId: ${this.gameId}, game.players.size: ${this.players.size}\r`);
             if (this.players.size == 4) {
                 if (this.turn == 0) {
@@ -132,7 +119,7 @@ app.get("/game", async (request, response) => {
         if (request.query.newGame === 'true') {
             console.log(`creating a new game...`);
             do {
-                gameId = nanoid_1.nanoid(5);
+                gameId = await nanoid();
             } while (gamesById.has(gameId));
             gamesById.set(gameId, new Game(gameId));
         }

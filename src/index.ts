@@ -1,10 +1,11 @@
 import express from "express";
 import fs from "fs/promises";
-import { nanoid } from "nanoid";
+import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
-import moment from "moment";
 
 import { Util } from "./util";
+
+const nanoid = customAlphabet('1234567890abcdef', 5);
 
 const app = express();
 const port = 8888;
@@ -36,22 +37,6 @@ class Game {
     async run() {
         while (true) {
             await Util.delay(1000);
-
-            // broadcast game state and kick inactive players
-            const timedOutPlayers: string[] = [];
-            this.players.forEach((player: Player, playerName: string) => {
-                const timeout = moment(player.state.timestamp).add(2, 'seconds');
-                //console.log(`${gameId}.${player} heartbeat timestamp is ${timestamp.toString()}; timeout at ${timeout.toString()}; moment is ${moment().toString()}`);
-    
-                if (timeout.isBefore(moment())) {
-                    timedOutPlayers.push(playerName);
-                }
-            });
-    
-            timedOutPlayers.forEach(player => {
-                console.log(`${player} in ${this.gameId} timed out`);
-                this.players.delete(player);
-            });
 
             process.stdout.write(`gameId: ${this.gameId}, game.players.size: ${this.players.size}\r`)
             if (this.players.size == 4) {
@@ -120,7 +105,7 @@ console.log(`WebSocket listening on port ${wssPort}`);
 
 wss.on('connection', function(ws) {
     console.log(`new websocket connection from ${ws}`);
-    
+
     // new websocket connection
     ws.on('message', function incoming(message) {
         // received heartbeat
@@ -163,7 +148,7 @@ app.get("/game", async (request, response) => {
             console.log(`creating a new game...`)
 
             do {
-                gameId = nanoid(5);
+                gameId = await nanoid();
             } while (gamesById.has(gameId));
 
             gamesById.set(gameId, new Game(gameId));
