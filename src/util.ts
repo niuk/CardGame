@@ -66,10 +66,6 @@ export namespace Util {
         playerName: string;
     }
 
-    export interface HeartbeatMessage {
-        timestamp: Date;
-    }
-
     export interface ShuffleMessage {
         cardsInHand: Util.Card[];
     }
