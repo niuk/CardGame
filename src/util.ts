@@ -44,7 +44,6 @@ export namespace Util {
         Small
     }
 
-    // because there can be duplicate cards, each card has a numerical id for easier handling
     export type Card = ([Suit, Rank] | Joker);
     
     export interface OtherPlayer {
@@ -53,9 +52,9 @@ export namespace Util {
     }
 
     export interface GameStateMessage {
+        deckCount: number;
         playerIndex: number;
-        cardsInDeck: number;
-        cardsInHand: Util.Card[];
+        playerCards: Util.Card[];
         cardsPlayed: Util.Card[];
         otherPlayers: Record<number, OtherPlayer>;
         activePlayerIndex: number;
@@ -67,7 +66,7 @@ export namespace Util {
     }
 
     export interface ShuffleMessage {
-        cardsInHand: Util.Card[];
+        cardsToShuffle: Util.Card[];
     }
 
     export interface PlayMessage {

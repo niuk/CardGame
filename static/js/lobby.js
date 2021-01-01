@@ -13,3 +13,4 @@ if (document !== null) {
         gameIdElement.value = gameIdValue;
     }
 }
+//# sourceMappingURL=lobby.js.map

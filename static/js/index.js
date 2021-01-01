@@ -15,7 +15,7 @@ const port = 8888;
 const playersByWebSocket = new Map();
 class Player {
     constructor(name, ws, game, index) {
-        this.cardsInHand = [];
+        this.cards = [];
         this.endTurn = new await_semaphore_1.Semaphore(1);
         this.name = name;
         this.ws = ws;
@@ -62,7 +62,6 @@ class Game {
                         full = false;
                     }
                 }
-                console.log(`full: ${full}, turn: ${this.turn}, activePlayerIndex: ${this.activePlayerIndex}`);
                 if (full) {
                     if (this.turn == 0) {
                         // first turn; draw cards for each player
@@ -78,7 +77,7 @@ class Game {
                                 if (card === undefined) {
                                     throw new Error(`Bad index: ${index}, this.cardsInDeck.length: ${this.cardsInDeck.length}`);
                                 }
-                                player.cardsInHand.push(card);
+                                player.cards.push(card);
                                 //console.log(`player ${player.name} given ${card}`);
                             }
                         }
@@ -94,7 +93,7 @@ class Game {
             let activePlayer = this.playersByIndex[this.activePlayerIndex];
             if (full && activePlayer !== undefined) {
                 // wait for active player to play cards
-                console.log(`waiting for player ${this.activePlayerIndex} (${activePlayer.name}, ${activePlayer.endTurn.count})...`);
+                console.log(`waiting for player ${this.activePlayerIndex} ('${activePlayer.name}', ${activePlayer.endTurn.count})...`);
                 activePlayer.releaseEndTurn = await activePlayer.endTurn.acquire();
                 this.turn++;
             }
@@ -112,7 +111,7 @@ class Game {
                 if (otherPlayer !== undefined) {
                     otherPlayers[j] = {
                         name: otherPlayer.name,
-                        cardCount: otherPlayer.cardsInHand.length
+                        cardCount: otherPlayer.cards.length
                     };
                 }
             }
@@ -122,8 +121,8 @@ class Game {
         if (player !== undefined) {
             player.ws.send(JSON.stringify({
                 playerIndex: i,
-                cardsInDeck: this.cardsInDeck.length,
-                cardsInHand: player.cardsInHand,
+                deckCount: this.cardsInDeck.length,
+                playerCards: player.cards,
                 cardsPlayed: this.cardsPlayed,
                 otherPlayers: otherPlayers,
                 activePlayerIndex: this.activePlayerIndex
@@ -197,12 +196,12 @@ wss.on('connection', function (ws) {
                         else {
                             const playMessage = obj;
                             let canPlay = true;
-                            let newCardsInHand = player.cardsInHand.slice();
+                            let newCards = player.cards.slice();
                             for (let i = 0; i < playMessage.cardsToPlay.length; ++i) {
                                 let found = false;
-                                for (let j = 0; j < newCardsInHand.length; ++j) {
-                                    if (JSON.stringify(playMessage.cardsToPlay[i]) === JSON.stringify(newCardsInHand[j])) {
-                                        newCardsInHand.splice(j, 1);
+                                for (let j = 0; j < newCards.length; ++j) {
+                                    if (JSON.stringify(playMessage.cardsToPlay[i]) === JSON.stringify(newCards[j])) {
+                                        newCards.splice(j, 1);
                                         found = true;
                                         break;
                                     }
@@ -218,7 +217,7 @@ wss.on('connection', function (ws) {
                             if (canPlay) {
                                 console.log(`${player.index} canPlay`);
                                 player.game.cardsPlayed = player.game.cardsPlayed.concat(playMessage.cardsToPlay);
-                                player.cardsInHand = newCardsInHand;
+                                player.cards = newCards;
                                 player.releaseEndTurn();
                             }
                         }
@@ -229,7 +228,7 @@ wss.on('connection', function (ws) {
                     }
                 }
             }
-            else if ('cardsInHand' in obj) {
+            else if ('cardsToShuffle' in obj) {
                 const player = playersByWebSocket.get(ws);
                 if (player === undefined) {
                     ws.send(JSON.stringify({
@@ -241,31 +240,31 @@ wss.on('connection', function (ws) {
                     try {
                         const shuffleMessage = obj;
                         let canShuffle = true;
-                        let oldCardsInHand = player.cardsInHand.slice();
-                        let newCardsInHand = [];
-                        for (let i = 0; i < shuffleMessage.cardsInHand.length; ++i) {
+                        let oldCards = player.cards.slice();
+                        let newCards = [];
+                        for (let i = 0; i < shuffleMessage.cardsToShuffle.length; ++i) {
                             let found = false;
-                            for (let j = 0; j < oldCardsInHand.length; ++j) {
-                                if (JSON.stringify(shuffleMessage.cardsInHand[i]) === JSON.stringify(oldCardsInHand[j])) {
-                                    const [card] = oldCardsInHand.splice(j, 1);
+                            for (let j = 0; j < oldCards.length; ++j) {
+                                if (JSON.stringify(shuffleMessage.cardsToShuffle[i]) === JSON.stringify(oldCards[j])) {
+                                    const [card] = oldCards.splice(j, 1);
                                     if (card === undefined) {
                                         throw Error();
                                     }
-                                    newCardsInHand.push(card);
+                                    newCards.push(card);
                                     found = true;
                                     break;
                                 }
                             }
                             if (!found) {
                                 ws.send(JSON.stringify({
-                                    errorDescription: `you don't have this card: ${shuffleMessage.cardsInHand[i]}`
+                                    errorDescription: `you don't have this card: ${shuffleMessage.cardsToShuffle[i]}`
                                 }));
                                 canShuffle = false;
                                 break;
                             }
                         }
                         if (canShuffle) {
-                            player.cardsInHand = newCardsInHand;
+                            player.cards = newCards;
                         }
                         player.game.sendStateToPlayerWithIndex(player.index);
                     }
@@ -327,3 +326,4 @@ app.get("/game", async (request, response) => {
 app.listen(port, () => {
     console.log(`listening on port ${port}`);
 });
+//# sourceMappingURL=index.js.map
