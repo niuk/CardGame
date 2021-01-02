@@ -27,6 +27,13 @@ ws.onmessage = ev => {
     } else {
         gameStateMessage = <Lib.GameStateMessage>obj;
         //console.log(gameStateMessage);
+
+        for (let i = 0; i < selectedIndices.length; ++i) {
+            if (selectedIndices[i] >= gameStateMessage.playerCards.length) {
+                selectedIndices.splice(i, selectedIndices.length - i);
+                break;
+            }
+        }
     }
 };
 
