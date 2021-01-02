@@ -1,6 +1,7 @@
 import { Lib } from './lib';
 import bs from 'binary-search';
 import './StackBlur';
+import { hasUncaughtExceptionCaptureCallback } from 'process';
 
 const playerName = Lib.getCookie('playerName');
 if (playerName === undefined) {
@@ -101,7 +102,7 @@ window.onload = async function() {
     // load card images asynchronously
     for (let suit = 0; suit <= 4; ++suit) {
         for (let rank = 0; rank <= 14; ++rank) {
-            if (suit == Lib.Suit.Joker) {
+            if (suit === Lib.Suit.Joker) {
                 if (0 < rank && rank < 14) {
                     continue;
                 }
@@ -149,9 +150,11 @@ window.onload = async function() {
     window.requestAnimationFrame(render);
 };
 
-let currentTime: number;
+let currentTime: number | undefined = undefined;
+let deltaTime: number;
 
 function render(time: number) {
+    deltaTime = time - (currentTime !== undefined ? currentTime : time);
     currentTime = time;
 
     if (gameStateMessage !== undefined) {
@@ -162,7 +165,7 @@ function render(time: number) {
 
         drawDeck(gameState.deckCount);
         drawOtherPlayers(gameState.playerIndex, gameState.otherPlayers);
-        drawPlayer(time, gameState.playerCards);
+        drawPlayer(gameState.playerCards);
         drawButtons();
         
         window.requestAnimationFrame(render);
@@ -251,42 +254,106 @@ class Vector {
     readonly y: number = 0;
 }
 
+function add(u: Vector, v: Vector) {
+    return { x: u.x + v.x, y: u.y + v.y };
+}
+
+function sub(u: Vector, v: Vector) {
+    return { x: u.x - v.x, y: u.y - v.y };
+}
+
+function len(u: Vector) {
+    return Math.sqrt(u.x * u.x + u.y * u.y);
+}
+
+function distance(u: Vector, v: Vector): number {
+    return len(sub(u, v));
+}
+
+function scale(s: number, v: Vector): Vector {
+    return { x: s * v.x, y: s * v.y };
+}
+
 // extra state for the player's card
-const animationStartTimes: number[] = [];
-const animationStartPositions: Vector[] = [];
+const playerCardTargets: Vector[] = [];
 const playerCardPositions: Vector[] = [];
+const playerCardVelocities: Vector[] = [];
 
 const selectedIndices: number[] = [];
 
-const dragCards: Lib.Card[] = [];
-const dragCardPositions: Vector[] = [];
+const movingCards: Lib.Card[] = [];
+const movingCardTargets: Vector[] = [];
+const movingCardPositions: Vector[] = [];
+const movingCardVelocities: Vector[] = [];
 
-const holdCards: Lib.Card[] = [];
-const holdCardPositions: Vector[] = [];
+const reservedCards: Lib.Card[] = [];
+const reservedCardTargets: Vector[] = [];
+const reservedCardPositions: Vector[] = [];
+const reservedCardVelocities: Vector[] = [];
 
+const moveThreshold = 0.2 * pixelsPerCM;
+const springConstant = 1000;
+const mass = 1;
+const drag = Math.sqrt(4 * mass * springConstant);
+
+//let n = 1000;
+
+function dampSpring(targetPosition: Vector, position: Vector, velocity: Vector): [Vector, Vector] {
+    const springForce = scale(springConstant, sub(targetPosition, position));
+    const dragForce = scale(-drag, velocity);
+    const acceleration = scale(1 / mass, add(springForce, dragForce));
+
+    //if (n-- > 0) {
+        //console.log(`deltaTime: ${deltaTime}, springForce: ${JSON.stringify(springForce)}, dragForce: ${JSON.stringify(dragForce)}`);
+        //console.log(`targetPosition: ${JSON.stringify(targetPosition)}, position: ${JSON.stringify(position)}, velocity: ${JSON.stringify(velocity)}, acceleration: ${JSON.stringify(acceleration)}`);
+    //}
+    
+    velocity = add(velocity, scale(deltaTime / 1000, acceleration));
+    position = add(position, scale(deltaTime / 1000, velocity));
+
+    //if (n-- > 0) {
+        //console.log(`new position: ${JSON.stringify(position)}, new velocity: ${JSON.stringify(velocity)}`);
+    //}
+
+    return [position, velocity];
+}
+
+enum Action {
+    None,
+    Select,
+    Deselect,
+    Toggle,
+    Play
+}
+
+function getDropAction(): Action {
+    const dropY = playerCardTargets[selectedIndices[0]].y;
+    if (dropY < canvas.height - 2 * cardHeight) {
+        return Action.Play;
+    }
+
+    const deselectDistance = Math.abs(dropY - (canvas.height - cardHeight));
+    const selectDistance = Math.abs(dropY - (canvas.height - cardHeight - 2 * gap));
+    if (deselectDistance < selectDistance) {
+        return Action.Deselect;
+    } else {
+        return Action.Select;
+    }
+}
+
+let mouseDownPosition = <Vector>{ x: 0, y: 0 };
 let indexAtMouseDown = -1;
-let dragging = false;
-let mouseDownX: number;
-let mouseDownY: number;
-const dragThreshold = 0.2 * pixelsPerCM;
+let action = Action.None;
 
-function getMouseX(e: MouseEvent) {
-    return canvas.width * (e.clientX - canvasRect.left) / canvasRect.width;
-}
-
-function getMouseY(e: MouseEvent) {
-    return canvas.height * (e.clientY - canvasRect.top) / canvasRect.height;
-}
-
-function distance(x0: number, y0: number, x1: number, y1: number): number {
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    return Math.sqrt(dx * dx + dy * dy);
+function getMousePosition(e: MouseEvent) {
+    return {
+        x: canvas.width * (e.clientX - canvasRect.left) / canvasRect.width,
+        y: canvas.height * (e.clientY - canvasRect.top) / canvasRect.height
+    };
 }
 
 canvas.onmousedown = function(e) {
-    mouseDownX = getMouseX(e);
-    mouseDownY = getMouseY(e);
+    mouseDownPosition = getMousePosition(e);
 
     indexAtMouseDown = -1;
     for (let i = 0; i < playerCardPositions.length; ++i) {
@@ -294,24 +361,22 @@ canvas.onmousedown = function(e) {
         const y0 = playerCardPositions[i].y;
         const x1 = x0 + cardWidth;
         const y1 = y0 + cardHeight;
-        if (x0 < mouseDownX && mouseDownX < x1 && y0 < mouseDownY && mouseDownY < y1) {
+        if (x0 < mouseDownPosition.x && mouseDownPosition.x < x1 && y0 < mouseDownPosition.y && mouseDownPosition.y < y1) {
             indexAtMouseDown = i;
+            action = Action.Toggle;
         }
     }
 };
 
 canvas.onmousemove = function(e) {
     if (indexAtMouseDown >= 0) {
-        const mouseX = getMouseX(e);
-        const mouseY = getMouseY(e);
-        if (dragging || distance(mouseX, mouseY, mouseDownX, mouseDownY) > dragThreshold) {
-            let dx = e.movementX;
-            let dy = e.movementY;
+        const mousePosition = getMousePosition(e);
+        if (action !== Action.Toggle || distance(mousePosition, mouseDownPosition) > moveThreshold) {
+            let delta = { x: e.movementX, y: e.movementY };
 
-            if (!dragging) {
-                dragging = true;
-                dx += mouseX - mouseDownX;
-                dy += mouseY - mouseDownY;
+            if (action === Action.Toggle) {
+                // first frame of exceeding moveThreshold
+                delta = add(delta, sub(mousePosition, mouseDownPosition));
 
                 // dragging a card selects it
                 let selectedIndexIndex = binarySearch(selectedIndices, indexAtMouseDown);
@@ -322,19 +387,18 @@ canvas.onmousemove = function(e) {
 
                 // gather together selected cards around the card under the mouse
                 for (let i = 0; i < selectedIndices.length; ++i) {
-                    playerCardPositions[selectedIndices[i]] = {
+                    movingCardTargets[i] = {
                         x: playerCardPositions[indexAtMouseDown].x + (i - selectedIndexIndex) * gap,
                         y: playerCardPositions[indexAtMouseDown].y
                     };
                 }
             }
 
+            action = getDropAction();
+
             // move all selected cards
             for (let i = 0; i < selectedIndices.length; ++i) {
-                playerCardPositions[selectedIndices[i]] = {
-                    x: playerCardPositions[selectedIndices[i]].x + dx,
-                    y: playerCardPositions[selectedIndices[i]].y + dy
-                };
+                movingCardTargets[i] = add(movingCardTargets[i], delta);
             }
         }
     }
@@ -342,20 +406,7 @@ canvas.onmousemove = function(e) {
 
 canvas.onmouseup = function(e) {
     if (indexAtMouseDown >= 0) {
-        if (dragging) {
-            dragging = false;
-
-            const dropY = playerCardPositions[selectedIndices[0]].y;
-            const deselectDistance = Math.abs(dropY - (canvas.height - cardHeight));
-            const selectDistance = Math.abs(dropY - (canvas.height - cardHeight - 2 * gap));
-            const playDistance = Math.abs(dropY - canvas.height / 2);
-            const shortest = [deselectDistance, selectDistance, playDistance].sort((a, b) => a - b)[0];
-            if (shortest === deselectDistance) {
-                selectedIndices.splice(0, selectedIndices.length);
-            } else if (shortest === playDistance) {
-                // TODO
-            }
-        } else {
+        if (action === Action.Toggle) {
             let selectedIndexIndex = binarySearch(selectedIndices, indexAtMouseDown);
             if (selectedIndexIndex < 0) {
                 // select
@@ -364,178 +415,219 @@ canvas.onmouseup = function(e) {
                 // deselect
                 selectedIndices.splice(selectedIndexIndex, 1);
             }
+        } else if (action === Action.Deselect) {
+            selectedIndices.splice(0, selectedIndices.length);
+        } else if (action === Action.Select) {
+            // onmousemove should have already selected the card
+        } else if (action === Action.Play) {
+            if (gameStateMessage !== undefined) {
+                const gameState = gameStateMessage; // needed to help TS with flow analysis
+                ws.send(JSON.stringify({
+                    cardsToPlay: selectedIndices.map(i => gameState.playerCards[i])
+                }));
+            }
         }
 
         indexAtMouseDown = -1;
+        action = Action.None;
     } else {
-        if (sortBySuitBounds[0] < mouseDownX && mouseDownX < sortBySuitBounds[2] &&
-            sortBySuitBounds[1] < mouseDownY && mouseDownY < sortBySuitBounds[3]
+        if (sortBySuitBounds[0] < mouseDownPosition.x && mouseDownPosition.x < sortBySuitBounds[2] &&
+            sortBySuitBounds[1] < mouseDownPosition.y && mouseDownPosition.y < sortBySuitBounds[3]
         ) {
             sortBySuit();
         }
 
-        if (sortByRankBounds[0] < mouseDownX && mouseDownX < sortByRankBounds[2] &&
-            sortByRankBounds[1] < mouseDownY && mouseDownY < sortByRankBounds[3]
+        if (sortByRankBounds[0] < mouseDownPosition.x && mouseDownPosition.x < sortByRankBounds[2] &&
+            sortByRankBounds[1] < mouseDownPosition.y && mouseDownPosition.y < sortByRankBounds[3]
         ) {
             sortByRank();
         }
     }
-
-    for (let i = 0; i < animationStartTimes.length; ++i) {
-        animationStartTimes[i] = currentTime;
-        animationStartPositions[i] = playerCardPositions[i];
-    }
 };
 
-function drawPlayer(time: number, playerCards: Lib.Card[]) {
+function drawPlayer(playerCards: Lib.Card[]) {
     context.save();
     try {
+        // initialize state
+        for (let i = 0; i < playerCards.length; ++i) {
+            if (playerCardTargets[i] === undefined) {
+                playerCardTargets[i] = { x: 0, y: 0 };
+            }
+            
+            if (playerCardPositions[i] === undefined) {
+                playerCardPositions[i] = { x: 0, y: 0 };
+            }
+
+            if (playerCardVelocities[i] === undefined) {
+                playerCardVelocities[i] = { x: 0, y: 0 };
+            }
+        }
+
+
         let splitIndex: number;
-        if (dragging) {
+        if (action !== Action.None && action !== Action.Toggle) {
             // extract dragged cards
             for (let i = 0; i < selectedIndices.length; ++i) {
-                dragCards[i] = playerCards[selectedIndices[i]];
-                dragCardPositions[i] = playerCardPositions[selectedIndices[i]];
+                movingCards[i] = playerCards[selectedIndices[i]];
+                // movingCardTargets[i] is set in onmousemove
+                movingCardPositions[i] = playerCardPositions[selectedIndices[i]];
+                movingCardVelocities[i] = playerCardVelocities[selectedIndices[i]];
             }
 
             // extract held cards
             let j = 0;
             for (let i = 0; i < playerCards.length; ++i) {
                 if (binarySearch(selectedIndices, i) < 0) {
-                    holdCards[j] = playerCards[i];
-                    holdCardPositions[j] = playerCardPositions[i];
+                    reservedCards[j] = playerCards[i];
+                    reservedCardTargets[j] = playerCardTargets[i];
+                    reservedCardPositions[j] = playerCardPositions[i];
+                    reservedCardVelocities[j] = playerCardVelocities[i];
                     ++j;
                 }
             }
 
-            // find the held cards, if any, overlapped by the dragged cards
-            let leftIndex: number | undefined = undefined;
-            let rightIndex: number | undefined = undefined;
-            for (let i = 0; i < playerCards.length - selectedIndices.length; ++i) {
-                if (dragCardPositions[0].x < holdCardPositions[i].x && holdCardPositions[i].x < dragCardPositions[dragCardPositions.length - 1].x) {
-                    if (leftIndex === undefined) {
-                        leftIndex = i;
-                    }
-
-                    rightIndex = i;
-                }
-            }
-
-            if (leftIndex !== undefined && rightIndex !== undefined) {
-                const leftGap = holdCardPositions[leftIndex].x - dragCardPositions[0].x;
-                const rightGap = dragCardPositions[dragCardPositions.length - 1].x - holdCardPositions[rightIndex].x;
-
-                if (leftGap < rightGap) {
-                    splitIndex = leftIndex;
-                } else {
-                    splitIndex = rightIndex + 1;
-                }
-                context.fillStyle = '#0000ff77';
+            if (action === Action.Play) {
+                splitIndex = playerCards.length - selectedIndices.length;
             } else {
-                context.fillStyle = '#ff000077';
-                // no overlapped cards, so the index is the first held card to the right of the dragged cards
-                for (splitIndex = 0; splitIndex < playerCards.length - selectedIndices.length; ++splitIndex) {
-                    if (dragCardPositions[dragCardPositions.length - 1].x < holdCardPositions[splitIndex].x) {
-                        break;
+                // find the held cards, if any, overlapped by the dragged cards
+                let leftIndex: number | undefined = undefined;
+                let rightIndex: number | undefined = undefined;
+                for (let i = 0; i < playerCards.length - selectedIndices.length; ++i) {
+                    if (movingCardPositions[0].x < reservedCardTargets[i].x && reservedCardTargets[i].x < movingCardPositions[selectedIndices.length - 1].x) {
+                        if (leftIndex === undefined) {
+                            leftIndex = i;
+                        }
+
+                        rightIndex = i;
                     }
                 }
+
+                if (leftIndex !== undefined && rightIndex !== undefined) {
+                    const leftGap = reservedCardTargets[leftIndex].x - movingCardPositions[0].x;
+                    const rightGap = movingCardPositions[selectedIndices.length - 1].x - reservedCardTargets[rightIndex].x;
+
+                    if (leftGap < rightGap) {
+                        splitIndex = leftIndex;
+                    } else {
+                        splitIndex = rightIndex + 1;
+                    }
+                } else {
+                    // no overlapped cards, so the index is the first held card to the right of the dragged cards
+                    for (splitIndex = 0; splitIndex < playerCards.length - selectedIndices.length; ++splitIndex) {
+                        if (movingCardPositions[selectedIndices.length - 1].x < reservedCardTargets[splitIndex].x) {
+                            break;
+                        }
+                    }
+                }
+
+                //context.fillStyle = '#000000ff';
+                //context.fillText(`${playerCards.length - selectedIndices.length}`, canvas.width / 2, canvas.height / 2 - 48);
+                //context.fillText(`${splitIndex}`, canvas.width / 2, canvas.height / 2 - 36);
+                //context.fillText(`${leftIndex}`, canvas.width / 2, canvas.height / 2 - 24);
+                //context.fillText(`${rightIndex}`, canvas.width / 2, canvas.height / 2 - 12);
+                //context.fillText(`${dragCardPositions[0].x}`, canvas.width / 2, canvas.height / 2);
+                //context.fillText(`${leftIndex !== undefined ? holdCardPositions[leftIndex].x : undefined}`, canvas.width / 2, canvas.height / 2 + 12);
+                //context.fillText(`${rightIndex !== undefined ? holdCardPositions[rightIndex].x : undefined}`, canvas.width / 2, canvas.height / 2 + 24);
+                //context.fillText(`${dragCardPositions[selectedIndices.length - 1].x}`, canvas.width / 2, canvas.height / 2 + 36);
+                //context.fillText(`${holdCardPositions[splitIndex].x}`, canvas.width / 2, canvas.height / 2 + 48);
             }
         } else {
             // not dragging, so every card is being held
             for (let i = 0; i < playerCards.length; ++i) {
-                holdCards[i] = playerCards[i];
-                holdCardPositions[i] = playerCardPositions[i];
+                reservedCards[i] = playerCards[i];
+                reservedCardTargets[i] = playerCardTargets[i];
+                reservedCardPositions[i] = playerCardPositions[i];
+                reservedCardVelocities[i] = playerCardVelocities[i];
             }
 
             splitIndex = playerCards.length;
         }
 
-        // render held cards to the left of the dragged hand
+        // draw reserved cards to the left of the moving cards
         for (let i = 0; i < splitIndex; ++i) {
-            let cardImage = <HTMLImageElement>getCardImage(holdCards[i]);
+            let cardImage = <HTMLImageElement>getCardImage(reservedCards[i]);
     
-            holdCardPositions[i] = {
-                x: canvas.width / 2 - playerCards.length / 2 * gap - cardWidth / 2 + i * gap,
-                y: canvas.height - cardHeight - (!dragging && binarySearch(selectedIndices, i) >= 0 ? 2 * gap : 0)
+            reservedCardTargets[i] = {
+                x: canvas.width / 2 - (playerCards.length - (action === Action.Play ? selectedIndices.length : 0)) / 2 * gap - cardWidth / 2 + i * gap,
+                y: canvas.height - cardHeight - (splitIndex < playerCards.length || binarySearch(selectedIndices, i) < 0 ? 0 : 2 * gap)
             };
+            [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(reservedCardTargets[i], reservedCardPositions[i], reservedCardVelocities[i]);
 
             context.drawImage(
                 cardImage,
-                holdCardPositions[i].x,
-                holdCardPositions[i].y,
+                reservedCardPositions[i].x,
+                reservedCardPositions[i].y,
                 cardWidth,
                 cardHeight
             );
 
             //context.fillStyle = '#ff0000ff';
-            //context.fillText(`${x}`, x, y - 24);
-
+            //context.fillText(`${Math.floor(holdCardPositions[i].x)}`, holdCardPositions[i].x, holdCardPositions[i].y - 24);
             //context.fillStyle = '#0000ffff';
-            //context.fillText(`${y}`, x, y - 12);
+            //context.fillText(`${Math.floor(holdCardPositions[i].y)}`, holdCardPositions[i].x, holdCardPositions[i].y - 12);
             
-            playerCards[i] = holdCards[i];
-            playerCardPositions[i] = holdCardPositions[i];
+            playerCards[i] = reservedCards[i];
+            playerCardTargets[i] = reservedCardTargets[i];
+            playerCardPositions[i] = reservedCardPositions[i];
+            playerCardVelocities[i] = reservedCardVelocities[i];
         }
 
-        if (dragging) {
+        if (splitIndex < playerCards.length) {
             // render dragged cards
             for (let i = 0; i < selectedIndices.length; ++i) {
-                let cardImage = <HTMLImageElement>getCardImage(dragCards[i]);
-    
+                let cardImage = <HTMLImageElement>getCardImage(movingCards[i]);
+
+                [movingCardPositions[i], movingCardVelocities[i]] = dampSpring(movingCardTargets[i], movingCardPositions[i], movingCardVelocities[i]);
+
                 context.drawImage(
                     cardImage,
-                    dragCardPositions[i].x,
-                    dragCardPositions[i].y,
+                    movingCardPositions[i].x,
+                    movingCardPositions[i].y,
                     cardWidth,
                     cardHeight
                 );
-    
+
                 //context.fillStyle = '#ff0000ff';
-                //context.fillText(`${x}`, x, y - 24);
-    
+                //context.fillText(`${Math.floor(dragCardPositions[i].x)}`, dragCardPositions[i].x, dragCardPositions[i].y - 24);
                 //context.fillStyle = '#0000ffff';
-                //context.fillText(`${y}`, x, y - 12);
+                //context.fillText(`${Math.floor(dragCardPositions[i].y)}`, dragCardPositions[i].x, dragCardPositions[i].y - 12);
+
+                playerCards[splitIndex + i] = movingCards[i];
+                playerCardTargets[splitIndex + i] = movingCardTargets[i];
+                playerCardPositions[splitIndex + i] = movingCardPositions[i];
+                playerCardVelocities[splitIndex + i] = movingCardVelocities[i];
+                
+                // also fix selection state
+                selectedIndices[i] = splitIndex + i;
             }
 
             // render remaining held cards
             for (let i = splitIndex; i < playerCards.length - selectedIndices.length; ++i) {
-                let cardImage = <HTMLImageElement>getCardImage(holdCards[i]);
+                let cardImage = <HTMLImageElement>getCardImage(reservedCards[i]);
 
-                holdCardPositions[i] = {
+                reservedCardTargets[i] = {
                     x: canvas.width / 2 - playerCards.length / 2 * gap - cardWidth / 2 + (i + selectedIndices.length) * gap,
                     y: canvas.height - cardHeight
                 };
+                [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(reservedCardTargets[i], reservedCardPositions[i], reservedCardVelocities[i]);
 
                 context.drawImage(
                     cardImage,
-                    holdCardPositions[i].x,
-                    holdCardPositions[i].y,
+                    reservedCardPositions[i].x,
+                    reservedCardPositions[i].y,
                     cardWidth,
                     cardHeight
                 );
 
                 //context.fillStyle = '#ff0000ff';
-                //context.fillText(`${x}`, x, y - 24);
-    
+                //context.fillText(`${Math.floor(holdCardPositions[i].x)}`, holdCardPositions[i].x, holdCardPositions[i].y - 24);
                 //context.fillStyle = '#0000ffff';
-                //context.fillText(`${y}`, x, y - 12);
+                //context.fillText(`${Math.floor(holdCardPositions[i].y)}`, holdCardPositions[i].x, holdCardPositions[i].y - 12);
 
-                context.fillRect(holdCardPositions[i].x, holdCardPositions[i].y, cardWidth, cardHeight);
-            }
-
-            // fix state
-            for (let i = 0; i < selectedIndices.length; ++i) {
-                playerCards[splitIndex + i] = dragCards[i];
-                playerCardPositions[splitIndex + i] = dragCardPositions[i];
-            }
-
-            for (let i = splitIndex; i < playerCards.length - selectedIndices.length; ++i) {
-                playerCards[selectedIndices.length + i] = holdCards[i];
-                playerCardPositions[selectedIndices.length + i] = holdCardPositions[i];
-            }
-
-            for (let i = 0; i < selectedIndices.length; ++i) {
-                selectedIndices[i] = splitIndex + i;
+                playerCards[selectedIndices.length + i] = reservedCards[i];
+                playerCardTargets[selectedIndices.length + i] = reservedCardTargets[i];
+                playerCardPositions[selectedIndices.length + i] = reservedCardPositions[i];
+                playerCardVelocities[selectedIndices.length + i] = reservedCardVelocities[i];
             }
         }
     } finally {
@@ -545,12 +637,6 @@ function drawPlayer(time: number, playerCards: Lib.Card[]) {
 
 function getCardImage(card: Lib.Card) {
     return cardImages.get(`[${Lib.getSuit(card)},${Lib.getRank(card)}]`);
-}
-
-const animationDuration = 1000;
-const animationExponent = 10;
-function animate(start: number, end: number, startTime: number, time: number): number {
-    return start + (1 - Math.pow(2, animationExponent * (startTime - time) / animationDuration)) * (end - start);
 }
 
 const radiansPerDegree: number = 0.01745329252;
@@ -626,12 +712,17 @@ function sortByRank() {
     remap(cardsWithIndex);
 }
 
+const temporaryTargets: Vector[] = [];
 const temporaryPositions: Vector[] = [];
+const temporaryVelocities: Vector[] = [];
 
 function remap(cardsWithIndex: [Lib.Card, number][]) {
     if (gameStateMessage === undefined) {
         return;
     }
+
+    console.log(`${JSON.stringify(gameStateMessage.playerCards.map((card, index) => `[[${Lib.getSuit(card)}, ${Lib.getRank(card)}], ${index}]`))}`);
+    console.log(`${JSON.stringify(cardsWithIndex.map(([card, index]) => `[[${Lib.getSuit(card)}, ${Lib.getRank(card)}], ${index}]`))}`);
 
     for (let i = 0; i < cardsWithIndex.length; ++i) {
         const [card, _] = cardsWithIndex[i];
@@ -640,10 +731,29 @@ function remap(cardsWithIndex: [Lib.Card, number][]) {
 
     for (let i = 0; i < cardsWithIndex.length; ++i) {
         const [_, j] = cardsWithIndex[i];
+        temporaryTargets[i] = playerCardTargets[j];
         temporaryPositions[i] = playerCardPositions[j];
+        temporaryVelocities[i] = playerCardVelocities[j];
     }
 
-    for (let i = 0; i < temporaryPositions.length; ++i) {
+    for (let i = 0; i < playerCardPositions.length; ++i) {
+        playerCardTargets[i] = temporaryTargets[i];
         playerCardPositions[i] = temporaryPositions[i];
+        playerCardVelocities[i] = temporaryVelocities[i];
     }
+
+    for (let i = 0; i < selectedIndices.length; ++i) {
+        console.log(`selectedIndices[${i}]: ${selectedIndices[i]}`);
+    
+        for (let j = 0; j < cardsWithIndex.length; ++j) {
+            const [_, k] = cardsWithIndex[j];
+            if (k === selectedIndices[i]) {
+                selectedIndices[i] = j;
+                console.log(`k: ${k}, selectedIndices[${i}] = ${j}`);
+                break;
+            }
+        }
+    }
+
+    selectedIndices.sort((a, b) => a - b);
 }
