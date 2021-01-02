@@ -1,12 +1,13 @@
-import { Util } from './util';
+import { Lib } from './lib';
 import bs from 'binary-search';
+import './StackBlur';
 
-const playerName = Util.getCookie('playerName');
+const playerName = Lib.getCookie('playerName');
 if (playerName === undefined) {
     throw new Error('No player name!');
 }
 
-const gameId = Util.getCookie('gameId');
+const gameId = Lib.getCookie('gameId');
 if (gameId === undefined) {
     throw new Error('No game id!');
 }
@@ -14,26 +15,24 @@ if (gameId === undefined) {
 // refreshing should rejoin the same game
 window.history.pushState(undefined, gameId, `/game?gameId=${gameId}&playerName=${playerName}`);
 
-let gameStateMessage: Util.GameStateMessage | undefined = undefined;
+let gameStateMessage: Lib.GameStateMessage | undefined = undefined;
 
 // open websocket connection to get game state updates
 let ws = new WebSocket(`ws://${window.location.hostname}:${JSON.parse(window.location.port) + 1111}`);
 ws.onmessage = ev => {
     const obj = JSON.parse(ev.data);
     if ('errorDescription' in obj && typeof obj.errorDescription === 'string') {
-        window.alert((<Util.ErrorMessage>obj).errorDescription);
+        window.alert((<Lib.ErrorMessage>obj).errorDescription);
     } else {
-        gameStateMessage = <Util.GameStateMessage>obj;
-        console.log(gameStateMessage);
+        gameStateMessage = <Lib.GameStateMessage>obj;
+        //console.log(gameStateMessage);
     }
 };
 
 // parameters for rendering
 const canvas = <HTMLCanvasElement>document.getElementById('canvas');
-const canvasRect = canvas.getBoundingClientRect();
-canvas.width = canvasRect.right - canvasRect.left;
-canvas.height = canvasRect.bottom - canvasRect.top;
 const context = <CanvasRenderingContext2D>canvas.getContext('2d');
+let canvasRect = canvas.getBoundingClientRect();
 
 // get pixels per centimeter
 const testElement = document.createElement('div');
@@ -46,30 +45,74 @@ console.log(`canvas: ${canvas}, context: ${context}, pixelsPerCM: ${pixelsPerCM}
 
 const cardImages = new Map<string, HTMLImageElement>();
 
-const suits = ['Clubs', 'Dmnds', 'Hearts', 'Spades'];
-const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const suits = ['Clubs', 'Dmnds', 'Hearts', 'Spades', 'Joker'];
+const ranks = ['Small', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'Big'];
 
 let cardWidth = 3 * pixelsPerCM;
 let cardHeight = 5 * pixelsPerCM;
 
+//                    [x0,     y0,     x1,     y1    ]
+let sortBySuitBounds: [number, number, number, number];
+let sortByRankBounds: [number, number, number, number];
+
+function calculateButtonBounds() {
+    sortBySuitBounds = [
+        canvas.width - 3.25 * pixelsPerCM,
+        canvas.height - 4.25 * pixelsPerCM,
+        canvas.width,
+        canvas.height - 3 * pixelsPerCM,
+    ];
+    sortByRankBounds = [
+        canvas.width - 3.25 * pixelsPerCM,
+        canvas.height - 2.25 * pixelsPerCM,
+        canvas.width,
+        canvas.height - 1 * pixelsPerCM,
+    ];    
+}
+
+function calculateCanvasSize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 1 * pixelsPerCM;
+    canvasRect = canvas.getBoundingClientRect();
+}
+
+window.onresize = async function() {
+    calculateCanvasSize();
+    calculateButtonBounds();
+};
+
+window.onscroll = async function () {
+    canvasRect = canvas.getBoundingClientRect();
+};
+
 window.onload = async function() {
     // wait for connection
     while (ws.readyState != WebSocket.OPEN) {
-        await Util.delay(1000);
+        await Lib.delay(1000);
         console.log(`ws.readyState: ${ws.readyState}`);
     }
 
     // try to join the game
-    ws.send(JSON.stringify(<Util.JoinMessage>{
+    ws.send(JSON.stringify(<Lib.JoinMessage>{
         gameId: gameId,
         playerName: playerName
     }));
 
     // load card images asynchronously
-    for (let suit = 0; suit < 4; ++suit) {
-        for (let rank = 1; rank <= 13; ++rank) {
+    for (let suit = 0; suit <= 4; ++suit) {
+        for (let rank = 0; rank <= 14; ++rank) {
+            if (suit == Lib.Suit.Joker) {
+                if (0 < rank && rank < 14) {
+                    continue;
+                }
+            } else {
+                if (rank < 1 || 13 < rank) {
+                    continue;
+                }
+            }
+
             const image = new Image();
-            image.src = `PaperCards/${suits[suit]}/${ranks[rank - 1]}of${suits[suit]}.png`;
+            image.src = `PaperCards/${suits[suit]}/${ranks[rank]}of${suits[suit]}.png`;
             image.onload = () => {
                 console.log(`loaded '${image.src}'`);
                 cardImages.set(JSON.stringify([suit, rank]), image);
@@ -86,20 +129,6 @@ window.onload = async function() {
         };
     }
 
-    const grayJokerImage = new Image();
-    grayJokerImage.src = 'PaperCards/Joker0.png';
-    grayJokerImage.onload = () => {
-        console.log(`loaded '${grayJokerImage.src}'`);
-        cardImages.set('GrayJoker', grayJokerImage);
-    };
-
-    const colorJokerImage = new Image();
-    colorJokerImage.src = 'PaperCards/Joker1.png';
-    colorJokerImage.onload = () => {
-        console.log(`loaded '${colorJokerImage.src}'`);
-        cardImages.set('ColorJoker', colorJokerImage);
-    };
-
     const blankImage = new Image();
     blankImage.src = 'PaperCards/Blank Card.png';
     blankImage.onload = () => {
@@ -108,23 +137,22 @@ window.onload = async function() {
     };
 
     while (cardImages.size < 4 * 13 + 7) {
-        await Util.delay(10);
+        await Lib.delay(10);
     }
 
     console.log('all card images loaded');
 
-    // initialize render context
-    console.log(`initial transform: ${context.getTransform()}`);
+    calculateCanvasSize();
+    calculateButtonBounds();
 
     // rendering must be synchronous, or else it flickers
     window.requestAnimationFrame(render);
-}
+};
 
-let previousTime: number | undefined = undefined;
+let currentTime: number;
+
 function render(time: number) {
-    if (previousTime === undefined) {
-        previousTime = time;
-    }
+    currentTime = time;
 
     if (gameStateMessage !== undefined) {
         const gameState = gameStateMessage; // cache the game state in case it changes
@@ -132,9 +160,10 @@ function render(time: number) {
         // clear the screen
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        renderDeck(gameState.deckCount);
-        renderOtherPlayers(gameState.playerIndex, gameState.otherPlayers);
-        renderPlayer(time - previousTime, gameState.playerCards);
+        drawDeck(gameState.deckCount);
+        drawOtherPlayers(gameState.playerIndex, gameState.otherPlayers);
+        drawPlayer(time, gameState.playerCards);
+        drawButtons();
         
         window.requestAnimationFrame(render);
     } else {
@@ -145,7 +174,7 @@ function render(time: number) {
     }
 }
 
-function renderDeck(deckCount: number) {
+function drawDeck(deckCount: number) {
     context.save();
     try {
         context.translate(canvas.width, 0);
@@ -167,7 +196,7 @@ function renderDeck(deckCount: number) {
     }
 }
 
-function renderOtherPlayers(playerIndex: number, otherPlayers: Record<number, Util.OtherPlayer>) {
+function drawOtherPlayers(playerIndex: number, otherPlayers: Record<number, Lib.OtherPlayer>) {
     context.save();
     try {
         context.translate(0, (canvas.width + canvas.height) / 2);
@@ -196,7 +225,7 @@ function renderOtherPlayers(playerIndex: number, otherPlayers: Record<number, Ut
 
 const gap = 0.5 * pixelsPerCM;
 
-function renderOtherPlayer(index: number, otherPlayer: Util.OtherPlayer | undefined) {
+function renderOtherPlayer(index: number, otherPlayer: Lib.OtherPlayer | undefined) {
     if (otherPlayer === undefined) {
         return;
     }
@@ -217,59 +246,67 @@ function binarySearch(haystack: number[], needle: number) {
     return bs(haystack, needle, (a, b) => a - b);
 }
 
-class Vector {
-    x: number = 0;
-    y: number = 0;
-}
-
 // extra state for the player's card
-const target0s: Vector[] = [];
-const card0s: Vector[] = [];
-const card1s: Vector[] = []; 
+const animationStartTimes: number[] = [];
+const animationStartPositions: number[] = [];
+const playerCardPositions: number[] = [];
+
 const selectedIndices: number[] = [];
+
+const dragCards: Lib.Card[] = [];
+const dragCardPositions: number[] = [];
+
+const holdCards: Lib.Card[] = [];
+const holdCardPositions: number[] = [];
+
 let indexAtMouseDown = -1;
 let dragging = false;
-let mouseDownPosition: Vector;
+let mouseDownX: number;
+let mouseDownY: number;
 const dragThreshold = 0.2 * pixelsPerCM;
 
-function getMousePosition(e: MouseEvent): Vector {
-    const rect = canvas.getBoundingClientRect();
-    return {
-        x: canvas.width * (e.clientX - rect.left) / rect.width,
-        y: canvas.height * (e.clientY - rect.top) / rect.height
-    };
+function getMouseX(e: MouseEvent) {
+    return canvas.width * (e.clientX - canvasRect.left) / canvasRect.width;
 }
 
-function distance(u: Vector, v: Vector): number {
-    const dx = u.x - v.x;
-    const dy = u.y - v.y;
+function getMouseY(e: MouseEvent) {
+    return canvas.height * (e.clientY - canvasRect.top) / canvasRect.height;
+}
+
+function distance(x0: number, y0: number, x1: number, y1: number): number {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-canvas.addEventListener("mousedown", function(e) {
-    mouseDownPosition = getMousePosition(e);
-    const { x, y } = mouseDownPosition;
+canvas.onmousedown = function(e) {
+    mouseDownX = getMouseX(e);
+    mouseDownY = getMouseY(e);
 
     indexAtMouseDown = -1;
-    for (let i = 0; i < card0s.length; ++i) {
-        const { x: x0, y: y0 } = card0s[i];
-        const { x: x1, y: y1 } = card1s[i];
-        if (x0 < x && x < x1 && y0 < y && y < y1) {
-            indexAtMouseDown = i;
+    for (let i = 0; i < playerCardPositions.length; i += 2) {
+        const x0 = playerCardPositions[i    ];
+        const y0 = playerCardPositions[i + 1];
+        const x1 = x0 + cardWidth;
+        const y1 = y0 + cardHeight;
+        if (x0 < mouseDownX && mouseDownX < x1 && y0 < mouseDownY && mouseDownY < y1) {
+            indexAtMouseDown = i / 2;
         }
     }
-});
+};
 
-canvas.addEventListener("mousemove", function(e) {
+canvas.onmousemove = function(e) {
     if (indexAtMouseDown >= 0) {
-        const mousePosition = getMousePosition(e);
-        if (dragging || distance(mousePosition, mouseDownPosition) > dragThreshold) {
+        const mouseX = getMouseX(e);
+        const mouseY = getMouseY(e);
+        if (dragging || distance(mouseX, mouseY, mouseDownX, mouseDownY) > dragThreshold) {
             let dx = e.movementX;
             let dy = e.movementY;
+
             if (!dragging) {
                 dragging = true;
-                dx += mousePosition.x - mouseDownPosition.x;
-                dy += mousePosition.y - mouseDownPosition.y;
+                dx += mouseX - mouseDownX;
+                dy += mouseY - mouseDownY;
 
                 // dragging a card selects it
                 let selectedIndexIndex = binarySearch(selectedIndices, indexAtMouseDown);
@@ -279,36 +316,27 @@ canvas.addEventListener("mousemove", function(e) {
                 }
 
                 // gather together selected cards around the card under the mouse
-                const { x, y } = card0s[indexAtMouseDown];
                 for (let i = 0; i < selectedIndices.length; ++i) {
-                    const x0 = x + (i - selectedIndexIndex) * gap;
-                    const x1 = x0 + cardWidth;
-                    const y0 = y;
-                    const y1 = y0 + cardHeight;
-                    const selectedIndex = selectedIndices[i];
-                    card0s[selectedIndex] = { x: x0, y: y0 };
-                    card1s[selectedIndex] = { x: x1, y: y1 };
+                    playerCardPositions[2 * selectedIndices[i]    ] = playerCardPositions[2 * indexAtMouseDown    ] + (i - selectedIndexIndex) * gap;
+                    playerCardPositions[2 * selectedIndices[i] + 1] = playerCardPositions[2 * indexAtMouseDown + 1];
                 }
             }
 
             // move all selected cards
             for (let i = 0; i < selectedIndices.length; ++i) {
-                const selectedIndex = selectedIndices[i];
-                const { x: x0, y: y0 } = card0s[selectedIndex];
-                const { x: x1, y: y1 } = card1s[selectedIndex];
-                card0s[selectedIndex] = { x: x0 + dx, y: y0 + dy };
-                card1s[selectedIndex] = { x: x1 + dx, y: y1 + dy };
+                playerCardPositions[2 * selectedIndices[i]    ] = playerCardPositions[2 * selectedIndices[i]    ] + dx;
+                playerCardPositions[2 * selectedIndices[i] + 1] = playerCardPositions[2 * selectedIndices[i] + 1] + dy;
             }
         }
     }
-});
+};
 
-canvas.addEventListener("mouseup", function(e) {
+canvas.onmouseup = function(e) {
     if (indexAtMouseDown >= 0) {
         if (dragging) {
             dragging = false;
 
-            const dropY = card0s[selectedIndices[0]].y;
+            const dropY = playerCardPositions[selectedIndices[0] + 1];
             const deselectDistance = Math.abs(dropY - (canvas.height - cardHeight));
             const selectDistance = Math.abs(dropY - (canvas.height - cardHeight - 2 * gap));
             const playDistance = Math.abs(dropY - canvas.height / 2);
@@ -316,6 +344,7 @@ canvas.addEventListener("mouseup", function(e) {
             if (shortest === deselectDistance) {
                 selectedIndices.splice(0, selectedIndices.length);
             } else if (shortest === playDistance) {
+                // TODO
             }
         } else {
             let selectedIndexIndex = binarySearch(selectedIndices, indexAtMouseDown);
@@ -329,34 +358,55 @@ canvas.addEventListener("mouseup", function(e) {
         }
 
         indexAtMouseDown = -1;
-    }
-});
+    } else {
+        if (sortBySuitBounds[0] < mouseDownX && mouseDownX < sortBySuitBounds[2] &&
+            sortBySuitBounds[1] < mouseDownY && mouseDownY < sortBySuitBounds[3]
+        ) {
+            sortBySuit();
+        }
 
-function renderPlayer(deltaTime: number, cards: Util.Card[]) {
+        if (sortByRankBounds[0] < mouseDownX && mouseDownX < sortByRankBounds[2] &&
+            sortByRankBounds[1] < mouseDownY && mouseDownY < sortByRankBounds[3]
+        ) {
+            sortByRank();
+        }
+    }
+
+    for (let i = 0; i < animationStartTimes.length; ++i) {
+        animationStartTimes[i] = currentTime;
+        animationStartPositions[2 * i    ] = playerCardPositions[2 * i    ];
+        animationStartPositions[2 * i + 1] = playerCardPositions[2 * i + 1];
+    }
+};
+
+function drawPlayer(time: number, playerCards: Lib.Card[]) {
     context.save();
     try {
-        const cardCount = cards.length;
-
-        const hand: Util.Card[] = [];
-        const hand0s: Vector[] = [];
-        const hand1s: Vector[] = [];
-        let index: number;
+        let splitIndex: number;
         if (dragging) {
             // extract dragged cards
             for (let i = 0; i < selectedIndices.length; ++i) {
-                const selectedIndex = selectedIndices[i];
-                hand.push(...cards.splice(selectedIndex - i, 1));
-                hand0s.push(...card0s.splice(selectedIndex - i, 1));
-                hand1s.push(...card1s.splice(selectedIndex - i, 1));
+                dragCards[i] = playerCards[selectedIndices[i]];
+                dragCardPositions[2 * i    ] = playerCardPositions[2 * selectedIndices[i]    ];
+                dragCardPositions[2 * i + 1] = playerCardPositions[2 * selectedIndices[i] + 1];
             }
 
-            selectedIndices.splice(0, selectedIndices.length);
-            
-            // find the last card overlapped by the hand
+            // extract held cards
+            let j = 0;
+            for (let i = 0; i < playerCards.length; ++i) {
+                if (binarySearch(selectedIndices, i) < 0) {
+                    holdCards[j] = playerCards[i];
+                    holdCardPositions[2 * j    ] = playerCardPositions[2 * i    ];
+                    holdCardPositions[2 * j + 1] = playerCardPositions[2 * i + 1];
+                    ++j;
+                }
+            }
+
+            // find the held cards, if any, overlapped by the dragged cards
             let leftIndex: number | undefined = undefined;
             let rightIndex: number | undefined = undefined;
-            for (let i = 0; i < cards.length; ++i) {
-                if (hand0s[0].x < card0s[i].x && card0s[i].x < hand0s[hand0s.length - 1].x) {
+            for (let i = 0; i < playerCards.length - selectedIndices.length; ++i) {
+                if (dragCardPositions[0] < holdCardPositions[2 * i] && holdCardPositions[2 * i] < dragCardPositions[dragCardPositions.length - 2]) {
                     if (leftIndex === undefined) {
                         leftIndex = i;
                     }
@@ -366,119 +416,229 @@ function renderPlayer(deltaTime: number, cards: Util.Card[]) {
             }
 
             if (leftIndex !== undefined && rightIndex !== undefined) {
-                const leftGap = card0s[leftIndex].x - hand0s[0].x;
-                const rightGap = hand0s[hand0s.length - 1].x - card0s[rightIndex].x;
+                const leftGap = holdCardPositions[2 * leftIndex] - dragCardPositions[0];
+                const rightGap = dragCardPositions[dragCardPositions.length - 2] - holdCardPositions[2 * rightIndex];
 
                 if (leftGap < rightGap) {
-                    index = leftIndex;
+                    splitIndex = leftIndex;
                 } else {
-                    index = rightIndex + 1;
+                    splitIndex = rightIndex + 1;
                 }
+                context.fillStyle = '#0000ff77';
             } else {
-                // no overlapped cards, so the index is where it was before
-                for (index = 0; index < cards.length; ++index) {
-                    if (hand0s[hand0s.length - 1].x <= card0s[index].x) {
+                context.fillStyle = '#ff000077';
+                // no overlapped cards, so the index is the first held card to the right of the dragged cards
+                for (splitIndex = 0; splitIndex < playerCards.length - selectedIndices.length; ++splitIndex) {
+                    if (dragCardPositions[dragCardPositions.length - 2] < holdCardPositions[2 * splitIndex]) {
                         break;
                     }
                 }
             }
         } else {
-            index = cards.length;
+            // not dragging, so every card is being held
+            for (let i = 0; i < playerCards.length; ++i) {
+                holdCards[i] = playerCards[i];
+                holdCardPositions[2 * i    ] = playerCardPositions[2 * i    ];
+                holdCardPositions[2 * i + 1] = playerCardPositions[2 * i + 1];
+            }
+
+            splitIndex = playerCards.length;
         }
 
-        context.font = '12px sans';
-
-        // render cards to the left of the dragged hand
-        for (let i = 0; i < index; ++i) {
-            let cardImage = <HTMLImageElement>getCardImage(cards[i]);
+        // render held cards to the left of the dragged hand
+        for (let i = 0; i < splitIndex; ++i) {
+            let cardImage = <HTMLImageElement>getCardImage(holdCards[i]);
     
-            const selected = binarySearch(selectedIndices, i) >= 0;
-            const x = canvas.width / 2 - cardCount / 2 * gap - cardWidth / 2 + i * gap;
-            const y = canvas.height - cardHeight - (selected ? 2 * gap : 0);
+            holdCardPositions[2 * i    ] = canvas.width / 2 - playerCards.length / 2 * gap - cardWidth / 2 + i * gap;
+            holdCardPositions[2 * i + 1] = canvas.height - cardHeight - (!dragging && binarySearch(selectedIndices, i) >= 0 ? 2 * gap : 0);
 
             context.drawImage(
                 cardImage,
-                x,
-                y,
+                holdCardPositions[2 * i    ],
+                holdCardPositions[2 * i + 1],
                 cardWidth,
                 cardHeight
             );
 
-            card0s[i] = { x, y };
-            card1s[i] = { x: x + cardWidth, y: y + cardHeight };
+            //context.fillStyle = '#ff0000ff';
+            //context.fillText(`${x}`, x, y - 24);
 
-            context.fillStyle = '#ff0000ff';
-            context.fillText(`${x}`, x, y - 24);
-
-            context.fillStyle = '#0000ffff';
-            context.fillText(`${y}`, x, y - 12);
+            //context.fillStyle = '#0000ffff';
+            //context.fillText(`${y}`, x, y - 12);
+            
+            playerCards[i] = holdCards[i];
+            playerCardPositions[2 * i    ] = holdCardPositions[2 * i    ];
+            playerCardPositions[2 * i + 1] = holdCardPositions[2 * i + 1];
         }
 
-        // splice dragged cards into position
-        cards.splice(index, 0, ...hand);
-        card0s.splice(index, 0, ...hand0s);
-        card1s.splice(index, 0, ...hand1s);
-
-        // render selection
-        for (let i = index; i < index + hand.length; ++i) {
-            selectedIndices.push(i);
-
-            let cardImage = <HTMLImageElement>getCardImage(cards[i]);    
-
-            const { x, y } = card0s[i];
-            context.drawImage(
-                cardImage,
-                x,
-                y,
-                cardWidth,
-                cardHeight
-            );
-
-            context.fillStyle = '#ff0000ff';
-            context.fillText(`${x}`, x, y - 24);
-
-            context.fillStyle = '#0000ffff';
-            context.fillText(`${y}`, x, y - 12);
-        }
-
-        // render remaining cards
-        for (let i = index + hand.length; i < cards.length; ++i) {
-            let cardImage = <HTMLImageElement>getCardImage(cards[i]);
+        if (dragging) {
+            // render dragged cards
+            for (let i = 0; i < selectedIndices.length; ++i) {
+                let cardImage = <HTMLImageElement>getCardImage(dragCards[i]);
     
-            const x = canvas.width / 2 - cardCount / 2 * gap - cardWidth / 2 + i * gap;
-            const y = canvas.height - cardHeight;
+                context.drawImage(
+                    cardImage,
+                    dragCardPositions[2 * i    ],
+                    dragCardPositions[2 * i + 1],
+                    cardWidth,
+                    cardHeight
+                );
     
-            context.drawImage(
-                cardImage,
-                x,
-                y,
-                cardWidth,
-                cardHeight
-            );
+                //context.fillStyle = '#ff0000ff';
+                //context.fillText(`${x}`, x, y - 24);
+    
+                //context.fillStyle = '#0000ffff';
+                //context.fillText(`${y}`, x, y - 12);
+            }
 
-            card0s[i] = { x, y };
-            card1s[i] = { x: x + cardWidth, y: y + cardHeight };
+            // render remaining held cards
+            for (let i = splitIndex; i < playerCards.length - selectedIndices.length; ++i) {
+                let cardImage = <HTMLImageElement>getCardImage(holdCards[i]);
 
-            context.fillStyle = '#ff0000ff';
-            context.fillText(`${x}`, x, y - 24);
+                holdCardPositions[2 * i    ] = canvas.width / 2 - playerCards.length / 2 * gap - cardWidth / 2 + (i + selectedIndices.length) * gap,
+                holdCardPositions[2 * i + 1] = canvas.height - cardHeight;
 
-            context.fillStyle = '#0000ffff';
-            context.fillText(`${y}`, x, y - 12);
+                context.drawImage(
+                    cardImage,
+                    holdCardPositions[2 * i    ],
+                    holdCardPositions[2 * i + 1],
+                    cardWidth,
+                    cardHeight
+                );
+
+                //context.fillStyle = '#ff0000ff';
+                //context.fillText(`${x}`, x, y - 24);
+    
+                //context.fillStyle = '#0000ffff';
+                //context.fillText(`${y}`, x, y - 12);
+
+                context.fillRect(holdCardPositions[2 * i], holdCardPositions[2 * i + 1], cardWidth, cardHeight);
+            }
+
+            // fix state
+            for (let i = 0; i < selectedIndices.length; ++i) {
+                playerCards[splitIndex + i] = dragCards[i];
+                playerCardPositions[2 * (splitIndex + i)    ] = dragCardPositions[2 * i    ];
+                playerCardPositions[2 * (splitIndex + i) + 1] = dragCardPositions[2 * i + 1];
+            }
+
+            for (let i = splitIndex; i < playerCards.length - selectedIndices.length; ++i) {
+                playerCards[selectedIndices.length + i] = holdCards[i];
+                playerCardPositions[2 * (selectedIndices.length + i)    ] = holdCardPositions[2 * i    ];
+                playerCardPositions[2 * (selectedIndices.length + i) + 1] = holdCardPositions[2 * i + 1];
+            }
+
+            for (let i = 0; i < selectedIndices.length; ++i) {
+                selectedIndices[i] = splitIndex + i;
+            }
         }
     } finally {
         context.restore();
     }
 }
 
-function getCardImage(card: Util.Card) {
-    if (card === Util.Joker.Big) {
-        return cardImages.get('ColorJoker');
-    } else if (card === Util.Joker.Small) {
-        return cardImages.get('GrayJoker');
-    } else {
-        const [suit, rank] = card;
-        return cardImages.get(`[${suit},${rank}]`);
-    }
+function getCardImage(card: Lib.Card) {
+    return cardImages.get(`[${Lib.getSuit(card)},${Lib.getRank(card)}]`);
+}
+
+const animationDuration = 1000;
+const animationExponent = 10;
+function animate(start: number, end: number, startTime: number, time: number): number {
+    return start + (1 - Math.pow(2, animationExponent * (startTime - time) / animationDuration)) * (end - start);
 }
 
 const radiansPerDegree: number = 0.01745329252;
+
+function drawButtons() {
+    context.save();
+    try {
+        const x = canvas.width - 7.5 * pixelsPerCM;
+        const y = canvas.height - 5 * pixelsPerCM;
+
+        // blur image behind
+        //stackBlurCanvasRGBA('canvas', x, y, canvas.width - x, canvas.height - y, 16);
+
+        context.fillStyle = '#00ffff77';
+        context.fillRect(x, y, canvas.width - x, canvas.height - y);
+        
+        context.fillStyle = '#000000ff';
+        context.font = '1.5cm Irregularis';
+        context.fillText('SORT', x + 0.5 * pixelsPerCM, y + 3 * pixelsPerCM);
+
+        context.font = '3cm Irregularis';
+        context.fillText('{', canvas.width - 4.25 * pixelsPerCM, canvas.height - 1.5 * pixelsPerCM);
+
+        context.font = '1.5cm Irregularis';
+        context.fillText('SUIT', sortBySuitBounds[0], sortBySuitBounds[3]);
+
+        context.font = '1.5cm Irregularis';
+        context.fillText('RANK', sortByRankBounds[0], sortByRankBounds[3]);
+
+        //context.fillStyle = '#ff000077';
+        //context.fillRect(sortBySuitBounds[0].x, sortBySuitBounds[0].y,
+            //sortBySuitBounds[1].x - sortBySuitBounds[0].x, sortBySuitBounds[1].y - sortBySuitBounds[0].y);
+
+        //context.fillStyle = '#0000ff77';
+        //context.fillRect(sortByRankBounds[0].x, sortByRankBounds[0].y,
+            //sortByRankBounds[1].x - sortByRankBounds[0].x, sortByRankBounds[1].y - sortByRankBounds[0].y);
+    } finally {
+        context.restore();
+    }
+}
+
+function sortBySuit() {
+    if (gameStateMessage === undefined) {
+        return;
+    }
+
+    const cardsWithIndex: [Lib.Card, number][] = gameStateMessage.playerCards.map((card, index) => [card, index]);
+    cardsWithIndex.sort(([a, i], [b, j]) => {
+        if (Lib.getSuit(a) === Lib.getSuit(b)) {
+            return Lib.getRank(a) - Lib.getRank(b);
+        } else {
+            return Lib.getSuit(a) - Lib.getSuit(b);
+        }
+    });
+
+    remap(cardsWithIndex);
+}
+
+function sortByRank() {
+    if (gameStateMessage === undefined) {
+        return;
+    }
+
+    const cardsWithIndex: [Lib.Card, number][] = gameStateMessage.playerCards.map((card, index) => [card, index]);
+    cardsWithIndex.sort(([a, i], [b, j]) => {
+        if (Lib.getRank(a) === Lib.getRank(b)) {
+            return Lib.getSuit(a) - Lib.getSuit(b);
+        } else {
+            return Lib.getRank(a) - Lib.getRank(b);
+        }
+    });
+
+    remap(cardsWithIndex);
+}
+
+const temporaryPositions: number[] = [];
+
+function remap(cardsWithIndex: [Lib.Card, number][]) {
+    if (gameStateMessage === undefined) {
+        return;
+    }
+
+    for (let i = 0; i < cardsWithIndex.length; ++i) {
+        const [card, _] = cardsWithIndex[i];
+        gameStateMessage.playerCards[i] = card;
+    }
+
+    for (let i = 0; i < cardsWithIndex.length; ++i) {
+        const [_, j] = cardsWithIndex[i];
+        temporaryPositions[2 * i    ] = playerCardPositions[2 * j    ];
+        temporaryPositions[2 * i + 1] = playerCardPositions[2 * j + 1];
+    }
+
+    for (let i = 0; i < temporaryPositions.length; ++i) {
+        playerCardPositions[i] = temporaryPositions[i];
+    }
+}

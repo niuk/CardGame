@@ -1,0 +1,14 @@
+@font-face {
+    font-family: "Irregularis";
+    src: url("Irregularis-raa9.ttf");
+}
+
+form {
+    font-family: Irregularis;
+    font-size: large;
+}
+
+button {
+    font-family: Irregularis;
+    font-size: large;
+}

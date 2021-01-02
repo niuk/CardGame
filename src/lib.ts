@@ -1,4 +1,4 @@
-export namespace Util {
+export namespace Lib {
     export function getCookie(name: string): string | undefined {
         const parts = `; ${document.cookie}`.split(`; ${name}=`);
         if (parts.length === 2) {
@@ -17,14 +17,16 @@ export namespace Util {
     }
     
     export enum Suit {
-        Club,
+        Club, // 0
         Diamond,
         Heart,
-        Spade
+        Spade,
+        Joker, // 4
     }
 
     export enum Rank {
-        Ace = 1,
+        Small, // 0
+        Ace,
         Two,
         Three,
         Four,
@@ -36,15 +38,23 @@ export namespace Util {
         Ten,
         Jack,
         Queen,
-        King
-    }
-    
-    export enum Joker {
-        Big,
-        Small
+        King,
+        Big, // 14
     }
 
-    export type Card = ([Suit, Rank] | Joker);
+    export type Card = number;
+
+    export function card(suit: Suit, rank: Rank): Card {
+        return suit << 4 | rank;
+    }
+
+    export function getSuit(card: Card): Suit {
+        return card >> 4;
+    }
+
+    export function getRank(card: Card): Rank {
+        return card & 0xf;
+    }
     
     export interface OtherPlayer {
         name: string;
@@ -54,8 +64,8 @@ export namespace Util {
     export interface GameStateMessage {
         deckCount: number;
         playerIndex: number;
-        playerCards: Util.Card[];
-        cardsPlayed: Util.Card[];
+        playerCards: Card[];
+        cardsPlayed: Card[];
         otherPlayers: Record<number, OtherPlayer>;
         activePlayerIndex: number;
     }
@@ -66,11 +76,11 @@ export namespace Util {
     }
 
     export interface ShuffleMessage {
-        cardsToShuffle: Util.Card[];
+        cardsToShuffle: Card[];
     }
 
     export interface PlayMessage {
-        cardsToPlay: Util.Card[];
+        cardsToPlay: Card[];
     }
 
     export interface FullGameError {

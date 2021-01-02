@@ -4,7 +4,7 @@ import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
 import { Mutex, Semaphore } from "await-semaphore";
 
-import { Util } from "./util";
+import { Lib } from "./lib";
 
 const nanoid = customAlphabet('1234567890abcdef', 5);
 
@@ -16,7 +16,7 @@ const playersByWebSocket = new Map<WebSocket, Player>();
 class Player {
     name: string;
     ws: WebSocket;
-    cards: Util.Card[] = [];
+    cards: Lib.Card[] = [];
     endTurn = new Semaphore(1);
     releaseEndTurn: () => void;
     game: Game;
@@ -47,8 +47,8 @@ class Game {
     gameId: string;
     stateMutex = new Mutex();
     playersByIndex: (Player | undefined)[] = [undefined, undefined, undefined, undefined]
-    cardsInDeck: Util.Card[] = [];
-    cardsPlayed: Util.Card[] = [];
+    cardsInDeck: Lib.Card[] = [];
+    cardsPlayed: Lib.Card[] = [];
     turn: number = 0;
 
     constructor(gameId: string) {
@@ -56,15 +56,15 @@ class Game {
 
         for (let i = 0; i < 4; ++i) {
             for (let j = 1; j <= 13; ++j) {
-                this.cardsInDeck.push([<Util.Suit>i, <Util.Rank>j]);
-                this.cardsInDeck.push([<Util.Suit>i, <Util.Rank>j]);
+                this.cardsInDeck.push(Lib.card(i, j));
+                this.cardsInDeck.push(Lib.card(i, j));
             }
         }
 
-        this.cardsInDeck.push(Util.Joker.Big);
-        this.cardsInDeck.push(Util.Joker.Big);
-        this.cardsInDeck.push(Util.Joker.Small);
-        this.cardsInDeck.push(Util.Joker.Small);
+        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Big));
+        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Big));
+        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Small));
+        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Small));
 
         this.run();
     }
@@ -126,13 +126,13 @@ class Game {
                 this.turn++;
             } else {
                 // still waiting for playersByIndex to join
-                await Util.delay(1000);
+                await Lib.delay(1000);
             }
         }
     }
 
     sendStateToPlayerWithIndex(i: number) {
-        let otherPlayers: Record<number, Util.OtherPlayer> = {};
+        let otherPlayers: Record<number, Lib.OtherPlayer> = {};
 
         for (let j = 0; j < this.playersByIndex.length; ++j) {
             if (i !== j) {
@@ -149,7 +149,7 @@ class Game {
         // send game state
         let player = this.playersByIndex[i];
         if (player !== undefined) {
-            player.ws.send(JSON.stringify(<Util.GameStateMessage>{
+            player.ws.send(JSON.stringify(<Lib.GameStateMessage>{
                 playerIndex: i,
                 deckCount: this.cardsInDeck.length,
                 playerCards: player.cards,
@@ -178,7 +178,7 @@ wss.on('connection', function(ws) {
             if ('gameId' in obj && typeof obj.gameId === 'string' &&
                 'playerName' in obj && typeof obj.playerName === 'string'
             ) {
-                const joinMessage = <Util.JoinMessage>obj;
+                const joinMessage = <Lib.JoinMessage>obj;
                 const game = gamesById.get(joinMessage.gameId);
                 if (game !== undefined) {
                     const release = await game.stateMutex.acquire();
@@ -200,32 +200,32 @@ wss.on('connection', function(ws) {
                             }
                         }
 
-                        ws.send(JSON.stringify(<Util.ErrorMessage>{
+                        ws.send(JSON.stringify(<Lib.ErrorMessage>{
                             errorDescription: "game is full"
                         }));
                     } finally {
                         release();
                     }
                 } else {
-                    ws.send(JSON.stringify(<Util.ErrorMessage>{
+                    ws.send(JSON.stringify(<Lib.ErrorMessage>{
                         errorDescription: "no such game"
                     }));
                 }
             } else if ('cardsToPlay' in obj) {
                 const player = playersByWebSocket.get(ws);
                 if (player === undefined) {
-                    ws.send(JSON.stringify(<Util.ErrorMessage>{
+                    ws.send(JSON.stringify(<Lib.ErrorMessage>{
                         errorDescription: "no such player"
                     }));
                 } else {
                     const release = await player.game.stateMutex.acquire();
                     try {
                         if (player.game.activePlayerIndex !== player.index) {
-                            ws.send(JSON.stringify(<Util.ErrorMessage>{
+                            ws.send(JSON.stringify(<Lib.ErrorMessage>{
                                 errorDescription: "you are not the active player"
                             }));
                         } else {
-                            const playMessage = <Util.PlayMessage>obj;
+                            const playMessage = <Lib.PlayMessage>obj;
                             
                             let canPlay = true;
                             let newCards = player.cards.slice();
@@ -240,7 +240,7 @@ wss.on('connection', function(ws) {
                                 }
 
                                 if (!found) {
-                                    ws.send(JSON.stringify(<Util.ErrorMessage>{
+                                    ws.send(JSON.stringify(<Lib.ErrorMessage>{
                                         errorDescription: `you don't have this card: ${playMessage.cardsToPlay[i]}`
                                     }));
                                     canPlay = false;
@@ -264,17 +264,17 @@ wss.on('connection', function(ws) {
             } else if ('cardsToShuffle' in obj) {
                 const player = playersByWebSocket.get(ws);
                 if (player === undefined) {
-                    ws.send(JSON.stringify(<Util.ErrorMessage>{
+                    ws.send(JSON.stringify(<Lib.ErrorMessage>{
                         errorDescription: "not such player"
                     }))
                 } else {
                     const release = await player.game.stateMutex.acquire();
                     try {
-                        const shuffleMessage = <Util.ShuffleMessage>obj;
+                        const shuffleMessage = <Lib.ShuffleMessage>obj;
         
                         let canShuffle = true;
                         let oldCards = player.cards.slice();
-                        let newCards: Util.Card[] = [];
+                        let newCards: Lib.Card[] = [];
                         for (let i = 0; i < shuffleMessage.cardsToShuffle.length; ++i) {
                             let found = false;
                             for (let j = 0; j < oldCards.length; ++j) {
@@ -288,7 +288,7 @@ wss.on('connection', function(ws) {
                             }
 
                             if (!found) {
-                                ws.send(JSON.stringify(<Util.ErrorMessage>{
+                                ws.send(JSON.stringify(<Lib.ErrorMessage>{
                                     errorDescription: `you don't have this card: ${shuffleMessage.cardsToShuffle[i]}`
                                 }));
                                 canShuffle = false;
@@ -306,7 +306,7 @@ wss.on('connection', function(ws) {
                     }
                 }
             } else {
-                ws.send(JSON.stringify(<Util.ErrorMessage>{
+                ws.send(JSON.stringify(<Lib.ErrorMessage>{
                     errorDescription: "bad message"
                 }));
             }
