@@ -55,17 +55,22 @@ export namespace Lib {
     export function getRank(card: Card): Rank {
         return card & 0xf;
     }
+
+    export function cardToString(card: Card): string {
+        return `[${Lib.getSuit(card)},${Lib.getRank(card)}]`;
+    }
     
     export interface OtherPlayer {
         name: string;
-        cardCount: number;
+        hiddenCardCount: number;
+        revealedCards: Card[];
     }
 
     export interface GameStateMessage {
         deckCount: number;
         playerIndex: number;
-        playerCards: Card[];
-        cardsPlayed: Card[];
+        hiddenCards: Card[];
+        revealedCards: Card[];
         otherPlayers: Record<number, OtherPlayer>;
         activePlayerIndex: number;
     }
@@ -75,20 +80,25 @@ export namespace Lib {
         playerName: string;
     }
 
-    export interface ShuffleMessage {
-        cardsToShuffle: Card[];
+    export interface ReorderMessage {
+        cardsToReorder: Card[];
     }
 
-    export interface PlayMessage {
-        cardsToPlay: Card[];
+    export interface DrawMessage {
+        drawCard: null;
     }
 
-    export interface FullGameError {
-        gameId: string;
+    export interface ReturnMessage {
+        cardsToReturn: Card[];
+        source: "hidden" | "revealed";
+    }
+    
+    export interface RevealMessage {
+        cardsToReveal: Card[];
     }
 
-    export interface NoSuchGameError {
-        gameId: string;
+    export interface HideMessage {
+        cardsToHide: Card[];
     }
 
     export interface ErrorMessage {
