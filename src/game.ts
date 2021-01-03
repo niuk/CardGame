@@ -15,9 +15,10 @@ if (gameId === undefined) {
 // refreshing should rejoin the same game
 window.history.pushState(undefined, gameId, `/game?gameId=${gameId}&playerName=${playerName}`);
 
-let gameStateMessage: Lib.GameStateMessage | undefined = undefined;
+let previousGameState: Lib.GameState | undefined = undefined;;
+let gameState: Lib.GameState | undefined = undefined;
 
-let onGameStateMessage: ((gameStateMessage: Lib.GameStateMessage) => void) | undefined = undefined;
+let onGameStateMessage: ((gameStateMessage: Lib.GameState) => void) | undefined = undefined;
 
 // open websocket connection to get game state updates
 let ws = new WebSocket(`ws://${window.location.hostname}:${JSON.parse(window.location.port) + 1111}`);
@@ -26,18 +27,19 @@ ws.onmessage = ev => {
     if ('errorDescription' in obj && typeof obj.errorDescription === 'string') {
         window.alert((<Lib.ErrorMessage>obj).errorDescription);
     } else {
-        gameStateMessage = <Lib.GameStateMessage>obj;
-        console.log(gameStateMessage);
+        previousGameState = gameState;
+        gameState = <Lib.GameState>obj;
+        console.log(gameState);
 
         for (let i = 0; i < selectedIndices.length; ++i) {
-            if (selectedIndices[i] >= gameStateMessage.playerCards.length) {
+            if (selectedIndices[i] >= gameState.playerCards.length) {
                 selectedIndices.splice(i, selectedIndices.length - i);
                 break;
             }
         }
 
         if (onGameStateMessage !== undefined) {
-            onGameStateMessage(gameStateMessage);
+            onGameStateMessage(gameState);
         }
     }
 };
@@ -163,16 +165,18 @@ function render(time: number) {
     deltaTime = time - (currentTime !== undefined ? currentTime : time);
     currentTime = time;
 
-    if (gameStateMessage !== undefined) {
-        const gameState = gameStateMessage; // cache the game state in case it changes
-
+    if (gameState !== undefined) {
         // clear the screen
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        renderBasics(<string>gameId, <string>playerName);
         renderDeck(gameState.deckCount);
-        renderOtherPlayers(gameState.playerIndex, gameState.otherPlayers);
-        renderPlayer(gameState.playerCards);
+        renderBasics(<string>gameId, <string>playerName);
+        renderOtherPlayers(gameState);
+        gameState.playerRevealCount = renderPlayer(
+            gameState.playerCards,
+            gameState.playerRevealCount,
+            gameState.playerIndex
+        );
         renderButtons();
         
         window.requestAnimationFrame(render);
@@ -218,19 +222,19 @@ function renderDeck(deckCount: number) {
     }
 }
 
-function renderOtherPlayers(playerIndex: number, otherPlayers: Record<number, Lib.OtherPlayer>) {
+function renderOtherPlayers(gameState: Lib.GameState) {
     context.save();
     try {
         context.translate(0, (canvas.width + canvas.height) / 2);
         context.rotate(-90 * radiansPerDegree);
-        renderOtherPlayer(1, otherPlayers[(playerIndex + 1) % 4]);
+        renderOtherPlayer(gameState, (gameState.playerIndex + 1) % 4);
     } finally {
         context.restore();
     }
     
     context.save();
     try {
-        renderOtherPlayer(2, otherPlayers[(playerIndex + 2) % 4]);
+        renderOtherPlayer(gameState, (gameState.playerIndex + 2) % 4);
     } finally {
         context.restore();
     }
@@ -239,27 +243,96 @@ function renderOtherPlayers(playerIndex: number, otherPlayers: Record<number, Li
     try {
         context.translate(canvas.width, (canvas.height - canvas.width) / 2);
         context.rotate(90 * radiansPerDegree);
-        renderOtherPlayer(3, otherPlayers[(playerIndex + 3) % 4]);
+        renderOtherPlayer(gameState, (gameState.playerIndex + 3) % 4);
     } finally {
         context.restore();
     }
 }
 
-function renderOtherPlayer(index: number, otherPlayer: Lib.OtherPlayer | undefined) {
-    if (otherPlayer === undefined) {
+const cardTargets: Vector[][] = [[], [], [], []];
+const cardPositions: Vector[][] = [[], [], [], []];
+const cardVelocities: Vector[][] = [[], [], [], []];
+
+function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
+    const player = gameState.otherPlayers[playerIndex];
+    if (player === undefined) { 
         return;
     }
 
+    const previousPlayer = previousGameState?.otherPlayers[playerIndex];
+
     context.fillStyle = '#000000ff';
     context.font = `${cardGap}px Irregularis`;
-    context.fillText(otherPlayer.name, canvas.width / 2, cardHeight + cardGap);
+    context.fillText(player.name, canvas.width / 2, cardHeight + cardGap);
 
-    const cardImage = <HTMLImageElement>cardImages.get(`Back${index}`);
-    for (let i = 0; i < otherPlayer.hiddenCardCount; ++i) {
+    const deckPosition = context.getTransform().inverse().transformPoint({
+        w: 1,
+        x: deckTopBounds[0].x,
+        y: deckTopBounds[0].y,
+        z: 0
+    });
+
+    for (let i = 0; i < player.cardCount; ++i) {
+        let j: number;
+        let count: number;
+        let cardImage: HTMLImageElement;
+        let y: number;
+        if (i < player.revealedCards.length) {
+            j = i;
+            count = player.revealedCards.length;
+            cardImage = <HTMLImageElement>cardImages.get(Lib.cardToString(player.revealedCards[i]));
+            y = cardHeight;
+        } else {
+            j = i - player.revealedCards.length;
+            count = player.cardCount - j;
+            cardImage = <HTMLImageElement>cardImages.get(`Back${playerIndex}`);
+            y = 0;
+        }
+
+        if (cardPositions[playerIndex][i] === undefined) {
+            cardPositions[playerIndex][i] = {
+                x: canvas.width / 2 - cardWidth / 2,
+                y: y
+            };
+
+            if (previousGameState !== undefined && previousGameState.deckCount > gameState.deckCount) {
+                cardPositions[playerIndex][i] = deckPosition;
+            }
+            
+            if (previousPlayer != undefined && previousPlayer.cardCount == player.cardCount) {
+                if (previousPlayer.revealedCards.length < player.revealedCards.length) {
+                    cardPositions[playerIndex][i] = {
+                        x: canvas.width / 2 - cardWidth / 2,
+                        y: 0
+                    };
+                } else if (previousPlayer.revealedCards.length > player.revealedCards.length) {
+                    cardPositions[playerIndex][i] = {
+                        x: canvas.width / 2 - cardWidth / 2,
+                        y: cardHeight
+                    };
+                }
+            }
+        }
+
+        if (cardVelocities[playerIndex][i] === undefined) {
+            cardVelocities[playerIndex][i] = { x: 0, y: 0 };
+        }
+        
+        cardTargets[playerIndex][i] = {
+            x: canvas.width / 2 - cardWidth / 2 + (j - count / 2) * cardGap,
+            y: y
+        };
+
+        [cardPositions[playerIndex][i], cardVelocities[playerIndex][i]] = dampSpring(
+            cardTargets[playerIndex][i],
+            cardPositions[playerIndex][i],
+            cardVelocities[playerIndex][i]
+        );
+
         context.drawImage(
             cardImage,
-            canvas.width / 2 + (i - otherPlayer.hiddenCardCount / 2) * cardGap - cardWidth / 2,
-            0,
+            cardPositions[playerIndex][i].x,
+            cardPositions[playerIndex][i].y,
             cardWidth,
             cardHeight
         );
@@ -296,12 +369,7 @@ function scale(s: number, v: Vector): Vector {
 }
 
 // extra state for the player's card
-const playerCardTargets: Vector[] = [];
-const playerCardPositions: Vector[] = [];
-const playerCardVelocities: Vector[] = [];
-
 const selectedIndices: number[] = [];
-let revealIndex = 0;
 
 const movingCards: Lib.Card[] = [];
 const movingCardTargets: Vector[] = [];
@@ -343,19 +411,33 @@ function dampSpring(targetPosition: Vector, position: Vector, velocity: Vector):
 enum Action {
     None,
     Draw,
-    Select,
-    Deselect,
+    DeselectHidden,
+    DeselectRevealed,
+    SelectHidden,
+    SelectRevealed,
     Toggle
 }
 
-function getDropAction(): Action {
-    const dropY = playerCardTargets[selectedIndices[0]].y;
-    const deselectDistance = Math.abs(dropY - (canvas.height - cardHeight));
-    const selectDistance = Math.abs(dropY - (canvas.height - cardHeight - 2 * cardGap));
+function getDropAction(gameState: Lib.GameState): Action {
+    const dropY = cardPositions[gameState.playerIndex][selectedIndices[0]].y;
+    const deselectHiddenDistance   = Math.abs(dropY - (canvas.height -     cardHeight));
+    const deselectRevealedDistance = Math.abs(dropY - (canvas.height - 2 * cardHeight));
+    const selectHiddenDistance     = Math.abs(dropY - (canvas.height -     cardHeight - 2 * cardGap));
+    const selectRevealedDistance   = Math.abs(dropY - (canvas.height - 2 * cardHeight - 2 * cardGap));
+    const deselectDistance = Math.min(deselectHiddenDistance, deselectRevealedDistance);
+    const selectDistance = Math.min(selectHiddenDistance, selectRevealedDistance);
     if (deselectDistance < selectDistance) {
-        return Action.Deselect;
+        if (deselectHiddenDistance < deselectRevealedDistance) {
+            return Action.DeselectHidden;
+        } else {
+            return Action.DeselectRevealed;
+        }
     } else {
-        return Action.Select;
+        if (selectHiddenDistance < selectRevealedDistance) {
+            return Action.SelectHidden;
+        } else {
+            return Action.SelectRevealed;
+        }
     }
 }
 
@@ -373,10 +455,11 @@ function getMousePosition(e: MouseEvent) {
     };
 }
 
-function getIndexAtMouseDownPosition(cardPositions: Vector[]) {
-}
-
 canvas.onmousedown = function(e) {
+    if (gameState === undefined) {
+        return;
+    }
+
     mouseDownPosition = getMousePosition(e);
 
     onDeckAtMouseDown =
@@ -384,9 +467,9 @@ canvas.onmousedown = function(e) {
         deckTopBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < deckTopBounds[1].y;
 
     cardIndexAtMouseDown = -1;
-    for (let i = playerCardPositions.length - 1; i >= 0; --i) {
-        const x0 = playerCardPositions[i].x;
-        const y0 = playerCardPositions[i].y;
+    for (let i = cardPositions[gameState.playerIndex].length - 1; i >= 0; --i) {
+        const x0 = cardPositions[gameState.playerIndex][i].x;
+        const y0 = cardPositions[gameState.playerIndex][i].y;
         const x1 = x0 + cardWidth;
         const y1 = y0 + cardHeight;
         if (x0 < mouseDownPosition.x && mouseDownPosition.x < x1 &&
@@ -400,38 +483,17 @@ canvas.onmousedown = function(e) {
 };
 
 canvas.onmousemove = function(e) {
+    if (gameState === undefined) {
+        return;
+    }
+
     mouseMovePosition = getMousePosition(e);
     exceededMoveTreshold = exceededMoveTreshold || distance(mouseMovePosition, mouseDownPosition) > moveThreshold;
     if (!exceededMoveTreshold) {
         return;
     }
 
-    if (onDeckAtMouseDown) {
-        if (action === Action.None) {
-            action = Action.Draw;
-
-            onGameStateMessage = gameStateMessage => {
-                // transition to moving state
-                onDeckAtMouseDown = false;
-                cardIndexAtMouseDown = gameStateMessage.playerCards.length - 1;
-                selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
-                playerCardTargets[cardIndexAtMouseDown] = add(deckTopBounds[0], sub(mouseMovePosition, mouseDownPosition));
-                playerCardPositions[cardIndexAtMouseDown] = deckTopBounds[0];
-                playerCardVelocities[cardIndexAtMouseDown] = { x: 0, y: 0 };
-                movingCardTargets[0] = playerCardTargets[cardIndexAtMouseDown];
-
-                if (action !== Action.None) { // only set the action if the mouse button is still down
-                    action = getDropAction();
-                }
-
-                onGameStateMessage = undefined;
-            };
-        
-            ws.send(JSON.stringify(<Lib.DrawMessage>{
-                drawCard: null
-            }));
-        }
-    } else if (cardIndexAtMouseDown >= 0) {
+    if (cardIndexAtMouseDown >= 0) {
         let delta = { x: e.movementX, y: e.movementY };
     
         if (action === Action.Toggle) {
@@ -448,22 +510,51 @@ canvas.onmousemove = function(e) {
             // gather together selected cards around the card under the mouse
             for (let i = 0; i < selectedIndices.length; ++i) {
                 movingCardTargets[i] = {
-                    x: playerCardPositions[cardIndexAtMouseDown].x + (i - selectedIndexIndex) * cardGap,
-                    y: playerCardPositions[cardIndexAtMouseDown].y
+                    x: cardPositions[gameState.playerIndex][cardIndexAtMouseDown].x + (i - selectedIndexIndex) * cardGap,
+                    y: cardPositions[gameState.playerIndex][cardIndexAtMouseDown].y
                 };
             }
         }
     
-        action = getDropAction();
+        action = getDropAction(gameState);
     
         // move all selected cards
         for (let i = 0; i < selectedIndices.length; ++i) {
             movingCardTargets[i] = add(movingCardTargets[i], delta);
         }
+    } else if (onDeckAtMouseDown) {
+        if (action === Action.None) {
+            action = Action.Draw;
+
+            onGameStateMessage = gameState => {
+                // transition to moving state
+                onDeckAtMouseDown = false;
+                cardIndexAtMouseDown = gameState.playerCards.length - 1;
+                selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
+                cardTargets[gameState.playerIndex][cardIndexAtMouseDown] = add(deckTopBounds[0], sub(mouseMovePosition, mouseDownPosition));
+                cardPositions[gameState.playerIndex][cardIndexAtMouseDown] = deckTopBounds[0];
+                cardVelocities[gameState.playerIndex][cardIndexAtMouseDown] = { x: 0, y: 0 };
+                movingCardTargets[0] = cardTargets[gameState.playerIndex][cardIndexAtMouseDown];
+
+                if (action !== Action.None) { // only set the action if the mouse button is still down
+                    action = getDropAction(gameState);
+                }
+
+                onGameStateMessage = undefined;
+            };
+        
+            ws.send(JSON.stringify(<Lib.DrawMessage>{
+                draw: null
+            }));
+        }
     }
 };
 
 canvas.onmouseup = function(e) {
+    if (gameState === undefined) {
+        return;
+    }
+
     if (onDeckAtMouseDown) {
     } else if (cardIndexAtMouseDown >= 0) {
         if (action === Action.Toggle) {
@@ -475,22 +566,22 @@ canvas.onmouseup = function(e) {
                 // deselect
                 selectedIndices.splice(selectedIndexIndex, 1);
             }
-        } else if (action === Action.Deselect) {
+        } else if (action === Action.DeselectHidden || action === Action.DeselectRevealed) {
             selectedIndices.splice(0, selectedIndices.length);
-            reorderCards();
-        } else if (action === Action.Select) {
+            reorderCards(gameState);
+        } else if (action === Action.SelectHidden || action === Action.SelectRevealed) {
             // onmousemove should have already selected the card
-            reorderCards();
+            reorderCards(gameState);
         }
     } else {
         if (sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortBySuitBounds[1].x &&
             sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortBySuitBounds[1].y
         ) {
-            sortBySuit();
+            sortBySuit(gameState.playerIndex);
         } else if (sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortByRankBounds[1].x &&
             sortByRankBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortByRankBounds[1].y
         ) {
-            sortByRank();
+            sortByRank(gameState);
         }
     }
 
@@ -500,61 +591,76 @@ canvas.onmouseup = function(e) {
     action = Action.None;
 };
 
-function reorderCards() {
-    if (gameStateMessage === undefined) {
-        throw new Error();
-    }
-
+function reorderCards(gameState: Lib.GameState) {
     ws.send(JSON.stringify(<Lib.ReorderMessage>{
-        cardsToReorder: gameStateMessage.playerCards,
-        revealIndex: revealIndex
+        cards: gameState.playerCards,
+        revealCount: gameState.playerRevealCount
     }));
 }
 
-function renderPlayer(playerCards: Lib.Card[]) {
+// returns the adjusted reveal index
+function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex: number): number {
     // initialize state
     for (let i = 0; i < playerCards.length; ++i) {
-        if (playerCardTargets[i] === undefined) {
-            playerCardTargets[i] = { x: 0, y: 0 };
+        if (cardTargets[playerIndex][i] === undefined) {
+            cardTargets[playerIndex][i] = { x: 0, y: 0 };
         }
         
-        if (playerCardPositions[i] === undefined) {
-            playerCardPositions[i] = { x: 0, y: 0 };
+        if (cardPositions[playerIndex][i] === undefined) {
+            cardPositions[playerIndex][i] = { x: 0, y: 0 };
         }
 
-        if (playerCardVelocities[i] === undefined) {
-            playerCardVelocities[i] = { x: 0, y: 0 };
+        if (cardVelocities[playerIndex][i] === undefined) {
+            cardVelocities[playerIndex][i] = { x: 0, y: 0 };
         }
     }
 
     let splitIndex: number;
-    if (action === Action.Select || action === Action.Deselect) {
-        // extract dragged cards
-        for (let i = 0; i < selectedIndices.length; ++i) {
-            movingCards[i] = playerCards[selectedIndices[i]];
-            // movingCardTargets[i] is set in onmousemove
-            movingCardPositions[i] = playerCardPositions[selectedIndices[i]];
-            movingCardVelocities[i] = playerCardVelocities[selectedIndices[i]];
-        }
+    let movingCardCount: number;
+    let reservedCardCount: number;
+    if (action === Action.DeselectHidden || action === Action.DeselectRevealed || action === Action.SelectHidden || action === Action.SelectRevealed) {
+        // extract moving cards
+        let revealCountAdjustment = 0;
 
-        // extract held cards
-        let j = 0;
-        for (let i = 0; i < playerCards.length; ++i) {
-            if (binarySearch(selectedIndices, i) < 0) {
-                reservedCards[j] = playerCards[i];
-                reservedCardTargets[j] = playerCardTargets[i];
-                reservedCardPositions[j] = playerCardPositions[i];
-                reservedCardVelocities[j] = playerCardVelocities[i];
-                ++j;
+        movingCardCount = 0;
+        for (let i = 0; i < selectedIndices.length; ++i) {
+            movingCards[movingCardCount] = playerCards[selectedIndices[i]];
+            // movingCardTargets[movingCardCount] is set in onmousemove
+            movingCardPositions[movingCardCount] = cardPositions[playerIndex][selectedIndices[i]];
+            movingCardVelocities[movingCardCount] = cardVelocities[playerIndex][selectedIndices[i]];
+            ++movingCardCount;
+
+            if (selectedIndices[i] < revealCount) {
+                ++revealCountAdjustment;
             }
         }
 
+        revealCount -= revealCountAdjustment;
+
+        // extract reserved cards
+        reservedCardCount = 0;
+        for (let i = 0; i < playerCards.length; ++i) {
+            if (binarySearch(selectedIndices, i) < 0) {
+                reservedCards[reservedCardCount] = playerCards[i];
+                reservedCardTargets[reservedCardCount] = cardTargets[playerIndex][i];
+                reservedCardPositions[reservedCardCount] = cardPositions[playerIndex][i];
+                reservedCardVelocities[reservedCardCount] = cardVelocities[playerIndex][i];
+                ++reservedCardCount;
+            }
+        }
+
+        // determine whether the moving cards are closer to the revealed cards or to the hidden cards
+        const splitRevealed = action === Action.DeselectRevealed || action === Action.SelectRevealed;
+        const start = splitRevealed ? 0 : revealCount;
+        const end = splitRevealed ? revealCount : reservedCardCount;
 
         // find the held cards, if any, overlapped by the dragged cards
         let leftIndex: number | undefined = undefined;
         let rightIndex: number | undefined = undefined;
-        for (let i = 0; i < playerCards.length - selectedIndices.length; ++i) {
-            if (movingCardPositions[0].x < reservedCardTargets[i].x && reservedCardTargets[i].x < movingCardPositions[selectedIndices.length - 1].x) {
+        for (let i = start; i < end; ++i) {
+            if (movingCardPositions[0].x < reservedCardTargets[i].x &&
+                reservedCardTargets[i].x < movingCardPositions[movingCardCount - 1].x
+            ) {
                 if (leftIndex === undefined) {
                     leftIndex = i;
                 }
@@ -565,7 +671,7 @@ function renderPlayer(playerCards: Lib.Card[]) {
 
         if (leftIndex !== undefined && rightIndex !== undefined) {
             const leftGap = reservedCardTargets[leftIndex].x - movingCardPositions[0].x;
-            const rightGap = movingCardPositions[selectedIndices.length - 1].x - reservedCardTargets[rightIndex].x;
+            const rightGap = movingCardPositions[movingCardCount - 1].x - reservedCardTargets[rightIndex].x;
 
             if (leftGap < rightGap) {
                 splitIndex = leftIndex;
@@ -573,45 +679,57 @@ function renderPlayer(playerCards: Lib.Card[]) {
                 splitIndex = rightIndex + 1;
             }
         } else {
-            // no overlapped cards, so the index is the first held card to the right of the dragged cards
-            for (splitIndex = 0; splitIndex < playerCards.length - selectedIndices.length; ++splitIndex) {
-                if (movingCardPositions[selectedIndices.length - 1].x < reservedCardTargets[splitIndex].x) {
+            // no overlapped cards, so the index is the first reserved card to the right of the moving cards
+            for (splitIndex = start; splitIndex < end; ++splitIndex) {
+                if (movingCardPositions[movingCardCount - 1].x < reservedCardTargets[splitIndex].x) {
                     break;
                 }
             }
         }
 
-        //context.fillStyle = '#000000ff';
-        //context.fillText(`${playerCards.length - selectedIndices.length}`, canvas.width / 2, canvas.height / 2 - 48);
-        //context.fillText(`${splitIndex}`, canvas.width / 2, canvas.height / 2 - 36);
-        //context.fillText(`${leftIndex}`, canvas.width / 2, canvas.height / 2 - 24);
-        //context.fillText(`${rightIndex}`, canvas.width / 2, canvas.height / 2 - 12);
-        //context.fillText(`${dragCardPositions[0].x}`, canvas.width / 2, canvas.height / 2);
-        //context.fillText(`${leftIndex !== undefined ? holdCardPositions[leftIndex].x : undefined}`, canvas.width / 2, canvas.height / 2 + 12);
-        //context.fillText(`${rightIndex !== undefined ? holdCardPositions[rightIndex].x : undefined}`, canvas.width / 2, canvas.height / 2 + 24);
-        //context.fillText(`${dragCardPositions[selectedIndices.length - 1].x}`, canvas.width / 2, canvas.height / 2 + 36);
-        //context.fillText(`${holdCardPositions[splitIndex].x}`, canvas.width / 2, canvas.height / 2 + 48);
-    } else {
-        // every card is reserved
-        for (let i = 0; i < playerCards.length; ++i) {
-            reservedCards[i] = playerCards[i];
-            reservedCardTargets[i] = playerCardTargets[i];
-            reservedCardPositions[i] = playerCardPositions[i];
-            reservedCardVelocities[i] = playerCardVelocities[i];
+        // adjust selected indices
+        for (let i = 0; i < selectedIndices.length; ++i) {
+            selectedIndices[i] = splitIndex + i;
         }
 
+        context.fillText(`${splitIndex}`, 0.75 * canvas.width, canvas.height / 2 - 36);
+
+        // adjust the reveal count
+        if (splitIndex < revealCount ||
+            splitIndex === revealCount && splitRevealed
+        ) {
+            revealCount += movingCardCount;
+        }
+    } else {
+        // every card is reserved
         splitIndex = playerCards.length;
+        movingCardCount = 0;
+        reservedCardCount = playerCards.length;
+        for (let i = 0; i < playerCards.length; ++i) {
+            reservedCards[i] = playerCards[i];
+            reservedCardTargets[i] = cardTargets[playerIndex][i];
+            reservedCardPositions[i] = cardPositions[playerIndex][i];
+            reservedCardVelocities[i] = cardVelocities[playerIndex][i];
+        }
     }
 
     // draw reserved cards to the left of the moving cards
     for (let i = 0; i < splitIndex; ++i) {
         let cardImage = <HTMLImageElement>getCardImage(reservedCards[i]);
 
+        const j = i < revealCount ? i : i - revealCount;
+        const count = i < revealCount ? revealCount : playerCards.length - revealCount;
+        const yOffset = i < revealCount ? 2 * cardHeight : cardHeight;
         reservedCardTargets[i] = {
-            x: canvas.width / 2 - playerCards.length / 2 * cardGap - cardWidth / 2 + i * cardGap,
-            y: canvas.height - cardHeight - (splitIndex < playerCards.length || binarySearch(selectedIndices, i) < 0 ? 0 : 2 * cardGap)
+            x: canvas.width / 2 - cardWidth / 2 + (j - count / 2) * cardGap,
+            y: canvas.height - yOffset - (binarySearch(selectedIndices, i) < 0 ? 0 : 2 * cardGap)
         };
-        [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(reservedCardTargets[i], reservedCardPositions[i], reservedCardVelocities[i]);
+
+        [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(
+            reservedCardTargets[i],
+            reservedCardPositions[i],
+            reservedCardVelocities[i]
+        );
 
         context.drawImage(
             cardImage,
@@ -627,69 +745,83 @@ function renderPlayer(playerCards: Lib.Card[]) {
         //context.fillText(`${Math.floor(holdCardPositions[i].y)}`, holdCardPositions[i].x, holdCardPositions[i].y - 12);
         
         playerCards[i] = reservedCards[i];
-        playerCardTargets[i] = reservedCardTargets[i];
-        playerCardPositions[i] = reservedCardPositions[i];
-        playerCardVelocities[i] = reservedCardVelocities[i];
+        cardTargets[playerIndex][i] = reservedCardTargets[i];
+        cardPositions[playerIndex][i] = reservedCardPositions[i];
+        cardVelocities[playerIndex][i] = reservedCardVelocities[i];
     }
 
-    if (splitIndex < playerCards.length) {
-        // render dragged cards
-        for (let i = 0; i < selectedIndices.length; ++i) {
-            let cardImage = <HTMLImageElement>getCardImage(movingCards[i]);
+    // render dragged cards
+    for (let i = 0; i < movingCardCount; ++i) {
+        let cardImage = <HTMLImageElement>getCardImage(movingCards[i]);
 
-            [movingCardPositions[i], movingCardVelocities[i]] = dampSpring(movingCardTargets[i], movingCardPositions[i], movingCardVelocities[i]);
+        [movingCardPositions[i], movingCardVelocities[i]] = dampSpring(
+            movingCardTargets[i],
+            movingCardPositions[i],
+            movingCardVelocities[i]
+        );
 
-            context.drawImage(
-                cardImage,
-                movingCardPositions[i].x,
-                movingCardPositions[i].y,
-                cardWidth,
-                cardHeight
-            );
+        context.drawImage(
+            cardImage,
+            movingCardPositions[i].x,
+            movingCardPositions[i].y,
+            cardWidth,
+            cardHeight
+        );
 
-            //context.fillStyle = '#ff0000ff';
-            //context.fillText(`${Math.floor(dragCardPositions[i].x)}`, dragCardPositions[i].x, dragCardPositions[i].y - 24);
-            //context.fillStyle = '#0000ffff';
-            //context.fillText(`${Math.floor(dragCardPositions[i].y)}`, dragCardPositions[i].x, dragCardPositions[i].y - 12);
+        //context.fillStyle = '#ff0000ff';
+        //context.fillText(`${Math.floor(dragCardPositions[i].x)}`, dragCardPositions[i].x, dragCardPositions[i].y - 24);
+        //context.fillStyle = '#0000ffff';
+        //context.fillText(`${Math.floor(dragCardPositions[i].y)}`, dragCardPositions[i].x, dragCardPositions[i].y - 12);
 
-            playerCards[splitIndex + i] = movingCards[i];
-            playerCardTargets[splitIndex + i] = movingCardTargets[i];
-            playerCardPositions[splitIndex + i] = movingCardPositions[i];
-            playerCardVelocities[splitIndex + i] = movingCardVelocities[i];
-            
-            // also fix selection state
-            selectedIndices[i] = splitIndex + i;
-        }
-
-        // render remaining held cards
-        for (let i = splitIndex; i < playerCards.length - selectedIndices.length; ++i) {
-            let cardImage = <HTMLImageElement>getCardImage(reservedCards[i]);
-
-            reservedCardTargets[i] = {
-                x: canvas.width / 2 - playerCards.length / 2 * cardGap - cardWidth / 2 + (i + selectedIndices.length) * cardGap,
-                y: canvas.height - cardHeight
-            };
-            [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(reservedCardTargets[i], reservedCardPositions[i], reservedCardVelocities[i]);
-
-            context.drawImage(
-                cardImage,
-                reservedCardPositions[i].x,
-                reservedCardPositions[i].y,
-                cardWidth,
-                cardHeight
-            );
-
-            //context.fillStyle = '#ff0000ff';
-            //context.fillText(`${Math.floor(holdCardPositions[i].x)}`, holdCardPositions[i].x, holdCardPositions[i].y - 24);
-            //context.fillStyle = '#0000ffff';
-            //context.fillText(`${Math.floor(holdCardPositions[i].y)}`, holdCardPositions[i].x, holdCardPositions[i].y - 12);
-
-            playerCards[selectedIndices.length + i] = reservedCards[i];
-            playerCardTargets[selectedIndices.length + i] = reservedCardTargets[i];
-            playerCardPositions[selectedIndices.length + i] = reservedCardPositions[i];
-            playerCardVelocities[selectedIndices.length + i] = reservedCardVelocities[i];
-        }
+        const j = splitIndex + i;
+        playerCards[j] = movingCards[i];
+        cardTargets[playerIndex][j] = movingCardTargets[i];
+        cardPositions[playerIndex][j] = movingCardPositions[i];
+        cardVelocities[playerIndex][j] = movingCardVelocities[i];
     }
+
+    // render remaining held cards
+    for (let i = splitIndex; i < reservedCardCount; ++i) {
+        let cardImage = <HTMLImageElement>getCardImage(reservedCards[i]);
+
+        let j = movingCardCount + i;
+        let k = j < revealCount ? j : j - revealCount;
+        const count = j < revealCount ? revealCount : playerCards.length - revealCount;
+        const yOffset = j < revealCount ? 2 * cardHeight : cardHeight;
+        reservedCardTargets[i] = {
+            x: canvas.width / 2 - cardWidth / 2 + (k - count / 2) * cardGap,
+            y: canvas.height - yOffset
+        };
+        
+        [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(
+            reservedCardTargets[i],
+            reservedCardPositions[i],
+            reservedCardVelocities[i]
+        );
+
+        context.drawImage(
+            cardImage,
+            reservedCardPositions[i].x,
+            reservedCardPositions[i].y,
+            cardWidth,
+            cardHeight
+        );
+
+        //context.fillStyle = '#ff0000ff';
+        //context.fillText(`${Math.floor(holdCardPositions[i].x)}`, holdCardPositions[i].x, holdCardPositions[i].y - 24);
+        //context.fillStyle = '#0000ffff';
+        //context.fillText(`${Math.floor(holdCardPositions[i].y)}`, holdCardPositions[i].x, holdCardPositions[i].y - 12);
+
+        playerCards[j] = reservedCards[i];
+        cardTargets[playerIndex][j] = reservedCardTargets[i];
+        cardPositions[playerIndex][j] = reservedCardPositions[i];
+        cardVelocities[playerIndex][j] = reservedCardVelocities[i];
+    }
+
+    context.fillStyle = '#ff0000ff';
+    context.fillText(`${revealCount}`, 0.75 * canvas.width, canvas.height / 2 + 12);
+
+    return revealCount;
 }
 
 function getCardImage(card: Lib.Card) {
@@ -734,12 +866,12 @@ function renderButtons() {
     }
 }
 
-function sortBySuit() {
-    if (gameStateMessage === undefined) {
+function sortBySuit(playerIndex: number) {
+    if (gameState === undefined) {
         return;
     }
 
-    const cardsWithIndex: [Lib.Card, number][] = gameStateMessage.playerCards.map((card, index) => [card, index]);
+    const cardsWithIndex: [Lib.Card, number][] = gameState.playerCards.map((card, index) => [card, index]);
     cardsWithIndex.sort(([a, i], [b, j]) => {
         if (Lib.getSuit(a) === Lib.getSuit(b)) {
             return Lib.getRank(a) - Lib.getRank(b);
@@ -748,17 +880,13 @@ function sortBySuit() {
         }
     });
 
-    remap(cardsWithIndex);
+    remap(gameState, cardsWithIndex);
 
-    reorderCards();
+    reorderCards(gameState);
 }
 
-function sortByRank() {
-    if (gameStateMessage === undefined) {
-        return;
-    }
-
-    const cardsWithIndex: [Lib.Card, number][] = gameStateMessage.playerCards.map((card, index) => [card, index]);
+function sortByRank(gameState: Lib.GameState) {
+    const cardsWithIndex: [Lib.Card, number][] = gameState.playerCards.map((card, index) => [card, index]);
     cardsWithIndex.sort(([a, i], [b, j]) => {
         if (Lib.getRank(a) === Lib.getRank(b)) {
             return Lib.getSuit(a) - Lib.getSuit(b);
@@ -767,21 +895,17 @@ function sortByRank() {
         }
     });
 
-    remap(cardsWithIndex);
+    remap(gameState, cardsWithIndex);
 
-    reorderCards();
+    reorderCards(gameState);
 }
 
 const temporaryTargets: Vector[] = [];
 const temporaryPositions: Vector[] = [];
 const temporaryVelocities: Vector[] = [];
 
-function remap(cardsWithIndex: [Lib.Card, number][]) {
-    if (gameStateMessage === undefined) {
-        return;
-    }
-
-    console.log(`${JSON.stringify(gameStateMessage.playerCards.map(
+function remap(gameState: Lib.GameState, cardsWithIndex: [Lib.Card, number][]) {
+    console.log(`${JSON.stringify(gameState.playerCards.map(
         (card, index) => `[${Lib.cardToString(card)}, ${index}]`
     ))}`);
     console.log(`${JSON.stringify(cardsWithIndex.map(
@@ -790,20 +914,20 @@ function remap(cardsWithIndex: [Lib.Card, number][]) {
 
     for (let i = 0; i < cardsWithIndex.length; ++i) {
         const [card, _] = cardsWithIndex[i];
-        gameStateMessage.playerCards[i] = card;
+        gameState.playerCards[i] = card;
     }
 
     for (let i = 0; i < cardsWithIndex.length; ++i) {
         const [_, j] = cardsWithIndex[i];
-        temporaryTargets[i] = playerCardTargets[j];
-        temporaryPositions[i] = playerCardPositions[j];
-        temporaryVelocities[i] = playerCardVelocities[j];
+        temporaryTargets[i] = cardTargets[gameState.playerIndex][j];
+        temporaryPositions[i] = cardPositions[gameState.playerIndex][j];
+        temporaryVelocities[i] = cardVelocities[gameState.playerIndex][j];
     }
 
-    for (let i = 0; i < playerCardPositions.length; ++i) {
-        playerCardTargets[i] = temporaryTargets[i];
-        playerCardPositions[i] = temporaryPositions[i];
-        playerCardVelocities[i] = temporaryVelocities[i];
+    for (let i = 0; i < cardPositions[gameState.playerIndex].length; ++i) {
+        cardTargets[gameState.playerIndex][i] = temporaryTargets[i];
+        cardPositions[gameState.playerIndex][i] = temporaryPositions[i];
+        cardVelocities[gameState.playerIndex][i] = temporaryVelocities[i];
     }
 
     for (let i = 0; i < selectedIndices.length; ++i) {

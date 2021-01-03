@@ -17,7 +17,7 @@ class Player {
     name: string;
     ws: WebSocket;
     cards: Lib.Card[] = [];
-    revealIndex: number = 0;
+    revealCount: number = 0;
     endTurn = new Semaphore(1);
     releaseEndTurn: () => void;
     game: Game;
@@ -129,7 +129,13 @@ class Game {
         }
     }
 
-    public sendStateToPlayerAtIndex(i: number) {
+    public broadcastState() {
+        for (let i = 0; i < this.players.length; ++i) {
+            this.sendStateToPlayer(i);
+        }
+    }
+
+    public sendStateToPlayer(i: number) {
         let otherPlayers: Record<number, Lib.OtherPlayer> = {};
 
         for (let j = 0; j < this.players.length; ++j) {
@@ -138,8 +144,8 @@ class Game {
                 if (otherPlayer !== undefined) {
                     otherPlayers[j] = {
                         name: otherPlayer.name,
-                        hiddenCardCount: otherPlayer.cards.length - otherPlayer.revealIndex,
-                        revealedCards: otherPlayer.cards.slice(otherPlayer.revealIndex),
+                        cardCount: otherPlayer.cards.length,
+                        revealedCards: otherPlayer.cards.slice(0, otherPlayer.revealCount),
                     };
                 }
             }
@@ -148,20 +154,14 @@ class Game {
         // send game state
         let player = this.players[i];
         if (player !== undefined) {
-            player.ws.send(JSON.stringify(<Lib.GameStateMessage>{
+            player.ws.send(JSON.stringify(<Lib.GameState>{
                 deckCount: this.cardsInDeck.length,
                 playerIndex: i,
                 playerCards: player.cards,
-                revealIndex: player.revealIndex,
+                playerRevealCount: player.revealCount,
                 otherPlayers: otherPlayers,
                 activePlayerIndex: this.activePlayerIndex
             }));
-        }
-    }
-
-    public broadcastState() {
-        for (let i = 0; i < this.players.length; ++i) {
-            this.sendStateToPlayerAtIndex(i);
         }
     }
 }
@@ -183,6 +183,7 @@ wss.on('connection', function(ws) {
     ws.on('message', async function incoming(message) {
         if (typeof message !== 'string') {
             logAndSendError(ws, 'bad message');
+
             return;
         }
 
@@ -194,6 +195,7 @@ wss.on('connection', function(ws) {
             const game = gamesById.get(joinMessage.gameId);
             if (game === undefined) {
                 logAndSendError(ws, "no such game");
+
                 return;
             }
 
@@ -225,6 +227,7 @@ wss.on('connection', function(ws) {
                 }
 
                 logAndSendError(ws, "game is full");
+
                 return;
             } finally {
                 release();
@@ -234,19 +237,20 @@ wss.on('connection', function(ws) {
         const player = playersByWebSocket.get(ws);
         if (player === undefined) {
             logAndSendError(ws, "you are not in a game");
+
             return;
         }
 
         const release = await player.game.stateMutex.acquire();
         try {
-            if ('cardsToReorder' in obj) {
+            if ('cards' in obj && 'revealCount' in obj) {
                 const reorderMessage = <Lib.ReorderMessage>obj;
 
                 let oldCards = player.cards.slice();
                 let newCards: Lib.Card[] = [];
-                for (let i = 0; i < reorderMessage.cardsToReorder.length; ++i) {
+                for (let i = 0; i < reorderMessage.cards.length; ++i) {
                     for (let j = 0; j < oldCards.length; ++j) {
-                        if (reorderMessage.cardsToReorder[i] === oldCards[j]) {
+                        if (reorderMessage.cards[i] === oldCards[j]) {
                             newCards.push(...oldCards.splice(j, 1));
                             break;
                         }
@@ -255,24 +259,46 @@ wss.on('connection', function(ws) {
 
                 if (oldCards.length > 0) {
                     logAndSendError(ws, `bad reorder: ${oldCards.map(Lib.cardToString)}`);
+                    player.game.sendStateToPlayer(player.index);
+
                     return;
                 }
 
+                if (reorderMessage.revealCount != player.revealCount) {
+                    if (player.game.activePlayerIndex !== player.index) {
+                        logAndSendError(ws, "you are not the active player");
+                        player.game.sendStateToPlayer(player.index);
+                        return;
+                    }
+                    
+                    player.releaseEndTurn();
+                }
+                
                 console.log(`player '${player.name}' in slot ${player.index} reordered cards: ${
                     JSON.stringify(newCards.map(Lib.cardToString))
-                }`);
-
+                }, revealCount: ${player.revealCount}`);
+    
                 player.cards = newCards;
-                player.game.sendStateToPlayerAtIndex(player.index);
+                player.revealCount = reorderMessage.revealCount;
+                player.game.broadcastState();
+
                 return;
             }
 
             if (player.game.activePlayerIndex !== player.index) {
                 logAndSendError(ws, "you are not the active player");
+
                 return;
             }
 
-            if ('drawCard' in obj) {
+            if ('draw' in obj) {
+                if ((<Lib.DrawMessage>obj).draw !== null) {
+                    logAndSendError(ws, 'bad draw message');
+                    player.game.sendStateToPlayer(player.index);
+                    
+                    return;
+                }
+
                 const index = Math.floor(Math.random() * player.game.cardsInDeck.length);
                 const [card] = player.game.cardsInDeck.splice(index, 1);
 
@@ -281,10 +307,11 @@ wss.on('connection', function(ws) {
                 player.cards.push(card);
                 player.releaseEndTurn();
                 player.game.broadcastState();
+
                 return;
             }
 
-            if ('cardsToReturn' in obj && 'source' in obj) {
+            if ('cardsToReturn' in obj) {
                 const returnMessage = <Lib.ReturnMessage>JSON.parse(obj);
                 
                 const indices: number[] = [];
