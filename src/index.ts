@@ -16,9 +16,8 @@ const playersByWebSocket = new Map<WebSocket, Player>();
 class Player {
     name: string;
     ws: WebSocket;
-    hiddenCards: Lib.Card[] = [];
-    sharedCards: Lib.Card[] = [];
-    revealedCards: Lib.Card[] = [];
+    cards: Lib.Card[] = [];
+    revealIndex: number = 0;
     endTurn = new Semaphore(1);
     releaseEndTurn: () => void;
     game: Game;
@@ -139,8 +138,8 @@ class Game {
                 if (otherPlayer !== undefined) {
                     otherPlayers[j] = {
                         name: otherPlayer.name,
-                        hiddenCardCount: otherPlayer.hiddenCards.length,
-                        revealedCards: otherPlayer.revealedCards,
+                        hiddenCardCount: otherPlayer.cards.length - otherPlayer.revealIndex,
+                        revealedCards: otherPlayer.cards.slice(otherPlayer.revealIndex),
                     };
                 }
             }
@@ -152,8 +151,8 @@ class Game {
             player.ws.send(JSON.stringify(<Lib.GameStateMessage>{
                 deckCount: this.cardsInDeck.length,
                 playerIndex: i,
-                hiddenCards: player.hiddenCards,
-                revealedCards: player.revealedCards,
+                playerCards: player.cards,
+                revealIndex: player.revealIndex,
                 otherPlayers: otherPlayers,
                 activePlayerIndex: this.activePlayerIndex
             }));
@@ -243,27 +242,27 @@ wss.on('connection', function(ws) {
             if ('cardsToReorder' in obj) {
                 const reorderMessage = <Lib.ReorderMessage>obj;
 
-                let oldHiddenCards = player.hiddenCards.slice();
-                let newHiddenCards: Lib.Card[] = [];
+                let oldCards = player.cards.slice();
+                let newCards: Lib.Card[] = [];
                 for (let i = 0; i < reorderMessage.cardsToReorder.length; ++i) {
-                    for (let j = 0; j < oldHiddenCards.length; ++j) {
-                        if (reorderMessage.cardsToReorder[i] === oldHiddenCards[j]) {
-                            newHiddenCards.push(...oldHiddenCards.splice(j, 1));
+                    for (let j = 0; j < oldCards.length; ++j) {
+                        if (reorderMessage.cardsToReorder[i] === oldCards[j]) {
+                            newCards.push(...oldCards.splice(j, 1));
                             break;
                         }
                     }
                 }
 
-                if (oldHiddenCards.length > 0) {
-                    logAndSendError(ws, `bad reorder: ${oldHiddenCards.map(Lib.cardToString)}`);
+                if (oldCards.length > 0) {
+                    logAndSendError(ws, `bad reorder: ${oldCards.map(Lib.cardToString)}`);
                     return;
                 }
 
                 console.log(`player '${player.name}' in slot ${player.index} reordered cards: ${
-                    JSON.stringify(newHiddenCards.map(Lib.cardToString))
+                    JSON.stringify(newCards.map(Lib.cardToString))
                 }`);
 
-                player.hiddenCards = newHiddenCards;
+                player.cards = newCards;
                 player.game.sendStateToPlayerAtIndex(player.index);
                 return;
             }
@@ -279,72 +278,43 @@ wss.on('connection', function(ws) {
 
                 console.log(`player '${player.name}' in slot ${player.index} drew card ${Lib.cardToString(card)}`);
 
-                player.hiddenCards.push(card);
+                player.cards.push(card);
                 player.releaseEndTurn();
                 player.game.broadcastState();
                 return;
             }
 
-            function moveCards(cards: Lib.Card[], source: Lib.Card[], target: Lib.Card[], action: string) {
-                if (player === undefined) {
-                    throw new Error();
-                }
-
+            if ('cardsToReturn' in obj && 'source' in obj) {
+                const returnMessage = <Lib.ReturnMessage>JSON.parse(obj);
+                
                 const indices: number[] = [];
-                for (let i = 0; i < cards.length; ++i) {
-                    for (let j = 0; j < source.length; ++j) {
-                        if (cards[i] === source[j]) {
+                for (let i = 0; i < returnMessage.cardsToReturn.length; ++i) {
+                    for (let j = 0; j < player.cards.length; ++j) {
+                        if (returnMessage.cardsToReturn[i] === player.cards[j]) {
                             indices.push(j);
                             break;
                         }
                     }
                 }
             
-                if (indices.length < cards.length) {
-                    logAndSendError(ws, `could not find all cards for ${action}: ${
-                        JSON.stringify(cards.map(Lib.cardToString))
-                    }, source: ${
-                        JSON.stringify(source.map(Lib.cardToString))
-                    }, target: ${
-                        JSON.stringify(target.map(Lib.cardToString))
+                if (indices.length < returnMessage.cardsToReturn.length) {
+                    logAndSendError(ws, `could not find all cards to return: ${
+                        JSON.stringify(returnMessage.cardsToReturn.map(Lib.cardToString))
                     }`);
 
                     return;
                 }
             
-                console.log(`'${player.name}' in slot ${player.index} performed ${action}: ${
-                    JSON.stringify(cards.map(Lib.cardToString))
+                console.log(`'${player.name}' in slot ${player.index} returned cards: ${
+                    JSON.stringify(returnMessage.cardsToReturn.map(Lib.cardToString))
                 }`);
             
                 indices.sort((a, b) => a - b);
                 for (let i = 0; i < indices.length; ++i) {
-                    target.push(...source.splice(indices[i] - i, 1))
-                }
-            }
-
-            if ('cardsToReturn' in obj && 'source' in obj) {
-                const returnMessage = <Lib.ReturnMessage>JSON.parse(obj);
-
-                let source: Lib.Card[];
-                if (returnMessage.source === 'hidden') {
-                    source = player.hiddenCards;
-                } else if (returnMessage.source === 'revealed') {
-                    source = player.revealedCards;
-                } else {
-                    logAndSendError(ws, `bad source`);
-                    return;
+                    player.game.cardsInDeck.push(...player.cards.splice(indices[i] - i, 1))
                 }
 
-                moveCards(returnMessage.cardsToReturn, source, player.game.cardsInDeck, "return");
                 return;
-            }
-
-            if ('cardsToReveal' in obj) {
-                moveCards((<Lib.RevealMessage>obj).cardsToReveal, player.hiddenCards, player.revealedCards, "reveal");
-            }
-
-            if ('cardsToHide' in obj) {
-                moveCards((<Lib.HideMessage>obj).cardsToHide, player.revealedCards, player.hiddenCards, "hide");
             }
         } finally {
             release();

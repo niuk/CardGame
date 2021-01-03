@@ -69,8 +69,8 @@ export namespace Lib {
     export interface GameStateMessage {
         deckCount: number;
         playerIndex: number;
-        hiddenCards: Card[];
-        revealedCards: Card[];
+        playerCards: Card[];
+        revealIndex: number;
         otherPlayers: Record<number, OtherPlayer>;
         activePlayerIndex: number;
     }
@@ -82,6 +82,7 @@ export namespace Lib {
 
     export interface ReorderMessage {
         cardsToReorder: Card[];
+        revealIndex: number;
     }
 
     export interface DrawMessage {
@@ -91,14 +92,6 @@ export namespace Lib {
     export interface ReturnMessage {
         cardsToReturn: Card[];
         source: "hidden" | "revealed";
-    }
-    
-    export interface RevealMessage {
-        cardsToReveal: Card[];
-    }
-
-    export interface HideMessage {
-        cardsToHide: Card[];
     }
 
     export interface ErrorMessage {
