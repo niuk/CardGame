@@ -18,14 +18,18 @@ window.history.pushState(undefined, gameId, `/game?gameId=${gameId}&playerName=$
 let previousGameState: Lib.GameState | undefined = undefined;;
 let gameState: Lib.GameState | undefined = undefined;
 
-let onGameStateMessage: ((gameStateMessage: Lib.GameState) => void) | undefined = undefined;
+let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
 
 // open websocket connection to get game state updates
 let ws = new WebSocket(`ws://${window.location.hostname}:${JSON.parse(window.location.port) + 1111}`);
 ws.onmessage = ev => {
     const obj = JSON.parse(ev.data);
     if ('errorDescription' in obj && typeof obj.errorDescription === 'string') {
-        window.alert((<Lib.ErrorMessage>obj).errorDescription);
+        //window.alert((<Lib.ErrorMessage>obj).errorDescription);
+        if (wsMessageCallback !== null) { 
+            wsMessageCallback(<Lib.ErrorMessage>obj);
+            wsMessageCallback = null;
+        }
     } else {
         previousGameState = gameState;
         gameState = <Lib.GameState>obj;
@@ -38,8 +42,9 @@ ws.onmessage = ev => {
             }
         }
 
-        if (onGameStateMessage !== undefined) {
-            onGameStateMessage(gameState);
+        if (wsMessageCallback !== null) {
+            wsMessageCallback(gameState);
+            wsMessageCallback = null;
         }
     }
 };
@@ -169,7 +174,7 @@ function render(time: number) {
         // clear the screen
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        renderDeck(gameState.deckCount);
+        renderDeck(time, gameState.deckCount);
         renderBasics(<string>gameId, <string>playerName);
         renderOtherPlayers(gameState);
         gameState.playerRevealCount = renderPlayer(
@@ -198,24 +203,53 @@ function renderBasics(gameId: string, playerName: string) {
     context.strokeRect(cardHeight, cardHeight, canvas.width - 2 * cardHeight, canvas.height - 2 * cardHeight);
 }
 
-let deckTopBounds: [Vector, Vector] = [{ x: 0, y: 0}, { x: 0, y: 0}];
+let deckTargets: Vector[] = [];
+let deckPositions: Vector[] = [];
+let deckVelocities: Vector[] = []
+let deckGap = 1;
+let dealTime: number | undefined = undefined;
+let dealDuration = 1000;
 
-function renderDeck(deckCount: number) {
+function renderDeck(time: number, deckCount: number) {
     context.save();
     try {
+        if (dealTime === undefined) {
+            dealTime = time;
+        }
+
+        const cardImage = <HTMLImageElement>cardImages.get('Back0');
+        const y = canvas.height / 2 - cardHeight / 2;
         for (let i = 0; i < deckCount; ++i) {
-            const cardImage = <HTMLImageElement>cardImages.get('Back0');
-            const x = canvas.width / 2 - cardWidth / 2 - (i - deckCount / 2);
-            const y = canvas.height / 2 - cardHeight / 2 + 0.5 * (i - deckCount / 2);
+            if (deckPositions[i] === undefined) {
+                deckPositions[i] = { x: 0, y: 0 };
+            }
+
+            // deckTopTarget set by onmousemove
+            if (deckVelocities[i] === undefined) {
+                deckVelocities[i] = { x: 0, y: 0 };
+            }
+
+            if (onDeckAtMouseDown && i === deckCount - 1) {
+                // set in onmousemove
+                console.log(`${deckCount}, ${deckTargets[i].x}, ${deckTargets[i].y}`);
+            } else if (time - dealTime < i * dealDuration / deckCount) {
+                deckTargets[i] = { x: -cardWidth, y: -cardHeight };
+            } else {
+                deckTargets[i] = {
+                    x: canvas.width / 2 - cardWidth / 2 - (i - deckCount / 2) * deckGap,
+                    y
+                };
+            }
+
+            [deckPositions[i], deckVelocities[i]] = slide(deckTargets[i], deckPositions[i], deckVelocities[i]);
+
             context.drawImage(
                 cardImage,
-                x,
-                y,
+                deckPositions[i].x,
+                deckPositions[i].y,
                 cardWidth,
                 cardHeight
             );
-
-            deckTopBounds = [{ x, y }, { x: x + cardWidth, y: y + cardHeight }];
         }
     } finally {
         context.restore();
@@ -267,8 +301,8 @@ function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
 
     const deckPosition = context.getTransform().inverse().transformPoint({
         w: 1,
-        x: deckTopBounds[0].x,
-        y: deckTopBounds[0].y,
+        x: deckPositions[gameState.deckCount - 1].x,
+        y: deckPositions[gameState.deckCount - 1].y,
         z: 0
     });
 
@@ -323,7 +357,7 @@ function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
             y: y
         };
 
-        [cardPositions[playerIndex][i], cardVelocities[playerIndex][i]] = dampSpring(
+        [cardPositions[playerIndex][i], cardVelocities[playerIndex][i]] = slide(
             cardTargets[playerIndex][i],
             cardPositions[playerIndex][i],
             cardVelocities[playerIndex][i]
@@ -381,15 +415,15 @@ const reservedCardTargets: Vector[] = [];
 const reservedCardPositions: Vector[] = [];
 const reservedCardVelocities: Vector[] = [];
 
-const moveThreshold = 0.2 * pixelsPerPercent;
+const moveThreshold = 0.2 * pixelsPerCM;
 const springConstant = 1000;
 const mass = 1;
 const drag = Math.sqrt(4 * mass * springConstant);
 
 //let n = 1000;
 
-function dampSpring(targetPosition: Vector, position: Vector, velocity: Vector): [Vector, Vector] {
-    const springForce = scale(springConstant, sub(targetPosition, position));
+function slide(target: Vector, position: Vector, velocity: Vector): [Vector, Vector] {
+    const springForce = scale(springConstant, sub(target, position));
     const dragForce = scale(-drag, velocity);
     const acceleration = scale(1 / mass, add(springForce, dragForce));
 
@@ -456,17 +490,20 @@ function getMousePosition(e: MouseEvent) {
 }
 
 canvas.onmousedown = function(e) {
+    mouseDownPosition = getMousePosition(e);
+    exceededMoveTreshold = false;
+    action = Action.None;
+
+    cardIndexAtMouseDown = -1;
+
     if (gameState === undefined) {
         return;
     }
-
-    mouseDownPosition = getMousePosition(e);
-
+    
     onDeckAtMouseDown =
-        deckTopBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < deckTopBounds[1].x &&
-        deckTopBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < deckTopBounds[1].y;
+        deckPositions[gameState.deckCount - 1].x < mouseDownPosition.x && mouseDownPosition.x < deckPositions[gameState.deckCount - 1].x + cardWidth &&
+        deckPositions[gameState.deckCount - 1].y < mouseDownPosition.y && mouseDownPosition.y < deckPositions[gameState.deckCount - 1].y + cardHeight;
 
-    cardIndexAtMouseDown = -1;
     for (let i = cardPositions[gameState.playerIndex].length - 1; i >= 0; --i) {
         const x0 = cardPositions[gameState.playerIndex][i].x;
         const y0 = cardPositions[gameState.playerIndex][i].y;
@@ -483,111 +520,133 @@ canvas.onmousedown = function(e) {
 };
 
 canvas.onmousemove = function(e) {
+    mouseMovePosition = getMousePosition(e);
+
+    let movement = { x: e.movementX, y: e.movementY };
+    exceededMoveTreshold = exceededMoveTreshold || distance(mouseMovePosition, mouseDownPosition) > moveThreshold;
+
     if (gameState === undefined) {
         return;
     }
 
-    mouseMovePosition = getMousePosition(e);
-    exceededMoveTreshold = exceededMoveTreshold || distance(mouseMovePosition, mouseDownPosition) > moveThreshold;
-    if (!exceededMoveTreshold) {
-        return;
-    }
-
-    if (cardIndexAtMouseDown >= 0) {
-        let delta = { x: e.movementX, y: e.movementY };
-    
-        if (action === Action.Toggle) {
-            // start of movement
-            delta = add(delta, sub(mouseMovePosition, mouseDownPosition));
-    
-            // dragging a card selects it
-            let selectedIndexIndex = binarySearch(selectedIndices, cardIndexAtMouseDown);
-            if (selectedIndexIndex < 0) {
-                selectedIndexIndex = ~selectedIndexIndex;
-                selectedIndices.splice(selectedIndexIndex, 0, cardIndexAtMouseDown);
-            }
-    
-            // gather together selected cards around the card under the mouse
-            for (let i = 0; i < selectedIndices.length; ++i) {
-                movingCardTargets[i] = {
-                    x: cardPositions[gameState.playerIndex][cardIndexAtMouseDown].x + (i - selectedIndexIndex) * cardGap,
-                    y: cardPositions[gameState.playerIndex][cardIndexAtMouseDown].y
-                };
-            }
+    if (action === Action.Toggle && exceededMoveTreshold) {
+        // dragging a card selects it
+        let selectedIndexIndex = binarySearch(selectedIndices, cardIndexAtMouseDown);
+        if (selectedIndexIndex < 0) {
+            selectedIndexIndex = ~selectedIndexIndex;
+            selectedIndices.splice(selectedIndexIndex, 0, cardIndexAtMouseDown);
         }
+
+        // start of movement
+        action = getDropAction(gameState);
+
+        // movement threshold needs to be accounted for
+        movement = add(movement, sub(mouseMovePosition, mouseDownPosition));
+
+        // gather together selected cards around the card under the mouse
+        for (let i = 0; i < selectedIndices.length; ++i) {
+            movingCardTargets[i] = add(movement, {
+                x: cardPositions[gameState.playerIndex][cardIndexAtMouseDown].x + (i - selectedIndexIndex) * cardGap,
+                y: cardPositions[gameState.playerIndex][cardIndexAtMouseDown].y
+            });
+        }
+    }
     
+    if (action === Action.DeselectHidden   || action === Action.SelectHidden ||
+        action === Action.DeselectRevealed || action === Action.SelectRevealed
+    ) {
         action = getDropAction(gameState);
     
         // move all selected cards
         for (let i = 0; i < selectedIndices.length; ++i) {
-            movingCardTargets[i] = add(movingCardTargets[i], delta);
+            movingCardTargets[i] = add(movingCardTargets[i], movement);
         }
-    } else if (onDeckAtMouseDown) {
-        if (action === Action.None) {
+    }
+    
+    if (onDeckAtMouseDown) {
+        if (action === Action.None && exceededMoveTreshold) {
             action = Action.Draw;
 
-            onGameStateMessage = gameState => {
-                // transition to moving state
-                onDeckAtMouseDown = false;
-                cardIndexAtMouseDown = gameState.playerCards.length - 1;
-                selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
-                cardTargets[gameState.playerIndex][cardIndexAtMouseDown] = add(deckTopBounds[0], sub(mouseMovePosition, mouseDownPosition));
-                cardPositions[gameState.playerIndex][cardIndexAtMouseDown] = deckTopBounds[0];
-                cardVelocities[gameState.playerIndex][cardIndexAtMouseDown] = { x: 0, y: 0 };
-                movingCardTargets[0] = cardTargets[gameState.playerIndex][cardIndexAtMouseDown];
+            wsMessageCallback = result => {
+                if ('errorDescription' in result) {
+                    const error = <Lib.ErrorMessage>result;
+                    console.log(error);
+                } else {
+                    // transition to moving state
+                    const gameState = <Lib.GameState>result;
+                    onDeckAtMouseDown = false;
+                    cardIndexAtMouseDown = gameState.playerCards.length - 1;
+                    selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
+                    cardTargets[gameState.playerIndex][cardIndexAtMouseDown] = add(deckPositions[gameState.deckCount - 1], sub(mouseMovePosition, mouseDownPosition));
+                    cardPositions[gameState.playerIndex][cardIndexAtMouseDown] = deckPositions[gameState.deckCount - 1];
+                    cardVelocities[gameState.playerIndex][cardIndexAtMouseDown] = { x: 0, y: 0 };
+                    movingCardTargets[0] = cardTargets[gameState.playerIndex][cardIndexAtMouseDown];
 
-                if (action !== Action.None) { // only set the action if the mouse button is still down
-                    action = getDropAction(gameState);
+                    if (action !== Action.None) { // only set the action if the mouse button is still down
+                        action = getDropAction(gameState);
+                    }
                 }
-
-                onGameStateMessage = undefined;
             };
         
             ws.send(JSON.stringify(<Lib.DrawMessage>{
                 draw: null
             }));
         }
+
+        // move the deck's top card
+        deckTargets[gameState.deckCount - 1] = add(deckTargets[gameState.deckCount - 1], movement);
+        console.log(`gameState.deckCount: ${gameState.deckCount}, { x: ${deckTargets[gameState.deckCount - 1].x}, y: ${deckTargets[gameState.deckCount - 1].y} }`);
     }
 };
 
 canvas.onmouseup = function(e) {
+    if (action === Action.Toggle) {
+        if (cardIndexAtMouseDown < 0) {
+            throw new Error();
+        }
+
+        let selectedIndexIndex = binarySearch(selectedIndices, cardIndexAtMouseDown);
+        if (selectedIndexIndex < 0) {
+            selectedIndices.splice(~selectedIndexIndex, 0, cardIndexAtMouseDown);
+        } else {
+            selectedIndices.splice(selectedIndexIndex, 1);
+        }
+    }
+    
     if (gameState === undefined) {
         return;
     }
 
-    if (onDeckAtMouseDown) {
-    } else if (cardIndexAtMouseDown >= 0) {
-        if (action === Action.Toggle) {
-            let selectedIndexIndex = binarySearch(selectedIndices, cardIndexAtMouseDown);
-            if (selectedIndexIndex < 0) {
-                // select
-                selectedIndices.splice(~selectedIndexIndex, 0, cardIndexAtMouseDown);
-            } else {
-                // deselect
-                selectedIndices.splice(selectedIndexIndex, 1);
-            }
-        } else if (action === Action.DeselectHidden || action === Action.DeselectRevealed) {
-            selectedIndices.splice(0, selectedIndices.length);
-            reorderCards(gameState);
-        } else if (action === Action.SelectHidden || action === Action.SelectRevealed) {
-            // onmousemove should have already selected the card
-            reorderCards(gameState);
+    if (action === Action.DeselectHidden || action === Action.DeselectRevealed) {
+        selectedIndices.splice(0, selectedIndices.length);
+
+        reorderCards(gameState);
+    }
+    
+    if (action === Action.SelectHidden || action === Action.SelectRevealed) {
+        let selectedIndexIndex = binarySearch(selectedIndices, cardIndexAtMouseDown);
+        if (selectedIndexIndex < 0) {
+            selectedIndexIndex = ~selectedIndexIndex;
+            selectedIndices.splice(selectedIndexIndex, 0, cardIndexAtMouseDown);
         }
-    } else {
-        if (sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortBySuitBounds[1].x &&
-            sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortBySuitBounds[1].y
-        ) {
-            sortBySuit(gameState.playerIndex);
-        } else if (sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortByRankBounds[1].x &&
-            sortByRankBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortByRankBounds[1].y
-        ) {
-            sortByRank(gameState);
-        }
+
+        reorderCards(gameState);
+    }
+    
+    if (sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortBySuitBounds[1].x &&
+        sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortBySuitBounds[1].y
+    ) {
+        sortBySuit(gameState.playerIndex);
+    }
+    
+    if (sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortByRankBounds[1].x &&
+        sortByRankBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortByRankBounds[1].y
+    ) {
+        sortByRank(gameState);
     }
 
     onDeckAtMouseDown = false;
     cardIndexAtMouseDown = -1;
-    exceededMoveTreshold = false;
     action = Action.None;
 };
 
@@ -618,7 +677,9 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
     let splitIndex: number;
     let movingCardCount: number;
     let reservedCardCount: number;
-    if (action === Action.DeselectHidden || action === Action.DeselectRevealed || action === Action.SelectHidden || action === Action.SelectRevealed) {
+    if (action === Action.DeselectHidden   || action === Action.SelectHidden ||
+        action === Action.DeselectRevealed || action === Action.SelectRevealed
+    ) {
         // extract moving cards
         let revealCountAdjustment = 0;
 
@@ -692,7 +753,8 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
             selectedIndices[i] = splitIndex + i;
         }
 
-        context.fillText(`${splitIndex}`, 0.75 * canvas.width, canvas.height / 2 - 36);
+        //context.fillStyle = '#ff0000ff';
+        //context.fillText(`${splitIndex}`, 0.75 * canvas.width, canvas.height / 2 - 36);
 
         // adjust the reveal count
         if (splitIndex < revealCount ||
@@ -725,7 +787,7 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
             y: canvas.height - yOffset - (binarySearch(selectedIndices, i) < 0 ? 0 : 2 * cardGap)
         };
 
-        [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(
+        [reservedCardPositions[i], reservedCardVelocities[i]] = slide(
             reservedCardTargets[i],
             reservedCardPositions[i],
             reservedCardVelocities[i]
@@ -754,7 +816,7 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
     for (let i = 0; i < movingCardCount; ++i) {
         let cardImage = <HTMLImageElement>getCardImage(movingCards[i]);
 
-        [movingCardPositions[i], movingCardVelocities[i]] = dampSpring(
+        [movingCardPositions[i], movingCardVelocities[i]] = slide(
             movingCardTargets[i],
             movingCardPositions[i],
             movingCardVelocities[i]
@@ -793,7 +855,7 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
             y: canvas.height - yOffset
         };
         
-        [reservedCardPositions[i], reservedCardVelocities[i]] = dampSpring(
+        [reservedCardPositions[i], reservedCardVelocities[i]] = slide(
             reservedCardTargets[i],
             reservedCardPositions[i],
             reservedCardVelocities[i]
@@ -818,8 +880,8 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
         cardVelocities[playerIndex][j] = reservedCardVelocities[i];
     }
 
-    context.fillStyle = '#ff0000ff';
-    context.fillText(`${revealCount}`, 0.75 * canvas.width, canvas.height / 2 + 12);
+    //context.fillStyle = '#ff0000ff';
+    //context.fillText(`${revealCount}`, 0.75 * canvas.width, canvas.height / 2 + 12);
 
     return revealCount;
 }
