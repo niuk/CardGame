@@ -1,5 +1,15 @@
-import * as Animation from './animation';
+import * as Lib from './lib';
+import * as State from './state';
+import * as Input from './input';
 import Vector from './vector';
+
+export let spriteWidth = 0;
+export let spriteHeight = 0;
+export let spriteGap = 0;
+export let deckSpriteGap = 0;
+
+const deckDealDuration = 1000;
+let deckDealTime: number | undefined = undefined;
 
 const canvas = <HTMLCanvasElement>document.getElementById('canvas');
 const context = <CanvasRenderingContext2D>canvas.getContext('2d');
@@ -13,15 +23,6 @@ document.body.appendChild(testElement);
 export const pixelsPerCM = testElement.offsetWidth;
 document.body.removeChild(testElement);
 
-export let cardWidth = 0;
-export let cardHeight = 0;
-export let cardGap = 0;
-
-const deckGap = 1;
-const dealTime: number | undefined = undefined;
-const dealDuration = 1000;
-export let deck: Animation.Card[];
-
 export let sortBySuitBounds: [Vector, Vector];
 export let sortByRankBounds: [Vector, Vector];
 
@@ -34,17 +35,18 @@ export function recalculateParameters() {
     canvasRect = canvas.getBoundingClientRect();
 
     pixelsPerPercent = canvas.height / 100;
-    cardWidth = 12 * pixelsPerPercent;
-    cardHeight = 18 * pixelsPerPercent;
-    cardGap = 2 * pixelsPerPercent;
+    spriteWidth = 12 * pixelsPerPercent;
+    spriteHeight = 18 * pixelsPerPercent;
+    spriteGap = 2 * pixelsPerPercent;
+    deckSpriteGap = 0.5 * pixelsPerPercent;
 
     sortBySuitBounds = [
-        { x: canvas.width - 2.75 * pixelsPerCM, y: canvas.height - 3.5 * pixelsPerCM },
-        { x: canvas.width, y: canvas.height - 2 * pixelsPerCM }
+        new Vector(canvas.width - 2.75 * pixelsPerCM, canvas.height - 3.5 * pixelsPerCM),
+        new Vector(canvas.width, canvas.height - 2 * pixelsPerCM)
     ];
     sortByRankBounds = [
-        { x: canvas.width - 2.75 * pixelsPerCM, y: canvas.height - 1.75 * pixelsPerCM },
-        { x: canvas.width, y: canvas.height - 0.25 * pixelsPerCM }
+        new Vector(canvas.width - 2.75 * pixelsPerCM, canvas.height - 1.75 * pixelsPerCM),
+        new Vector(canvas.width, canvas.height - 0.25 * pixelsPerCM)
     ];
 }
 
@@ -52,17 +54,17 @@ export function render(time: number) {
     deltaTime = time - (currentTime !== undefined ? currentTime : time);
     currentTime = time;
 
-    if (gameState !== undefined) {
+    if (State.gameState !== undefined) {
         // clear the screen
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        renderBasics(<string>gameId, <string>playerName);
-        renderDeck(time, gameState.deckCount);
-        renderOtherPlayers(gameState);
-        gameState.playerRevealCount = renderPlayer(
-            gameState.playerCards,
-            gameState.playerRevealCount,
-            gameState.playerIndex
+        renderBasics(State.gameId, State.playerName);
+        renderDeck(time, State.gameState.deckCount);
+        renderOtherPlayers(State.gameState);
+        State.gameState.playerRevealCount = renderPlayer(
+            State.gameState.playerCards,
+            State.gameState.playerRevealCount,
+            State.gameState.playerIndex
         );
         renderButtons();
         
@@ -82,48 +84,32 @@ function renderBasics(gameId: string, playerName: string) {
     context.fillText(`Your name is: ${playerName}`, 0, canvas.height);
     
     context.setLineDash([4, 2]);
-    context.strokeRect(cardHeight, cardHeight, canvas.width - 2 * cardHeight, canvas.height - 2 * cardHeight);
+    context.strokeRect(spriteHeight, spriteHeight, canvas.width - 2 * spriteHeight, canvas.height - 2 * spriteHeight);
 }
 
 function renderDeck(time: number, deckCount: number) {
     context.save();
     try {
-        if (dealTime === undefined) {
-            dealTime = time;
+        if (deckDealTime === undefined) {
+            deckDealTime = time;
         }
 
-        const cardImage = <HTMLImageElement>cardImages.get('Back0');
-        const y = canvas.height / 2 - cardHeight / 2;
-        for (let i = 0; i < deckCount; ++i) {
-            if (deckPositions[i] === undefined) {
-                deckPositions[i] = { x: 0, y: 0 };
-            }
+        for (let i = 0; i < State.deckSprites.length; ++i) {
+            const deckSprite = State.deckSprites[i];
+            if (deckSprite === undefined) throw new Error();
 
-            // deckTopTarget set by onmousemove
-            if (deckVelocities[i] === undefined) {
-                deckVelocities[i] = { x: 0, y: 0 };
-            }
-
-            if (onDeckAtMouseDown && i === deckCount - 1) {
+            if (Input.onDeckAtMouseDown && i === deckCount - 1) {
                 // set in onmousemove
-            } else if (time - dealTime < i * dealDuration / deckCount) {
-                deckTargets[i] = { x: -cardWidth, y: -cardHeight };
+            } else if (time - deckDealTime < i * deckDealDuration / deckCount) {
+                deckSprite.target = new Vector(-spriteWidth, -spriteHeight);
             } else {
-                deckTargets[i] = {
-                    x: canvas.width / 2 - cardWidth / 2 - (i - deckCount / 2) * deckGap,
-                    y
-                };
+                deckSprite.target = new Vector(
+                    canvas.width / 2 - spriteWidth / 2 - (i - deckCount / 2) * deckSpriteGap,
+                    canvas.height / 2 - spriteHeight / 2
+                );
             }
 
-            [deckPositions[i], deckVelocities[i]] = slide(deckTargets[i], deckPositions[i], deckVelocities[i]);
-
-            context.drawImage(
-                cardImage,
-                deckPositions[i].x,
-                deckPositions[i].y,
-                cardWidth,
-                cardHeight
-            );
+            deckSprite.animate(deltaTime);
         }
     } finally {
         context.restore();
@@ -134,7 +120,7 @@ function renderOtherPlayers(gameState: Lib.GameState) {
     context.save();
     try {
         context.translate(0, (canvas.width + canvas.height) / 2);
-        context.rotate(-90 * radiansPerDegree);
+        context.rotate(-Math.PI / 2);
         renderOtherPlayer(gameState, (gameState.playerIndex + 1) % 4);
     } finally {
         context.restore();
@@ -150,7 +136,7 @@ function renderOtherPlayers(gameState: Lib.GameState) {
     context.save();
     try {
         context.translate(canvas.width, (canvas.height - canvas.width) / 2);
-        context.rotate(90 * radiansPerDegree);
+        context.rotate(Math.PI);
         renderOtherPlayer(gameState, (gameState.playerIndex + 3) % 4);
     } finally {
         context.restore();
@@ -159,113 +145,48 @@ function renderOtherPlayers(gameState: Lib.GameState) {
 
 function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
     const player = gameState.otherPlayers[playerIndex];
-    if (player === undefined) { 
-        return;
-    }
-
-    const previousPlayer = previousGameState?.otherPlayers[playerIndex];
+    if (player === undefined) return;
 
     context.fillStyle = '#000000ff';
-    context.font = `${cardGap}px Irregularis`;
-    context.fillText(player.name, canvas.width / 2, cardHeight + cardGap);
+    context.font = `${spriteGap}px Irregularis`;
+    context.fillText(player.name, canvas.width / 2, spriteHeight + spriteGap);
 
-    const deckPosition = context.getTransform().inverse().transformPoint({
+    const deckPosition = State.deckSprites[State.deckSprites.length - 1]?.position ??
+        new Vector(canvas.width / 2 - spriteWidth / 2, canvas.height / 2 - spriteHeight / 2);
+    const deckPoint = context.getTransform().inverse().transformPoint({
         w: 1,
-        x: deckPositions[gameState.deckCount - 1].x,
-        y: deckPositions[gameState.deckCount - 1].y,
+        x: deckPosition.x,
+        y: deckPosition.y,
         z: 0
     });
 
-    for (let i = 0; i < player.cardCount; ++i) {
-        let j: number;
-        let count: number;
-        let cardImage: HTMLImageElement;
-        let y: number;
-        if (i < player.revealedCards.length) {
-            j = i;
-            count = player.revealedCards.length;
-            cardImage = <HTMLImageElement>cardImages.get(Lib.cardToString(player.revealedCards[i]));
-            y = cardHeight;
-        } else {
-            j = i - player.revealedCards.length;
-            count = player.cardCount - j;
-            cardImage = <HTMLImageElement>cardImages.get(`Back${playerIndex}`);
-            y = 0;
-        }
+    const faceSprites = State.faceSpritesForPlayer[playerIndex];
+    if (faceSprites === undefined) throw new Error();
+    for (let i = 0; i < faceSprites.length; ++i) {
+        const faceSprite = faceSprites[i];
+        if (faceSprite === undefined) throw new Error();
+        faceSprite.target = new Vector(canvas.width / 2 - spriteWidth / 2 + (i - faceSprites.length / 2) * spriteGap, spriteHeight);
+        faceSprite.animate(deltaTime);
+    }
 
-        if (cardPositions[playerIndex][i] === undefined) {
-            cardPositions[playerIndex][i] = {
-                x: canvas.width / 2 - cardWidth / 2,
-                y: y
-            };
-
-            if (previousGameState !== undefined && previousGameState.deckCount > gameState.deckCount) {
-                cardPositions[playerIndex][i] = deckPosition;
-            }
-            
-            if (previousPlayer != undefined && previousPlayer.cardCount == player.cardCount) {
-                if (previousPlayer.revealedCards.length < player.revealedCards.length) {
-                    cardPositions[playerIndex][i] = {
-                        x: canvas.width / 2 - cardWidth / 2,
-                        y: 0
-                    };
-                } else if (previousPlayer.revealedCards.length > player.revealedCards.length) {
-                    cardPositions[playerIndex][i] = {
-                        x: canvas.width / 2 - cardWidth / 2,
-                        y: cardHeight
-                    };
-                }
-            }
-        }
-
-        if (cardVelocities[playerIndex][i] === undefined) {
-            cardVelocities[playerIndex][i] = { x: 0, y: 0 };
-        }
-        
-        cardTargets[playerIndex][i] = {
-            x: canvas.width / 2 - cardWidth / 2 + (j - count / 2) * cardGap,
-            y: y
-        };
-
-        [cardPositions[playerIndex][i], cardVelocities[playerIndex][i]] = slide(
-            cardTargets[playerIndex][i],
-            cardPositions[playerIndex][i],
-            cardVelocities[playerIndex][i]
-        );
-
-        context.drawImage(
-            cardImage,
-            cardPositions[playerIndex][i].x,
-            cardPositions[playerIndex][i].y,
-            cardWidth,
-            cardHeight
-        );
+    const backSprites = State.backSpritesForPlayer[playerIndex];
+    if (backSprites === undefined) throw new Error();
+    for (let i = 0; i < backSprites.length; ++i) {
+        const backSprite = backSprites[i];
+        if (backSprite === undefined) throw new Error();
+        backSprite.target = new Vector(canvas.width / 2 - spriteWidth / 2 + (i - backSprites.length / 2) * spriteGap, 0);
+        backSprite.animate(deltaTime);
     }
 }
 
 // returns the adjusted reveal index
 function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex: number): number {
-    // initialize state
-    for (let i = 0; i < playerCards.length; ++i) {
-        if (cardTargets[playerIndex][i] === undefined) {
-            cardTargets[playerIndex][i] = { x: 0, y: 0 };
-        }
-        
-        if (cardPositions[playerIndex][i] === undefined) {
-            cardPositions[playerIndex][i] = { x: 0, y: 0 };
-        }
-
-        if (cardVelocities[playerIndex][i] === undefined) {
-            cardVelocities[playerIndex][i] = { x: 0, y: 0 };
-        }
-    }
-
     let splitIndex: number;
     let movingCardCount: number;
     let reservedCardCount: number;
-    if (action === Action.Return ||
-        action === Action.DeselectHidden   || action === Action.SelectHidden ||
-        action === Action.DeselectRevealed || action === Action.SelectRevealed
+    if (Input.action === Input.Action.Return ||
+        Input.action === Input.Action.DeselectHidden   || Input.action === Input.Action.SelectHidden ||
+        Input.action === Input.Action.DeselectRevealed || Input.action === Input.Action.SelectRevealed
     ) {
         // extract moving cards
         let revealCountAdjustment = 0;
@@ -368,11 +289,11 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
 
         const j = i < revealCount ? i : i - revealCount;
         const count = i < revealCount ? revealCount : playerCards.length - revealCount;
-        const yOffset = i < revealCount ? 2 * cardHeight : cardHeight;
+        const yOffset = i < revealCount ? 2 * spriteHeight : spriteHeight;
         const selected = binarySearch(selectedIndices, i) >= 0;
         reservedCardTargets[i] = {
-            x: canvas.width / 2 - cardWidth / 2 + (j - count / 2) * cardGap,
-            y: canvas.height - yOffset - (selected ? 2 * cardGap : 0)
+            x: canvas.width / 2 - spriteWidth / 2 + (j - count / 2) * spriteGap,
+            y: canvas.height - yOffset - (selected ? 2 * spriteGap : 0)
         };
 
         [reservedCardPositions[i], reservedCardVelocities[i]] = slide(
@@ -385,8 +306,8 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
             cardImage,
             reservedCardPositions[i].x,
             reservedCardPositions[i].y,
-            cardWidth,
-            cardHeight
+            spriteWidth,
+            spriteHeight
         );
 
         //context.fillStyle = '#ff0000ff';
@@ -414,8 +335,8 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
             cardImage,
             movingCardPositions[i].x,
             movingCardPositions[i].y,
-            cardWidth,
-            cardHeight
+            spriteWidth,
+            spriteHeight
         );
 
         //context.fillStyle = '#ff0000ff';
@@ -437,9 +358,9 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
         let j = movingCardCount + i;
         let k = j < revealCount ? j : j - revealCount;
         const count = j < revealCount ? revealCount : playerCards.length - revealCount;
-        const yOffset = j < revealCount ? 2 * cardHeight : cardHeight;
+        const yOffset = j < revealCount ? 2 * spriteHeight : spriteHeight;
         reservedCardTargets[i] = {
-            x: canvas.width / 2 - cardWidth / 2 + (k - count / 2) * cardGap,
+            x: canvas.width / 2 - spriteWidth / 2 + (k - count / 2) * spriteGap,
             y: canvas.height - yOffset
         };
         
@@ -453,8 +374,8 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
             cardImage,
             reservedCardPositions[i].x,
             reservedCardPositions[i].y,
-            cardWidth,
-            cardHeight
+            spriteWidth,
+            spriteHeight
         );
 
         //context.fillStyle = '#ff0000ff';

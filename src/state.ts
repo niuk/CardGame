@@ -1,69 +1,80 @@
 import * as Lib from './lib';
-import * as Animation from './animation';
 import * as CardImages from './card-images';
-import Vector from './vector';
+import Sprite from './sprite';
 
+const playerNameFromCookie = Lib.getCookie('playerName');
+if (playerNameFromCookie === undefined) throw new Error('No player name!');
+export const playerName = playerNameFromCookie;
+
+const gameIdFromCookie = Lib.getCookie('gameId');
+if (gameIdFromCookie === undefined) throw new Error('No game id!');
+export const gameId = gameIdFromCookie;
+
+// we need to keep a copy of the previous game state around for bookkeeping purposes
+export let previousGameState: Lib.GameState | undefined;
 // the most recently received game state, if any
-export let gameState: Lib.GameState | undefined = undefined;
-// keep copies of the previous game state around for bookkeeping purposes
-let previousGameState: Lib.GameState | undefined = undefined;
+export let gameState: Lib.GameState | undefined;
 
 // indices of cards for drag & drop
 // IMPORTANT: this array must always be sorted!
 // Always use binarySearch to insert and delete or sort after manipulation
 export const selectedIndices: number[] = [];
 
+// for animating the deck
+export let deckSprites: Sprite[] = [];
+
 // associative arrays, one for each player at their player index
-// each Anim.Card corresponds to a visible Lib.Card by index
-export let animations: Animation.Card[][] | undefined;
-// animation states are always constructed using the previous animation states for continuity
-let previousAnimations: Animation.Card[][] | undefined;
+// each element corresponds to a face-down card by index
+export let backSpritesForPlayer: Sprite[][] = [];
+
+// each element corresponds to a face-up card by index
+// face sprites are constructed using the previous face sprites to maintain continuity
+let previousFaceSpritesForPlayer: Sprite[][] = [];
+export let faceSpritesForPlayer: Sprite[][] = [];
 
 // open websocket connection to get game state updates
 let ws = new WebSocket(`wss://${window.location.hostname}/`);
 
 let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
 
-ws.onmessage = ev => {
-    const obj = JSON.parse(ev.data);
+ws.onmessage = e => {
+    const obj = JSON.parse(e.data);
     if ('errorDescription' in obj) {
         if (wsMessageCallback !== null) { 
             wsMessageCallback(<Lib.ErrorMessage>obj);
             wsMessageCallback = null;
         }
     } else {
-        gameState = <Lib.GameState>obj;
-        if (gameState === undefined) {
-            throw new Error(`bad game state: ${ev.data}`);
-        }
-
         previousGameState = gameState;
-        if (previousGameState !== undefined) {
-            // selected indices might have shifted
-            for (let i = 0; i < selectedIndices.length; ++i) {
-                if (gameState.playerCards[selectedIndices[i]] !== previousGameState.playerCards[selectedIndices[i]]) {
-                    let found = false;
-                    for (let j = 0; j < gameState.playerCards.length; ++j) {
-                        if (gameState.playerCards[j] === previousGameState.playerCards[selectedIndices[i]]) {
-                            selectedIndices[i] = j;
-                            found = true;
-                            break;
-                        }
-                    }
+        gameState = <Lib.GameState>obj;
 
-                    if (!found) { 
-                        selectedIndices.splice(i, 1);
-                        --i;
+        // selected indices might have shifted
+        for (let i = 0; i < selectedIndices.length; ++i) {
+            const selectedIndex = selectedIndices[i];
+            if (selectedIndex === undefined) throw new Error();
+
+            if (gameState.playerCards[selectedIndex] !== previousGameState?.playerCards[selectedIndex]) {
+                let found = false;
+                for (let j = 0; j < gameState.playerCards.length; ++j) {
+                    if (gameState.playerCards[j] === previousGameState?.playerCards[selectedIndex]) {
+                        selectedIndices[i] = j;
+                        found = true;
+                        break;
                     }
                 }
-            }
 
-            // binary search still needs to work
-            selectedIndices.sort();
+                if (!found) {
+                    selectedIndices.splice(i, 1);
+                    --i;
+                }
+            }
         }
 
+        // binary search still needs to work
+        selectedIndices.sort();
+
         // initialize animation states
-        associateAnimationsWithCards(gameState, previousGameState);
+        associateAnimationsWithCards(previousGameState, gameState);
 
         if (wsMessageCallback !== null) {
             wsMessageCallback(gameState);
@@ -71,62 +82,6 @@ ws.onmessage = ev => {
         }
     }
 };
-
-function associateAnimationsWithCards(gameState: Lib.GameState, previousGameState: Lib.GameState) {
-    animations = [];
-    if (previousAnimations === undefined) {
-        previousAnimations = [];
-    }
-
-    for (let i = 0; i < 4; ++i) {
-        let cards: Lib.Card[];
-        let previousCards: Lib.Card[];
-        if (i == gameState.playerIndex) {
-            cards = gameState.playerCards;
-            previousCards = previousGameState.playerCards;
-        } else {
-            const otherPlayer = gameState.otherPlayers[i];
-            if (otherPlayer !== undefined) {
-                cards = otherPlayer.revealedCards;
-            } else {
-                cards = [];
-            }
-
-            const previousOtherPlayer = previousGameState.otherPlayers[i];
-            if (previousOtherPlayer !== undefined) {
-                previousCards = previousOtherPlayer.revealedCards;
-            } else {
-                previousCards = [];
-            }
-        }
-
-        animations[i] = [];
-        if (previousAnimations[i] === undefined) {
-            previousAnimations[i] = [];
-        }
-
-        for (let j = 0; j < cards.length; ++j) {
-            let found = false;
-            for (let k = 0; k < previousCards.length; ++k) {
-                if (cards[j] === previousCards[k]) {
-                    animations[i][j] = previousAnimations[i][k];
-                    found = true;
-                    break;
-                }
-            }
-
-            // TODO: use revealedCount and deckCount to determine initial position
-            if (!found) {
-                animations[i][j] = new Animation.Card(
-                    CardImages.get(cards[j]),
-                    new Vector(0, 0),
-                    new Vector(0, 0),
-                    new Vector(0, 0)
-                );
-            }
-        }
-    }
-}
 
 export async function joinGame(gameId: string, playerName: string) {
     // wait for connection
@@ -138,15 +93,68 @@ export async function joinGame(gameId: string, playerName: string) {
     // try to join the game
     const result = await new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
         wsMessageCallback = resolve;
-        ws.send(JSON.stringify(<Lib.JoinMessage>{
-            gameId: gameId,
-            playerName: playerName
-        }));
+        ws.send(JSON.stringify(<Lib.JoinMessage>{ gameId, playerName }));
     });
     
     if ('errorDescription' in result) {
         window.alert(result.errorDescription);
         throw new Error(result.errorDescription);
+    }
+}
+
+function associateAnimationsWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
+    deckSprites = [];
+    for (let i = 0; i < gameState.deckCount; ++i) {
+        deckSprites[i] = new Sprite(CardImages.get('Back0'));
+    }
+
+    backSpritesForPlayer = [];
+
+    previousFaceSpritesForPlayer = faceSpritesForPlayer;
+    faceSpritesForPlayer = [];
+
+    for (let i = 0; i < 4; ++i) {
+        let previousFaceCards: Lib.Card[];
+        let faceCards: Lib.Card[];
+
+        let backSprites: Sprite[] = [];
+        backSpritesForPlayer[i] = backSprites;
+        if (i == gameState.playerIndex) {
+            previousFaceCards = previousGameState?.playerCards ?? [];
+            faceCards = gameState.playerCards;
+        } else {
+            let previousOtherPlayer = previousGameState?.otherPlayers[i];
+            let otherPlayer = gameState.otherPlayers[i];
+
+            previousFaceCards = previousOtherPlayer?.revealedCards ?? [];  
+            faceCards = otherPlayer?.revealedCards ?? [];
+
+            for (let j = 0; j < (otherPlayer?.cardCount ?? 0) - (otherPlayer?.revealedCards?.length ?? 0); ++j) {
+                backSprites[j] = new Sprite(CardImages.get(`Back${i}`));
+            }
+        }
+
+        let previousFaceSprites: Sprite[] = previousFaceSpritesForPlayer[i] ?? [];
+        let faceSprites: Sprite[] = [];
+        faceSpritesForPlayer[i] = faceSprites;
+        for (let j = 0; j < faceCards.length; ++j) {
+            let found = false;
+            for (let k = 0; k < previousFaceCards.length; ++k) {
+                if (faceCards[j] === previousFaceCards[k]) {
+                    const previousFaceSprite = previousFaceSprites[k];
+                    if (previousFaceSprite === undefined) throw new Error();
+                    faceSprites[j] = previousFaceSprite;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                const faceCard = faceCards[j];
+                if (faceCard === undefined) throw new Error();
+                faceSprites[j] = new Sprite(CardImages.get(Lib.cardToString(faceCard)));
+            }
+        }
     }
 }
 

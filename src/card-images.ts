@@ -51,10 +51,10 @@ export async function load() {
     console.log('all card images loaded');
 }
 
-export function get(card: Lib.Card): HTMLImageElement {
-    const image = cardImages.get(Lib.cardToString(card));
+export function get(stringFromCard: string): HTMLImageElement {
+    const image = cardImages.get(stringFromCard);
     if (image === undefined) {
-        throw new Error(`couldn't find image for card: ${Lib.cardToString(card)}`);
+        throw new Error(`couldn't find image: ${stringFromCard}`);
     }
 
     return image;
