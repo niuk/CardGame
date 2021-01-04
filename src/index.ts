@@ -238,7 +238,7 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
                 }
             }
 
-            if (game.players.length >= 8) {
+            if (game.players.length >= 4) {
                 logAndSendError(e.target, "game is full");
                 return;
             }
@@ -363,18 +363,24 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
         if ('cardsToReturn' in obj) {
             const returnMessage = <Lib.ReturnMessage>obj;
-            
-            const indices: number[] = [];
+
+            const newCards = player.cards.slice();
+            let newRevealCount = player.revealCount;
             for (let i = 0; i < returnMessage.cardsToReturn.length; ++i) {
-                for (let j = 0; j < player.cards.length; ++j) {
-                    if (returnMessage.cardsToReturn[i] === player.cards[j]) {
-                        indices.push(j);
+                for (let j = 0; j < newCards.length; ++j) {
+                    if (returnMessage.cardsToReturn[i] === newCards[j]) {
+                        newCards.splice(j, 1);
+
+                        if (j < newRevealCount) {
+                            --newRevealCount;
+                        }
+
                         break;
                     }
                 }
             }
         
-            if (indices.length < returnMessage.cardsToReturn.length) {
+            if (player.cards.length - newCards.length != returnMessage.cardsToReturn.length) {
                 logAndSendError(e.target, `could not find all cards to return: ${
                     JSON.stringify(returnMessage.cardsToReturn.map(Lib.cardToString))
                 }`);
@@ -385,13 +391,9 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
             console.log(`'${player.name}' in slot ${player.index} returned cards: ${
                 JSON.stringify(returnMessage.cardsToReturn.map(Lib.cardToString))
             }`);
-        
-            indices.sort((a, b) => a - b);
-            for (let i = 0; i < indices.length; ++i) {
-                player.game.cardsInDeck.push(...player.cards.splice(indices[i] - i, 1))
-            }
 
-            player.revealCount = Math.min(player.revealCount, player.cards.length);
+            player.cards = newCards;
+            player.revealCount = newRevealCount;
             player.releaseEndTurn();
             player.game.broadcastState();
 

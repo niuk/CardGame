@@ -1,6 +1,5 @@
 import { Lib } from './lib';
 import bs from 'binary-search';
-import './StackBlur';
 
 const playerName = Lib.getCookie('playerName');
 if (playerName === undefined) {
@@ -15,12 +14,17 @@ if (gameId === undefined) {
 // refreshing should rejoin the same game
 window.history.pushState(undefined, gameId, `/game?gameId=${gameId}&playerName=${playerName}`);
 
+// keep copies of the game state around for bookkeeping purposes
 let previousGameState: Lib.GameState | undefined = undefined;;
 let gameState: Lib.GameState | undefined = undefined;
 
 const temporaryTargets: Vector[] = [];
 const temporaryPositions: Vector[] = [];
 const temporaryVelocities: Vector[] = [];
+
+const cardTargets: Vector[][] = [[], [], [], []];
+const cardPositions: Vector[][] = [[], [], [], []];
+const cardVelocities: Vector[][] = [[], [], [], []];
 
 let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
 
@@ -38,6 +42,7 @@ ws.onmessage = ev => {
         gameState = <Lib.GameState>obj;
 
         if (previousGameState !== undefined) {
+            // selected indices might have shifted
             for (let i = 0; i < selectedIndices.length; ++i) {
                 if (gameState.playerCards[selectedIndices[i]] !== previousGameState.playerCards[selectedIndices[i]]) {
                     let found = false;
@@ -56,12 +61,15 @@ ws.onmessage = ev => {
                 }
             }
 
+            // binary search still needs to work
             selectedIndices.sort();
 
+            // associative arrays for target/position/velocity also need realignment
+            // start with the player's cards
             for (let i = 0; i < previousGameState.playerCards.length; ++i) {
-                temporaryTargets[i] = cardTargets[0][i];
-                temporaryPositions[i] = cardPositions[0][i];
-                temporaryVelocities[i] = cardPositions[0][i];
+                temporaryTargets[i] = cardTargets[previousGameState.playerIndex][i];
+                temporaryPositions[i] = cardPositions[previousGameState.playerIndex][i];
+                temporaryVelocities[i] = cardPositions[previousGameState.playerIndex][i];
             }
 
             for (let i = 0; i < gameState.playerCards.length; ++i) {
@@ -74,10 +82,36 @@ ws.onmessage = ev => {
 
                     for (let j = 0; j < previousGameState.playerCards.length; ++j) {
                         if (gameState.playerCards[i] === previousGameState.playerCards[j]) {
-                            cardTargets[0][i] = temporaryTargets[j];
-                            cardPositions[0][i] = temporaryPositions[j];
-                            cardVelocities[0][i] = temporaryVelocities[j];
+                            cardTargets[previousGameState.playerIndex][i] = temporaryTargets[j];
+                            cardPositions[previousGameState.playerIndex][i] = temporaryPositions[j];
+                            cardVelocities[previousGameState.playerIndex][i] = temporaryVelocities[j];
                             break;
+                        }
+                    }
+                }
+            }
+
+            // realign other players' revealed cards
+            for (let i = 0; i < 4; ++i) {
+                const otherPlayer = gameState.otherPlayers[i];
+                const previousOtherPlayer = previousGameState.otherPlayers[i];
+                if (otherPlayer !== undefined && previousOtherPlayer !== undefined) {
+                    for (let j = 0; j < previousOtherPlayer.revealedCards.length; ++j) {
+                        temporaryTargets[j] = cardTargets[i][j];
+                        temporaryPositions[j] = cardPositions[i][j];
+                        temporaryVelocities[j] = cardVelocities[i][j];
+                    }
+                    
+                    for (let j = 0; j < otherPlayer.revealedCards.length; ++j) {
+                        if (otherPlayer.revealedCards[j] !== previousOtherPlayer.revealedCards[j]) {
+                            for (let k = 0; k < previousOtherPlayer.revealedCards.length; ++k) {
+                                if (otherPlayer.revealedCards[j] === previousOtherPlayer.revealedCards[k]) {
+                                    cardTargets[i][j] = temporaryTargets[k];
+                                    cardPositions[i][j] = temporaryPositions[k];
+                                    cardVelocities[i][j] = temporaryVelocities[k];
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -332,10 +366,6 @@ function renderOtherPlayers(gameState: Lib.GameState) {
     }
 }
 
-const cardTargets: Vector[][] = [[], [], [], []];
-const cardPositions: Vector[][] = [[], [], [], []];
-const cardVelocities: Vector[][] = [[], [], [], []];
-
 function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
     const player = gameState.otherPlayers[playerIndex];
     if (player === undefined) { 
@@ -505,11 +535,16 @@ enum Action {
 function getDropAction(gameState: Lib.GameState): Action {
     const dropPosition = cardPositions[gameState.playerIndex][selectedIndices[0]];
 
-    if (deckPositions[gameState.deckCount - 1].x - cardWidth / 2 < dropPosition.x && dropPosition.x < deckPositions[0].x + cardWidth / 2 &&
-        deckPositions[gameState.deckCount - 1].y - cardHeight / 2 < dropPosition.y && dropPosition.y < deckPositions[0].y + cardHeight / 2
-    ) {
-        return Action.Return;
-    }
+    /*
+    console.log(`dropPosition.x: ${dropPosition.x}, ${
+        deckPositions[gameState.deckCount - 1].x - cardWidth / 2}, ${
+        deckPositions[0].x + cardWidth / 2
+    }`);
+    console.log(`dropPosition.y: ${dropPosition.y}, ${
+        deckPositions[gameState.deckCount - 1].y - cardHeight / 2}, ${
+        deckPositions[0].y + cardHeight / 2
+    }`);
+    */
 
     const deselectHiddenDistance   = Math.abs(dropPosition.y - (canvas.height -     cardHeight));
     const deselectRevealedDistance = Math.abs(dropPosition.y - (canvas.height - 2 * cardHeight));
@@ -561,7 +596,7 @@ canvas.onmousedown = function(e) {
         deckPositions[gameState.deckCount - 1].x < mouseDownPosition.x && mouseDownPosition.x < deckPositions[gameState.deckCount - 1].x + cardWidth &&
         deckPositions[gameState.deckCount - 1].y < mouseDownPosition.y && mouseDownPosition.y < deckPositions[gameState.deckCount - 1].y + cardHeight;
 
-    for (let i = cardPositions[gameState.playerIndex].length - 1; i >= 0; --i) {
+    for (let i = gameState.playerCards.length - 1; i >= 0; --i) {
         const x0 = cardPositions[gameState.playerIndex][i].x;
         const y0 = cardPositions[gameState.playerIndex][i].y;
         const x1 = x0 + cardWidth;
@@ -614,7 +649,7 @@ canvas.onmousemove = function(e) {
         action === Action.DeselectRevealed || action === Action.SelectRevealed
     ) {
         action = getDropAction(gameState);
-    
+
         // move all selected cards
         for (let i = 0; i < selectedIndices.length; ++i) {
             movingCardTargets[i] = add(movingCardTargets[i], movement);
@@ -624,7 +659,6 @@ canvas.onmousemove = function(e) {
     if (onDeckAtMouseDown) {
         if (action === Action.None && exceededMoveTreshold) {
             action = Action.Draw;
-
             drawCard();
         }
 
@@ -674,7 +708,7 @@ canvas.onmouseup = function(e) {
     if (sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortBySuitBounds[1].x &&
         sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < sortBySuitBounds[1].y
     ) {
-        sortBySuit(gameState.playerIndex);
+        sortBySuit(gameState);
     }
     
     if (sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < sortByRankBounds[1].x &&
@@ -692,19 +726,19 @@ function drawCard() {
     wsMessageCallback = result => {
         if ('errorDescription' in result) {
             console.error(result.errorDescription);
-        } else {
-            // transition to moving state
+        } else if (action !== Action.None) {
+            // mouse button is still down; transition to select/deselect state
             onDeckAtMouseDown = false;
             cardIndexAtMouseDown = result.playerCards.length - 1;
             selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
-            cardTargets[result.playerIndex][cardIndexAtMouseDown] = add(deckPositions[result.deckCount - 1], sub(mouseMovePosition, mouseDownPosition));
+
+            // initialize parameters used in animations
+            movingCardTargets[0] = add(deckPositions[result.deckCount - 1], sub(mouseMovePosition, mouseDownPosition));
+            cardTargets[result.playerIndex][cardIndexAtMouseDown] = movingCardTargets[0];
             cardPositions[result.playerIndex][cardIndexAtMouseDown] = deckPositions[result.deckCount - 1];
             cardVelocities[result.playerIndex][cardIndexAtMouseDown] = { x: 0, y: 0 };
-            movingCardTargets[0] = cardTargets[result.playerIndex][cardIndexAtMouseDown];
 
-            if (action !== Action.None) { // only set the action if the mouse button is still down
-                action = getDropAction(result);
-            }
+            action = getDropAction(result);
         }
     };
 
@@ -720,6 +754,7 @@ function returnCards(gameState: Lib.GameState) {
         } else {
             // make the selected cards disappear
             selectedIndices.splice(0, selectedIndices.length);
+            console.log(`selectedIndices cleared after cards were returned: ${selectedIndices.length}`);
         }
     };
 
@@ -867,9 +902,10 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
         const j = i < revealCount ? i : i - revealCount;
         const count = i < revealCount ? revealCount : playerCards.length - revealCount;
         const yOffset = i < revealCount ? 2 * cardHeight : cardHeight;
+        const selected = binarySearch(selectedIndices, i) >= 0;
         reservedCardTargets[i] = {
             x: canvas.width / 2 - cardWidth / 2 + (j - count / 2) * cardGap,
-            y: canvas.height - yOffset - (binarySearch(selectedIndices, i) < 0 ? 0 : 2 * cardGap)
+            y: canvas.height - yOffset - (selected ? 2 * cardGap : 0)
         };
 
         [reservedCardPositions[i], reservedCardVelocities[i]] = slide(
@@ -1013,41 +1049,49 @@ function renderButtons() {
     }
 }
 
-function sortBySuit(playerIndex: number) {
-    if (gameState === undefined) {
-        return;
-    }
-
-    const cardsWithIndex: [Lib.Card, number][] = gameState.playerCards.map((card, index) => [card, index]);
-    cardsWithIndex.sort(([a, i], [b, j]) => {
+function sortBySuit(gameState: Lib.GameState) {
+    let compareFn = (a: number, b: number) => {
         if (Lib.getSuit(a) === Lib.getSuit(b)) {
             return Lib.getRank(a) - Lib.getRank(b);
         } else {
             return Lib.getSuit(a) - Lib.getSuit(b);
         }
-    });
+    };
 
-    remap(gameState, cardsWithIndex);
-
+    sortAndRemap(gameState, gameState.playerCards.
+        slice(0, gameState.playerRevealCount).
+        map((card, index) => [card, index]), compareFn);
+    sortAndRemap(gameState, gameState.playerCards.
+        slice(gameState.playerRevealCount).
+        map((card, index) => [card, index]), compareFn);
     reorderCards(gameState);
 }
 
 function sortByRank(gameState: Lib.GameState) {
-    const cardsWithIndex: [Lib.Card, number][] = gameState.playerCards.map((card, index) => [card, index]);
-    cardsWithIndex.sort(([a, i], [b, j]) => {
+    let compareFn = (a: number, b: number) => {
         if (Lib.getRank(a) === Lib.getRank(b)) {
             return Lib.getSuit(a) - Lib.getSuit(b);
         } else {
             return Lib.getRank(a) - Lib.getRank(b);
         }
-    });
+    };
 
-    remap(gameState, cardsWithIndex);
-
+    sortAndRemap(gameState, gameState.playerCards.
+        slice(0, gameState.playerRevealCount).
+        map((card, index) => [card, index]), compareFn);
+    sortAndRemap(gameState, gameState.playerCards.
+        slice(gameState.playerRevealCount).
+        map((card, index) => [card, index]), compareFn);
     reorderCards(gameState);
 }
 
-function remap(gameState: Lib.GameState, cardsWithIndex: [Lib.Card, number][]) {
+function sortAndRemap(
+    gameState: Lib.GameState,
+    cardsWithIndex: [Lib.Card, number][],
+    compareFn: (a: number, b: number) => number
+) {
+    cardsWithIndex.sort(([a, i], [b, j]) => compareFn(a, b));
+
     console.log(`${JSON.stringify(gameState.playerCards.map(
         (card, index) => `[${Lib.cardToString(card)}, ${index}]`
     ))}`);
@@ -1067,7 +1111,7 @@ function remap(gameState: Lib.GameState, cardsWithIndex: [Lib.Card, number][]) {
         temporaryVelocities[i] = cardVelocities[gameState.playerIndex][j];
     }
 
-    for (let i = 0; i < cardPositions[gameState.playerIndex].length; ++i) {
+    for (let i = 0; i < cardsWithIndex.length; ++i) {
         cardTargets[gameState.playerIndex][i] = temporaryTargets[i];
         cardPositions[gameState.playerIndex][i] = temporaryPositions[i];
         cardVelocities[gameState.playerIndex][i] = temporaryVelocities[i];
