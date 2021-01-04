@@ -25,7 +25,7 @@ const temporaryVelocities: Vector[] = [];
 let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
 
 // open websocket connection to get game state updates
-let ws = new WebSocket(`wss://${window.location.hostname}:8443`);
+let ws = new WebSocket(`wss://${window.location.hostname}/`);
 ws.onmessage = ev => {
     const obj = JSON.parse(ev.data);
     if ('errorDescription' in obj) {
