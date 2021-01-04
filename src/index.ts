@@ -1,4 +1,5 @@
 import express from "express";
+import https from "https";
 import fs from "fs/promises";
 import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
@@ -7,9 +8,6 @@ import { Mutex, Semaphore } from "await-semaphore";
 import { Lib } from "./lib";
 
 const nanoid = customAlphabet('1234567890abcdef', 5);
-
-const app = express();
-const port = 8888;
 
 const playersByWebSocket = new Map<WebSocket, Player>();
 
@@ -151,9 +149,9 @@ class Game {
 
 const gamesById = new Map<string, Game>();
 
-const wssPort = port + 1111;
-const wss = new WebSocket.Server({ port: wssPort });
+const wssPort = 8443;
 console.log(`WebSocket listening on port ${wssPort}`);
+const wss = new WebSocket.Server({ port: wssPort });
 
 function logAndSendError(ws: WebSocket, errorDescription: string) {
     console.error(`ERROR: ${errorDescription}`);
@@ -364,6 +362,8 @@ wss.on('connection', function(ws) {
     });
 });
 
+const app = express();
+
 app.use(express.static('static'));
 
 app.get("/", async (_, response) => {
@@ -410,6 +410,13 @@ app.get("/game", async (request, response) => {
     }
 });
 
-app.listen(port, () => {
+(async () => {
+    var httpsServer = https.createServer({
+        key: await fs.readFile('../key.pem'),
+        cert: await fs.readFile('../cert.pem'),
+    }, app);
+
+    const port = 443;
     console.log(`listening on port ${port}`);
-});
+    httpsServer.listen(port);
+})();
