@@ -203,7 +203,7 @@ app.get("/game", async (request, response) => {
 });
 
 async function wsOnMessage(e: WebSocket.MessageEvent) {
-    if (e.type !== 'string') {
+    if (e.type !== 'message') {
         logAndSendError(e.target, `bad message type: ${e.type}`);
 
         return;
