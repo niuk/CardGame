@@ -18,14 +18,17 @@ window.history.pushState(undefined, gameId, `/game?gameId=${gameId}&playerName=$
 let previousGameState: Lib.GameState | undefined = undefined;;
 let gameState: Lib.GameState | undefined = undefined;
 
+const temporaryTargets: Vector[] = [];
+const temporaryPositions: Vector[] = [];
+const temporaryVelocities: Vector[] = [];
+
 let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
 
 // open websocket connection to get game state updates
 let ws = new WebSocket(`ws://${window.location.hostname}:${JSON.parse(window.location.port) + 1111}`);
 ws.onmessage = ev => {
     const obj = JSON.parse(ev.data);
-    if ('errorDescription' in obj && typeof obj.errorDescription === 'string') {
-        //window.alert((<Lib.ErrorMessage>obj).errorDescription);
+    if ('errorDescription' in obj) {
         if (wsMessageCallback !== null) { 
             wsMessageCallback(<Lib.ErrorMessage>obj);
             wsMessageCallback = null;
@@ -33,12 +36,51 @@ ws.onmessage = ev => {
     } else {
         previousGameState = gameState;
         gameState = <Lib.GameState>obj;
-        console.log(gameState);
 
-        for (let i = 0; i < selectedIndices.length; ++i) {
-            if (selectedIndices[i] >= gameState.playerCards.length) {
-                selectedIndices.splice(i, selectedIndices.length - i);
-                break;
+        if (previousGameState !== undefined) {
+            for (let i = 0; i < selectedIndices.length; ++i) {
+                if (gameState.playerCards[selectedIndices[i]] !== previousGameState.playerCards[selectedIndices[i]]) {
+                    let found = false;
+                    for (let j = 0; j < gameState.playerCards.length; ++j) {
+                        if (gameState.playerCards[j] === previousGameState.playerCards[selectedIndices[i]]) {
+                            selectedIndices[i] = j;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) { 
+                        selectedIndices.splice(i, 1);
+                        --i;
+                    }
+                }
+            }
+
+            selectedIndices.sort();
+
+            for (let i = 0; i < previousGameState.playerCards.length; ++i) {
+                temporaryTargets[i] = cardTargets[0][i];
+                temporaryPositions[i] = cardPositions[0][i];
+                temporaryVelocities[i] = cardPositions[0][i];
+            }
+
+            for (let i = 0; i < gameState.playerCards.length; ++i) {
+                if (gameState.playerCards[i] !== previousGameState.playerCards[i]) {
+                    /*console.log(`[${i}]: ${
+                        Lib.cardToString(gameState.playerCards[i])
+                    } !== ${
+                        Lib.cardToString(previousGameState.playerCards[i])
+                    }`);*/
+
+                    for (let j = 0; j < previousGameState.playerCards.length; ++j) {
+                        if (gameState.playerCards[i] === previousGameState.playerCards[j]) {
+                            cardTargets[0][i] = temporaryTargets[j];
+                            cardPositions[0][i] = temporaryPositions[j];
+                            cardVelocities[0][i] = temporaryVelocities[j];
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -108,10 +150,18 @@ window.onload = async function() {
     }
 
     // try to join the game
-    ws.send(JSON.stringify(<Lib.JoinMessage>{
-        gameId: gameId,
-        playerName: playerName
-    }));
+    const result = await new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
+        wsMessageCallback = resolve;
+        ws.send(JSON.stringify(<Lib.JoinMessage>{
+            gameId: gameId,
+            playerName: playerName
+        }));
+    });
+    
+    if ('errorDescription' in result) {
+        window.alert(result.errorDescription);
+        throw new Error(result.errorDescription);
+    }
 
     // load card images asynchronously
     for (let suit = 0; suit <= 4; ++suit) {
@@ -174,8 +224,8 @@ function render(time: number) {
         // clear the screen
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        renderDeck(time, gameState.deckCount);
         renderBasics(<string>gameId, <string>playerName);
+        renderDeck(time, gameState.deckCount);
         renderOtherPlayers(gameState);
         gameState.playerRevealCount = renderPlayer(
             gameState.playerCards,
@@ -231,7 +281,6 @@ function renderDeck(time: number, deckCount: number) {
 
             if (onDeckAtMouseDown && i === deckCount - 1) {
                 // set in onmousemove
-                console.log(`${deckCount}, ${deckTargets[i].x}, ${deckTargets[i].y}`);
             } else if (time - dealTime < i * dealDuration / deckCount) {
                 deckTargets[i] = { x: -cardWidth, y: -cardHeight };
             } else {
@@ -445,6 +494,7 @@ function slide(target: Vector, position: Vector, velocity: Vector): [Vector, Vec
 enum Action {
     None,
     Draw,
+    Return,
     DeselectHidden,
     DeselectRevealed,
     SelectHidden,
@@ -453,11 +503,18 @@ enum Action {
 }
 
 function getDropAction(gameState: Lib.GameState): Action {
-    const dropY = cardPositions[gameState.playerIndex][selectedIndices[0]].y;
-    const deselectHiddenDistance   = Math.abs(dropY - (canvas.height -     cardHeight));
-    const deselectRevealedDistance = Math.abs(dropY - (canvas.height - 2 * cardHeight));
-    const selectHiddenDistance     = Math.abs(dropY - (canvas.height -     cardHeight - 2 * cardGap));
-    const selectRevealedDistance   = Math.abs(dropY - (canvas.height - 2 * cardHeight - 2 * cardGap));
+    const dropPosition = cardPositions[gameState.playerIndex][selectedIndices[0]];
+
+    if (deckPositions[gameState.deckCount - 1].x - cardWidth / 2 < dropPosition.x && dropPosition.x < deckPositions[0].x + cardWidth / 2 &&
+        deckPositions[gameState.deckCount - 1].y - cardHeight / 2 < dropPosition.y && dropPosition.y < deckPositions[0].y + cardHeight / 2
+    ) {
+        return Action.Return;
+    }
+
+    const deselectHiddenDistance   = Math.abs(dropPosition.y - (canvas.height -     cardHeight));
+    const deselectRevealedDistance = Math.abs(dropPosition.y - (canvas.height - 2 * cardHeight));
+    const selectHiddenDistance     = Math.abs(dropPosition.y - (canvas.height -     cardHeight - 2 * cardGap));
+    const selectRevealedDistance   = Math.abs(dropPosition.y - (canvas.height - 2 * cardHeight - 2 * cardGap));
     const deselectDistance = Math.min(deselectHiddenDistance, deselectRevealedDistance);
     const selectDistance = Math.min(selectHiddenDistance, selectRevealedDistance);
     if (deselectDistance < selectDistance) {
@@ -552,7 +609,8 @@ canvas.onmousemove = function(e) {
         }
     }
     
-    if (action === Action.DeselectHidden   || action === Action.SelectHidden ||
+    if (action === Action.Return ||
+        action === Action.DeselectHidden   || action === Action.SelectHidden ||
         action === Action.DeselectRevealed || action === Action.SelectRevealed
     ) {
         action = getDropAction(gameState);
@@ -567,35 +625,11 @@ canvas.onmousemove = function(e) {
         if (action === Action.None && exceededMoveTreshold) {
             action = Action.Draw;
 
-            wsMessageCallback = result => {
-                if ('errorDescription' in result) {
-                    const error = <Lib.ErrorMessage>result;
-                    console.log(error);
-                } else {
-                    // transition to moving state
-                    const gameState = <Lib.GameState>result;
-                    onDeckAtMouseDown = false;
-                    cardIndexAtMouseDown = gameState.playerCards.length - 1;
-                    selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
-                    cardTargets[gameState.playerIndex][cardIndexAtMouseDown] = add(deckPositions[gameState.deckCount - 1], sub(mouseMovePosition, mouseDownPosition));
-                    cardPositions[gameState.playerIndex][cardIndexAtMouseDown] = deckPositions[gameState.deckCount - 1];
-                    cardVelocities[gameState.playerIndex][cardIndexAtMouseDown] = { x: 0, y: 0 };
-                    movingCardTargets[0] = cardTargets[gameState.playerIndex][cardIndexAtMouseDown];
-
-                    if (action !== Action.None) { // only set the action if the mouse button is still down
-                        action = getDropAction(gameState);
-                    }
-                }
-            };
-        
-            ws.send(JSON.stringify(<Lib.DrawMessage>{
-                draw: null
-            }));
+            drawCard();
         }
 
         // move the deck's top card
         deckTargets[gameState.deckCount - 1] = add(deckTargets[gameState.deckCount - 1], movement);
-        console.log(`gameState.deckCount: ${gameState.deckCount}, { x: ${deckTargets[gameState.deckCount - 1].x}, y: ${deckTargets[gameState.deckCount - 1].y} }`);
     }
 };
 
@@ -615,6 +649,10 @@ canvas.onmouseup = function(e) {
     
     if (gameState === undefined) {
         return;
+    }
+
+    if (action === Action.Return) {
+        returnCards(gameState);
     }
 
     if (action === Action.DeselectHidden || action === Action.DeselectRevealed) {
@@ -650,7 +688,53 @@ canvas.onmouseup = function(e) {
     action = Action.None;
 };
 
+function drawCard() {
+    wsMessageCallback = result => {
+        if ('errorDescription' in result) {
+            console.error(result.errorDescription);
+        } else {
+            // transition to moving state
+            onDeckAtMouseDown = false;
+            cardIndexAtMouseDown = result.playerCards.length - 1;
+            selectedIndices.splice(0, selectedIndices.length, cardIndexAtMouseDown);
+            cardTargets[result.playerIndex][cardIndexAtMouseDown] = add(deckPositions[result.deckCount - 1], sub(mouseMovePosition, mouseDownPosition));
+            cardPositions[result.playerIndex][cardIndexAtMouseDown] = deckPositions[result.deckCount - 1];
+            cardVelocities[result.playerIndex][cardIndexAtMouseDown] = { x: 0, y: 0 };
+            movingCardTargets[0] = cardTargets[result.playerIndex][cardIndexAtMouseDown];
+
+            if (action !== Action.None) { // only set the action if the mouse button is still down
+                action = getDropAction(result);
+            }
+        }
+    };
+
+    ws.send(JSON.stringify(<Lib.DrawMessage>{
+        draw: null
+    }));
+}
+
+function returnCards(gameState: Lib.GameState) {
+    wsMessageCallback = result => {
+        if ('errorDescription' in result) {
+            console.error(result.errorDescription);
+        } else {
+            // make the selected cards disappear
+            selectedIndices.splice(0, selectedIndices.length);
+        }
+    };
+
+    ws.send(JSON.stringify(<Lib.ReturnMessage>{
+        cardsToReturn: selectedIndices.map(i => gameState.playerCards[i])
+    }));
+}
+
 function reorderCards(gameState: Lib.GameState) {
+    wsMessageCallback = result => {
+        if ('errorDescription' in result) {
+            console.error(result.errorDescription);
+        }
+    };
+
     ws.send(JSON.stringify(<Lib.ReorderMessage>{
         cards: gameState.playerCards,
         revealCount: gameState.playerRevealCount
@@ -677,7 +761,8 @@ function renderPlayer(playerCards: Lib.Card[], revealCount: number, playerIndex:
     let splitIndex: number;
     let movingCardCount: number;
     let reservedCardCount: number;
-    if (action === Action.DeselectHidden   || action === Action.SelectHidden ||
+    if (action === Action.Return ||
+        action === Action.DeselectHidden   || action === Action.SelectHidden ||
         action === Action.DeselectRevealed || action === Action.SelectRevealed
     ) {
         // extract moving cards
@@ -961,10 +1046,6 @@ function sortByRank(gameState: Lib.GameState) {
 
     reorderCards(gameState);
 }
-
-const temporaryTargets: Vector[] = [];
-const temporaryPositions: Vector[] = [];
-const temporaryVelocities: Vector[] = [];
 
 function remap(gameState: Lib.GameState, cardsWithIndex: [Lib.Card, number][]) {
     console.log(`${JSON.stringify(gameState.playerCards.map(

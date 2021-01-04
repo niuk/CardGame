@@ -47,7 +47,7 @@ class Player {
 class Game {
     gameId: string;
     stateMutex = new Mutex();
-    players: (Player | undefined)[] = [undefined, undefined, undefined, undefined]
+    players: Player[] = []
     cardsInDeck: Lib.Card[] = [];
     turn: number = 0;
 
@@ -75,41 +75,30 @@ class Game {
 
     private async run() {
         while (true) {
-            let full = true;
-
             const release = await this.stateMutex.acquire();
             try {
-                // only execute game logic and advance turns when all player slots are filled
-                for (let i = 0; i < this.players.length; ++i) {
-                    if (this.players[i] === undefined) {
-                        full = false;
-                    }
-                }
-
-                if (full) {
-                    if (this.turn == 0) {
-                        // first turn; draw cards for each player
-                        for (let i = 0; i < this.players.length; ++i) {
-                            let player = this.players[i];
-                            if (player === undefined) {
-                                throw new Error(`Player at index ${i} left.`);
-                            }
-
-                            /*
-                            // each player gets 25 cards
-                            for (let i = 0; i < 25; ++i) {
-                                const index = Math.floor(Math.random() * this.cardsInDeck.length);
-                                const [card] = this.cardsInDeck.splice(index, 1);
-                                
-                                if (card === undefined) {
-                                    throw new Error(`Bad index: ${index}, this.cardsInDeck.length: ${this.cardsInDeck.length}`);
-                                }
-
-                                player.cards.push(card);
-                                //console.log(`player ${player.name} given ${card}`);
-                            }
-                            */
+                if (this.turn == 0) {
+                    // first turn; draw cards for each player
+                    for (let i = 0; i < this.players.length; ++i) {
+                        let player = this.players[i];
+                        if (player === undefined) {
+                            throw new Error(`Player at index ${i} left.`);
                         }
+
+                        /*
+                        // each player gets 25 cards
+                        for (let i = 0; i < 25; ++i) {
+                            const index = Math.floor(Math.random() * this.cardsInDeck.length);
+                            const [card] = this.cardsInDeck.splice(index, 1);
+                            
+                            if (card === undefined) {
+                                throw new Error(`Bad index: ${index}, this.cardsInDeck.length: ${this.cardsInDeck.length}`);
+                            }
+
+                            player.cards.push(card);
+                            //console.log(`player ${player.name} given ${card}`);
+                        }
+                        */
                     }
                 }
             } finally {
@@ -117,7 +106,7 @@ class Game {
             }
 
             let activePlayer = this.players[this.activePlayerIndex];
-            if (full && activePlayer !== undefined) {
+            if (activePlayer !== undefined) {
                 // wait for active player to play cards
                 console.log(`waiting for player '${activePlayer.name}' in slot ${this.activePlayerIndex}...`);
                 activePlayer.releaseEndTurn = await activePlayer.endTurn.acquire();
@@ -140,29 +129,23 @@ class Game {
 
         for (let j = 0; j < this.players.length; ++j) {
             if (i !== j) {
-                let otherPlayer = this.players[j];
-                if (otherPlayer !== undefined) {
-                    otherPlayers[j] = {
-                        name: otherPlayer.name,
-                        cardCount: otherPlayer.cards.length,
-                        revealedCards: otherPlayer.cards.slice(0, otherPlayer.revealCount),
-                    };
-                }
+                otherPlayers[j] = {
+                    name: this.players[j].name,
+                    cardCount: this.players[j].cards.length,
+                    revealedCards: this.players[j].cards.slice(0, this.players[j].revealCount),
+                };
             }
         }
 
         // send game state
-        let player = this.players[i];
-        if (player !== undefined) {
-            player.ws.send(JSON.stringify(<Lib.GameState>{
-                deckCount: this.cardsInDeck.length,
-                playerIndex: i,
-                playerCards: player.cards,
-                playerRevealCount: player.revealCount,
-                otherPlayers: otherPlayers,
-                activePlayerIndex: this.activePlayerIndex
-            }));
-        }
+        this.players[i].ws.send(JSON.stringify(<Lib.GameState>{
+            deckCount: this.cardsInDeck.length,
+            playerIndex: i,
+            playerCards: this.players[i].cards,
+            playerRevealCount: this.players[i].revealCount,
+            otherPlayers: otherPlayers,
+            activePlayerIndex: this.activePlayerIndex
+        }));
     }
 }
 
@@ -204,20 +187,10 @@ wss.on('connection', function(ws) {
             const release = await game.stateMutex.acquire();
             try {
                 for (let i = 0; i < game.players.length; ++i) {
-                    let player = game.players[i];
-                    if (player === undefined) {
-                        player = new Player(joinMessage.playerName, ws, game, i);
-                        playersByWebSocket.set(ws, player);
-                        game.players[i] = player;
-                        game.broadcastState();
-
-                        console.log(`player '${joinMessage.playerName}' filled slot ${i} in game '${game.gameId}'`);
-
-                        return;
-                    } else if (player.ws.readyState !== WebSocket.OPEN) {
-                        player.name = joinMessage.playerName;
-                        player.ws = ws;
-                        playersByWebSocket.set(ws, player);
+                    if (game.players[i].ws.readyState !== WebSocket.OPEN) {
+                        game.players[i].name = joinMessage.playerName;
+                        game.players[i].ws = ws;
+                        playersByWebSocket.set(ws, game.players[i]);
                         game.broadcastState();
 
                         console.log(`player '${joinMessage.playerName}' took over slot ${i} in game '${game.gameId}'`);
@@ -226,7 +199,17 @@ wss.on('connection', function(ws) {
                     }
                 }
 
-                logAndSendError(ws, "game is full");
+                if (game.players.length >= 8) {
+                    logAndSendError(ws, "game is full");
+                    return;
+                }
+
+                const player = new Player(joinMessage.playerName, ws, game, game.players.length);
+                playersByWebSocket.set(ws, player);
+                game.players.push(player);
+                game.broadcastState();
+
+                console.log(`player '${joinMessage.playerName}' filled slot ${game.players.length - 1} in game '${game.gameId}'`);
 
                 return;
             } finally {
@@ -264,14 +247,42 @@ wss.on('connection', function(ws) {
                     return;
                 }
 
-                if (reorderMessage.revealCount != player.revealCount) {
-                    if (player.game.activePlayerIndex !== player.index) {
-                        logAndSendError(ws, "you are not the active player");
-                        player.game.sendStateToPlayer(player.index);
-                        return;
-                    }
-                    
+                if (player.game.activePlayerIndex === player.index) {
+                    // only the active player can reveal/hide cards, which advances the turn
                     player.releaseEndTurn();
+                } else {
+                    // we must validate that the revealed/hidden cards stay the same for inactive players
+                    for (let i = 0; i < player.revealCount; ++i) {
+                        let found = false;
+                        for (let j = 0; j < reorderMessage.revealCount; ++j) {
+                            if (player.cards[i] === newCards[j]) {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) {
+                            logAndSendError(ws, "you are not the active player");
+                            player.game.sendStateToPlayer(player.index);
+                            return;
+                        }
+                    }
+
+                    for (let i = 0; i < reorderMessage.revealCount; ++i) {
+                        let found = false;
+                        for (let j = 0; j < player.revealCount; ++j) {
+                            if (newCards[i] === player.cards[j]) {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) {
+                            logAndSendError(ws, "you are not the active player");
+                            player.game.sendStateToPlayer(player.index);
+                            return;
+                        }
+                    }
                 }
                 
                 console.log(`player '${player.name}' in slot ${player.index} reordered cards: ${
@@ -312,7 +323,7 @@ wss.on('connection', function(ws) {
             }
 
             if ('cardsToReturn' in obj) {
-                const returnMessage = <Lib.ReturnMessage>JSON.parse(obj);
+                const returnMessage = <Lib.ReturnMessage>obj;
                 
                 const indices: number[] = [];
                 for (let i = 0; i < returnMessage.cardsToReturn.length; ++i) {
@@ -340,6 +351,10 @@ wss.on('connection', function(ws) {
                 for (let i = 0; i < indices.length; ++i) {
                     player.game.cardsInDeck.push(...player.cards.splice(indices[i] - i, 1))
                 }
+
+                player.revealCount = Math.min(player.revealCount, player.cards.length);
+                player.releaseEndTurn();
+                player.game.broadcastState();
 
                 return;
             }
