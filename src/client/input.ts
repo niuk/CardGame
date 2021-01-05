@@ -1,11 +1,11 @@
-import * as Render from './render';
-import * as State from './state';
 import * as Lib from '../lib';
+import * as BS from '../binary-search';
+import * as State from './state';
+import * as VP from './view-params';
+import Sprite from './sprite';
 import Vector from './vector';
 
-const canvas = <HTMLCanvasElement>document.getElementById('canvas');
-
-const moveThreshold = 0.2 * Render.pixelsPerCM;
+const moveThreshold = 0.2 * VP.pixelsPerCM;
 
 // used by both rendering and input
 export let onDeckAtMouseDown = false;
@@ -42,10 +42,10 @@ function getDropAction(gameState: Lib.GameState): Action {
     }`);
     */
 
-    const deselectHiddenDistance   = Math.abs(dropPosition.y - (canvas.height -     Render.spriteHeight));
-    const deselectRevealedDistance = Math.abs(dropPosition.y - (canvas.height - 2 * Render.spriteHeight));
-    const selectHiddenDistance     = Math.abs(dropPosition.y - (canvas.height -     Render.spriteHeight - 2 * Render.spriteGap));
-    const selectRevealedDistance   = Math.abs(dropPosition.y - (canvas.height - 2 * Render.spriteHeight - 2 * Render.spriteGap));
+    const deselectHiddenDistance   = Math.abs(dropPosition.y - (VP.canvas.height -     VP.spriteHeight));
+    const deselectRevealedDistance = Math.abs(dropPosition.y - (VP.canvas.height - 2 * VP.spriteHeight));
+    const selectHiddenDistance     = Math.abs(dropPosition.y - (VP.canvas.height -     VP.spriteHeight - 2 * VP.spriteGap));
+    const selectRevealedDistance   = Math.abs(dropPosition.y - (VP.canvas.height - 2 * VP.spriteHeight - 2 * VP.spriteGap));
     const deselectDistance = Math.min(deselectHiddenDistance, deselectRevealedDistance);
     const selectDistance = Math.min(selectHiddenDistance, selectRevealedDistance);
     if (deselectDistance < selectDistance) {
@@ -65,12 +65,12 @@ function getDropAction(gameState: Lib.GameState): Action {
 
 function getMousePosition(e: MouseEvent) {
     return new Vector(
-        canvas.width * (e.clientX - Render.canvasRect.left) / Render.canvasRect.width,
-        canvas.height * (e.clientY - Render.canvasRect.top) / Render.canvasRect.height
+        VP.canvas.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
+        VP.canvas.height * (e.clientY - VP.canvasRect.top) / VP.canvasRect.height
     );
 }
 
-canvas.onmousedown = async (event: MouseEvent) => {
+VP.canvas.onmousedown = async (event: MouseEvent) => {
     try {
         mouseDownPosition = getMousePosition(event);
 
@@ -81,18 +81,18 @@ canvas.onmousedown = async (event: MouseEvent) => {
 
         if (State.gameState === undefined) throw new Error();
 
-        const deckTopPosition = State.deckSprites[State.deckSprites.length - 1]?.position;
-        onDeckAtMouseDown = deckTopPosition !== undefined &&
-            deckTopPosition.x < mouseDownPosition.x && mouseDownPosition.x < deckTopPosition.x + Render.spriteWidth &&
-            deckTopPosition.y < mouseDownPosition.y && mouseDownPosition.y < deckTopPosition.y + Render.spriteHeight;
+        const deckPosition = State.deckSprites[State.deckSprites.length - 1]?.position;
+        onDeckAtMouseDown = deckPosition !== undefined &&
+            deckPosition.x < mouseDownPosition.x && mouseDownPosition.x < deckPosition.x + VP.spriteWidth &&
+            deckPosition.y < mouseDownPosition.y && mouseDownPosition.y < deckPosition.y + VP.spriteHeight;
 
         // because we render left to right, the rightmost card under the mouse position is what we should return
         const faceSprites = State.faceSpritesForPlayer[State.gameState.playerIndex] ?? [];
         for (let i = faceSprites.length - 1; i >= 0; --i) {
             const position = faceSprites[i]?.position;
             if (position !== undefined &&
-                position.x < mouseDownPosition.x && mouseDownPosition.x < position.x + Render.spriteWidth &&
-                position.y < mouseDownPosition.y && mouseDownPosition.y < position.y + Render.spriteHeight
+                position.x < mouseDownPosition.x && mouseDownPosition.x < position.x + VP.spriteWidth &&
+                position.y < mouseDownPosition.y && mouseDownPosition.y < position.y + VP.spriteHeight
             ) {
                 cardIndexAtMouseDown = i;
                 action = Action.Toggle;
@@ -104,9 +104,9 @@ canvas.onmousedown = async (event: MouseEvent) => {
     }
 };
 
-canvas.onmousemove = async (event: MouseEvent) => {
+VP.canvas.onmousemove = async (event: MouseEvent) => {
     try {
-        mouseMovePosition = getMousePosition(event);
+        mouseMovePosition = await getMousePosition(event);
 
         let movement = new Vector(event.movementX, event.movementY);
         exceededMoveTreshold = exceededMoveTreshold || mouseMovePosition.distance(mouseDownPosition) > moveThreshold;
@@ -117,7 +117,7 @@ canvas.onmousemove = async (event: MouseEvent) => {
 
         if (action === Action.Toggle && exceededMoveTreshold) {
             // dragging a card selects it
-            let selectedIndexIndex = Lib.binarySearch(State.selectedIndices, cardIndexAtMouseDown);
+            let selectedIndexIndex = BS.binarySearchNumber(State.selectedIndices, cardIndexAtMouseDown);
             if (selectedIndexIndex < 0) {
                 selectedIndexIndex = ~selectedIndexIndex;
                 State.selectedIndices.splice(selectedIndexIndex, 0, cardIndexAtMouseDown);
@@ -136,7 +136,7 @@ canvas.onmousemove = async (event: MouseEvent) => {
                 const faceSprite = faceSprites[i];
                 if (faceSprite === undefined) throw new Error();
                 faceSprite.target = new Vector(
-                    faceSpriteAtMouseDown.position.x + (i - selectedIndexIndex) * Render.spriteGap,
+                    faceSpriteAtMouseDown.position.x + (i - selectedIndexIndex) * VP.spriteGap,
                     faceSpriteAtMouseDown.position.y
                 );
             }
@@ -189,14 +189,14 @@ canvas.onmousemove = async (event: MouseEvent) => {
     }
 };
 
-canvas.onmouseup = async () => {
+VP.canvas.onmouseup = async () => {
     try {
         if (action === Action.Toggle) {
             if (cardIndexAtMouseDown < 0) {
                 throw new Error();
             }
 
-            let selectedIndexIndex = Lib.binarySearch(State.selectedIndices, cardIndexAtMouseDown);
+            let selectedIndexIndex = BS.binarySearchNumber(State.selectedIndices, cardIndexAtMouseDown);
             if (selectedIndexIndex < 0) {
                 State.selectedIndices.splice(~selectedIndexIndex, 0, cardIndexAtMouseDown);
             } else {
@@ -226,7 +226,7 @@ canvas.onmouseup = async () => {
         }
         
         if (action === Action.SelectHidden || action === Action.SelectRevealed) {
-            let selectedIndexIndex = Lib.binarySearch(State.selectedIndices, cardIndexAtMouseDown);
+            let selectedIndexIndex = BS.binarySearchNumber(State.selectedIndices, cardIndexAtMouseDown);
             if (selectedIndexIndex < 0) {
                 selectedIndexIndex = ~selectedIndexIndex;
                 State.selectedIndices.splice(selectedIndexIndex, 0, cardIndexAtMouseDown);
@@ -238,8 +238,8 @@ canvas.onmouseup = async () => {
             }
         }
         
-        if (Render.sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < Render.sortBySuitBounds[1].x &&
-            Render.sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < Render.sortBySuitBounds[1].y
+        if (VP.sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.sortBySuitBounds[1].x &&
+            VP.sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortBySuitBounds[1].y
         ) {
             const result = await State.sortBySuit(State.gameState);
             if ('errorDescription' in result) {
@@ -247,8 +247,8 @@ canvas.onmouseup = async () => {
             }
         }
         
-        if (Render.sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < Render.sortByRankBounds[1].x &&
-            Render.sortByRankBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < Render.sortByRankBounds[1].y
+        if (VP.sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.sortByRankBounds[1].x &&
+            VP.sortByRankBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortByRankBounds[1].y
         ) {
             const result = await State.sortByRank(State.gameState);
             if ('errorDescription' in result) {

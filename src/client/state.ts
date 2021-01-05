@@ -26,10 +26,7 @@ export let deckSprites: Sprite[] = [];
 // associative arrays, one for each player at their player index
 // each element corresponds to a face-down card by index
 export let backSpritesForPlayer: Sprite[][] = [];
-
 // each element corresponds to a face-up card by index
-// face sprites are constructed using the previous face sprites to maintain continuity
-let previousFaceSpritesForPlayer: Sprite[][] = [];
 export let faceSpritesForPlayer: Sprite[][] = [];
 
 // open websocket connection to get game state updates
@@ -105,21 +102,23 @@ export async function joinGame(gameId: string, playerName: string) {
 }
 
 function associateAnimationsWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
-    deckSprites = [];
-    for (let i = 0; i < gameState.deckCount; ++i) {
+    deckSprites.splice(gameState.deckCount, deckSprites.length - gameState.deckCount);
+    for (let i = deckSprites.length; i < gameState.deckCount; ++i) {
         deckSprites[i] = new Sprite(CardImages.get('Back0'));
-        console.log(`deckSprites[${i}]: ${JSON.stringify(deckSprites[i]?.animate)}`);
     }
 
+    const previousBackSpritesForPlayer = backSpritesForPlayer;
     backSpritesForPlayer = [];
 
-    previousFaceSpritesForPlayer = faceSpritesForPlayer;
+    // reuse previous face sprites as much as possible to maintain continuity
+    const previousFaceSpritesForPlayer = faceSpritesForPlayer;
     faceSpritesForPlayer = [];
 
     for (let i = 0; i < 4; ++i) {
         let previousFaceCards: Lib.Card[];
         let faceCards: Lib.Card[];
 
+        let previousBackSprites: Sprite[] = previousBackSpritesForPlayer[i] ?? [];
         let backSprites: Sprite[] = [];
         backSpritesForPlayer[i] = backSprites;
         if (i == gameState.playerIndex) {

@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "module": "amd",
-    "outFile": "static/client.js",
+    "outDir": "static",
+    "module": "amd"
   },
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.base.json",
   "exclude": [
     "src/server"
   ],

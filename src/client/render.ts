@@ -1,55 +1,16 @@
 import * as Lib from '../lib';
+import * as BS from '../binary-search';
 import * as State from './state';
+import * as VP from './view-params';
 import * as Input from './input';
 import Vector from './vector';
 import Sprite from './sprite';
 
-export let spriteWidth = 0;
-export let spriteHeight = 0;
-export let spriteGap = 0;
-export let deckSpriteGap = 0;
-
 const deckDealDuration = 1000;
 let deckDealTime: number | undefined = undefined;
 
-const canvas = <HTMLCanvasElement>document.getElementById('canvas');
-const context = <CanvasRenderingContext2D>canvas.getContext('2d');
-export let canvasRect = canvas.getBoundingClientRect();
-export let pixelsPerPercent = 0;
-
-// get pixels per centimeter
-const testElement = document.createElement('div');
-testElement.style.width = '1cm';
-document.body.appendChild(testElement);
-export const pixelsPerCM = testElement.offsetWidth;
-document.body.removeChild(testElement);
-
-export let sortBySuitBounds: [Vector, Vector];
-export let sortByRankBounds: [Vector, Vector];
-
 let currentTime: number | undefined = undefined;
 let deltaTime: number;
-
-export function recalculateParameters() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - 0.5 * pixelsPerCM;
-    canvasRect = canvas.getBoundingClientRect();
-
-    pixelsPerPercent = canvas.height / 100;
-    spriteWidth = 12 * pixelsPerPercent;
-    spriteHeight = 18 * pixelsPerPercent;
-    spriteGap = 2 * pixelsPerPercent;
-    deckSpriteGap = 0.5 * pixelsPerPercent;
-
-    sortBySuitBounds = [
-        new Vector(canvas.width - 2.75 * pixelsPerCM, canvas.height - 3.5 * pixelsPerCM),
-        new Vector(canvas.width, canvas.height - 2 * pixelsPerCM)
-    ];
-    sortByRankBounds = [
-        new Vector(canvas.width - 2.75 * pixelsPerCM, canvas.height - 1.75 * pixelsPerCM),
-        new Vector(canvas.width, canvas.height - 0.25 * pixelsPerCM)
-    ];
-}
 
 export function render(time: number) {
     deltaTime = time - (currentTime !== undefined ? currentTime : time);
@@ -57,7 +18,7 @@ export function render(time: number) {
 
     if (State.gameState !== undefined) {
         // clear the screen
-        context.clearRect(0, 0, canvas.width, canvas.height);
+        VP.context.clearRect(0, 0, VP.canvas.width, VP.canvas.height);
 
         renderBasics(State.gameId, State.playerName);
         renderDeck(time, State.gameState.deckCount);
@@ -75,17 +36,17 @@ export function render(time: number) {
 }
 
 function renderBasics(gameId: string, playerName: string) {
-    context.fillStyle = '#000000ff';
-    context.font = '0.75cm Irregularis';
-    context.fillText(`Game: ${gameId}`, 0, 0.75 * pixelsPerCM);
-    context.fillText(`Your name is: ${playerName}`, 0, canvas.height);
+    VP.context.fillStyle = '#000000ff';
+    VP.context.font = '0.75cm Irregularis';
+    VP.context.fillText(`Game: ${gameId}`, 0, 0.75 * VP.pixelsPerCM);
+    VP.context.fillText(`Your name is: ${playerName}`, 0, VP.canvas.height);
     
-    context.setLineDash([4, 2]);
-    context.strokeRect(spriteHeight, spriteHeight, canvas.width - 2 * spriteHeight, canvas.height - 2 * spriteHeight);
+    VP.context.setLineDash([4, 2]);
+    VP.context.strokeRect(VP.spriteHeight, VP.spriteHeight, VP.canvas.width - 2 * VP.spriteHeight, VP.canvas.height - 2 * VP.spriteHeight);
 }
 
 function renderDeck(time: number, deckCount: number) {
-    context.save();
+    VP.context.save();
     try {
         if (deckDealTime === undefined) {
             deckDealTime = time;
@@ -98,45 +59,47 @@ function renderDeck(time: number, deckCount: number) {
             if (Input.onDeckAtMouseDown && i === deckCount - 1) {
                 // set in onmousemove
             } else if (time - deckDealTime < i * deckDealDuration / deckCount) {
-                deckSprite.target = new Vector(-spriteWidth, -spriteHeight);
+                // card not yet dealt; keep top left
+                deckSprite.position = new Vector(-VP.spriteWidth, -VP.spriteHeight);
+                deckSprite.target = new Vector(-VP.spriteWidth, -VP.spriteHeight);
             } else {
                 deckSprite.target = new Vector(
-                    canvas.width / 2 - spriteWidth / 2 - (i - deckCount / 2) * deckSpriteGap,
-                    canvas.height / 2 - spriteHeight / 2
+                    VP.canvas.width / 2 - VP.spriteWidth / 2 - (i - deckCount / 2) * VP.spriteDeckGap,
+                    VP.canvas.height / 2 - VP.spriteHeight / 2
                 );
             }
 
             deckSprite.animate(deltaTime);
         }
     } finally {
-        context.restore();
+        VP.context.restore();
     }
 }
 
 function renderOtherPlayers(gameState: Lib.GameState) {
-    context.save();
+    VP.context.save();
     try {
-        context.translate(0, (canvas.width + canvas.height) / 2);
-        context.rotate(-Math.PI / 2);
+        VP.context.translate(0, (VP.canvas.width + VP.canvas.height) / 2);
+        VP.context.rotate(-Math.PI / 2);
         renderOtherPlayer(gameState, (gameState.playerIndex + 1) % 4);
     } finally {
-        context.restore();
+        VP.context.restore();
     }
     
-    context.save();
+    VP.context.save();
     try {
         renderOtherPlayer(gameState, (gameState.playerIndex + 2) % 4);
     } finally {
-        context.restore();
+        VP.context.restore();
     }
 
-    context.save();
+    VP.context.save();
     try {
-        context.translate(canvas.width, (canvas.height - canvas.width) / 2);
-        context.rotate(Math.PI);
+        VP.context.translate(VP.canvas.width, (VP.canvas.height - VP.canvas.width) / 2);
+        VP.context.rotate(Math.PI);
         renderOtherPlayer(gameState, (gameState.playerIndex + 3) % 4);
     } finally {
-        context.restore();
+        VP.context.restore();
     }
 }
 
@@ -144,13 +107,13 @@ function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
     const player = gameState.otherPlayers[playerIndex];
     if (player === undefined) return;
 
-    context.fillStyle = '#000000ff';
-    context.font = `${spriteGap}px Irregularis`;
-    context.fillText(player.name, canvas.width / 2, spriteHeight + spriteGap);
+    VP.context.fillStyle = '#000000ff';
+    VP.context.font = `${VP.spriteGap}px Irregularis`;
+    VP.context.fillText(player.name, VP.canvas.width / 2, VP.spriteHeight + VP.spriteGap);
 
     const deckPosition = State.deckSprites[State.deckSprites.length - 1]?.position ??
-        new Vector(canvas.width / 2 - spriteWidth / 2, canvas.height / 2 - spriteHeight / 2);
-    const deckPoint = context.getTransform().inverse().transformPoint({
+        new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2, VP.canvas.height / 2 - VP.spriteHeight / 2);
+    const deckPoint = VP.context.getTransform().inverse().transformPoint({
         w: 1,
         x: deckPosition.x,
         y: deckPosition.y,
@@ -161,7 +124,7 @@ function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
     const faceSprites = State.faceSpritesForPlayer[playerIndex];
     if (faceSprites === undefined) throw new Error();
     for (const faceSprite of faceSprites) {
-        faceSprite.target = new Vector(canvas.width / 2 - spriteWidth / 2 + (i++ - faceSprites.length / 2) * spriteGap, spriteHeight);
+        faceSprite.target = new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2 + (i++ - faceSprites.length / 2) * VP.spriteGap, VP.spriteHeight);
         faceSprite.animate(deltaTime);
     }
 
@@ -169,7 +132,7 @@ function renderOtherPlayer(gameState: Lib.GameState, playerIndex: number) {
     const backSprites = State.backSpritesForPlayer[playerIndex];
     if (backSprites === undefined) throw new Error();
     for (const backSprite of backSprites) {
-        backSprite.target = new Vector(canvas.width / 2 - spriteWidth / 2 + (i++ - backSprites.length / 2) * spriteGap, 0);
+        backSprite.target = new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2 + (i++ - backSprites.length / 2) * VP.spriteGap, 0);
         backSprite.animate(deltaTime);
     }
 }
@@ -205,7 +168,7 @@ function renderPlayer(gameState: Lib.GameState) {
         // extract reserved sprites
         let i = 0;
         for (const sprite of sprites) {
-            if (Lib.binarySearch(State.selectedIndices, i++) < 0) {
+            if (BS.binarySearchNumber(State.selectedIndices, i++) < 0) {
                 reservedSprites.push(sprite);
             }
         }
@@ -284,10 +247,10 @@ function renderPlayer(gameState: Lib.GameState) {
 
         const i = sprites.length < gameState.playerRevealCount ? sprites.length : sprites.length - gameState.playerRevealCount;
         const j = sprites.length < gameState.playerRevealCount ? gameState.playerRevealCount : reservedSprites.length - gameState.playerRevealCount;
-        const y = sprites.length < gameState.playerRevealCount ? 2 * spriteHeight : spriteHeight;
+        const y = sprites.length < gameState.playerRevealCount ? 2 * VP.spriteHeight : VP.spriteHeight;
         reservedSprite.target = new Vector(
-            canvas.width / 2 - spriteWidth / 2 + (i - j / 2) * spriteGap,
-            canvas.height - y - (Lib.binarySearch(State.selectedIndices, sprites.length) < 0 ? 0 : 2 * spriteGap)
+            VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - j / 2) * VP.spriteGap,
+            VP.canvas.height - y - (BS.binarySearchNumber(State.selectedIndices, sprites.length) < 0 ? 0 : 2 * VP.spriteGap)
         );
 
         reservedSprite.animate(deltaTime);
@@ -296,37 +259,37 @@ function renderPlayer(gameState: Lib.GameState) {
 }
 
 function renderButtons() {
-    context.save();
+    VP.context.save();
     try {
         // blur image behind
         //stackBlurCanvasRGBA('canvas', x, y, canvas.width - x, canvas.height - y, 16);
 
-        const x = sortBySuitBounds[0].x - 4 * pixelsPerCM;
-        const y = sortBySuitBounds[0].y;
-        context.fillStyle = '#00ffff77';
-        context.fillRect(x, y, canvas.width - x, canvas.height - y);
+        const x = VP.sortBySuitBounds[0].x - 4 * VP.pixelsPerCM;
+        const y = VP.sortBySuitBounds[0].y;
+        VP.context.fillStyle = '#00ffff77';
+        VP.context.fillRect(x, y, VP.canvas.width - x, VP.canvas.height - y);
         
-        context.fillStyle = '#000000ff';
-        context.font = '1.5cm Irregularis';
-        context.fillText('SORT', x + 0.25 * pixelsPerCM, y + 2.25 * pixelsPerCM);
+        VP.context.fillStyle = '#000000ff';
+        VP.context.font = '1.5cm Irregularis';
+        VP.context.fillText('SORT', x + 0.25 * VP.pixelsPerCM, y + 2.25 * VP.pixelsPerCM);
 
-        context.font = '3cm Irregularis';
-        context.fillText('{', x + 3 * pixelsPerCM, y + 2.75 * pixelsPerCM);
+        VP.context.font = '3cm Irregularis';
+        VP.context.fillText('{', x + 3 * VP.pixelsPerCM, y + 2.75 * VP.pixelsPerCM);
 
-        context.font = '1.5cm Irregularis';
-        context.fillText('SUIT', sortBySuitBounds[0].x, sortBySuitBounds[1].y);
+        VP.context.font = '1.5cm Irregularis';
+        VP.context.fillText('SUIT', VP.sortBySuitBounds[0].x, VP.sortBySuitBounds[1].y);
 
-        context.font = '1.5cm Irregularis';
-        context.fillText('RANK', sortByRankBounds[0].x, sortByRankBounds[1].y);
+        VP.context.font = '1.5cm Irregularis';
+        VP.context.fillText('RANK', VP.sortByRankBounds[0].x, VP.sortByRankBounds[1].y);
 
         //context.fillStyle = '#ff000077';
-        //context.fillRect(sortBySuitBounds[0].x, sortBySuitBounds[0].y,
+        //context.fillRect(VP.sortBySuitBounds[0].x, VP.sortBySuitBounds[0].y,
             //sortBySuitBounds[1].x - sortBySuitBounds[0].x, sortBySuitBounds[1].y - sortBySuitBounds[0].y);
 
         //context.fillStyle = '#0000ff77';
         //context.fillRect(sortByRankBounds[0].x, sortByRankBounds[0].y,
             //sortByRankBounds[1].x - sortByRankBounds[0].x, sortByRankBounds[1].y - sortByRankBounds[0].y);
     } finally {
-        context.restore();
+        VP.context.restore();
     }
 }

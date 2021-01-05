@@ -1,9 +1,3 @@
-import bs from 'binary-search';
-
-export function binarySearch(haystack: number[], needle: number, low?: number, high?: number) {
-    return bs(haystack, needle, (a, b) => a - b, low, high);
-}
-
 export function getCookie(name: string): string | undefined {
     const parts = `; ${document.cookie}`.split(`; ${name}=`);
     if (parts.length === 2) {
