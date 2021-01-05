@@ -1,12 +1,22 @@
+var loaded = {};
 var exports = {};
-var module = { exports: exports, default: exports };
+var module = { exports: exports };
 
 function require(uri) {
-    uri = `js/${uri.replace("./", "")}.js`;
-    console.log(`require('${uri}')`)
-    var xmlHttp = new XMLHttpRequest();
-    xmlHttp.open("GET", uri, false);
-    xmlHttp.send(null);
-    window.eval(xmlHttp.responseText);
-    return module.exports;
+    if (loaded[uri] !== undefined) {
+        return exports;
+    }
+    
+    if (uri.indexOf("./") < 0) {
+        uri = `js/${uri}.js`;
+        console.log(`require('${uri}'); loaded: ${JSON.stringify(loaded)}`);
+
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.open("GET", uri, false);
+        xmlHttp.send(null);
+        eval(xmlHttp.responseText);
+    }
+    
+    loaded[uri] = null;
+    return exports;
 }

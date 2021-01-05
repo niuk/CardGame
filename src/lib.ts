@@ -73,11 +73,11 @@ export interface OtherPlayer {
 
 export interface GameState {
     deckCount: number;
+    activePlayerIndex: number;
     playerIndex: number;
     playerCards: Card[];
     playerRevealCount: number;
     otherPlayers: OtherPlayer[];
-    activePlayerIndex: number;
 }
 
 export interface JoinMessage {

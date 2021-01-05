@@ -1,4 +1,4 @@
-import { Lib } from "./lib";
+import * as Lib from "./lib";
 
 if (document !== null) {
     const playerNameElement = document.getElementById('playerName');

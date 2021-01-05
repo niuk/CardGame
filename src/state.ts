@@ -38,6 +38,8 @@ let ws = new WebSocket(`wss://${window.location.hostname}/`);
 let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
 
 ws.onmessage = e => {
+    console.log(e.data);
+
     const obj = JSON.parse(e.data);
     if ('errorDescription' in obj) {
         if (wsMessageCallback !== null) { 
@@ -85,10 +87,10 @@ ws.onmessage = e => {
 
 export async function joinGame(gameId: string, playerName: string) {
     // wait for connection
-    while (ws.readyState != WebSocket.OPEN) {
+    do {
         await Lib.delay(1000);
-        console.log(`ws.readyState: ${ws.readyState}`);
-    }
+        console.log(`ws.readyState: ${ws.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
+    } while (ws.readyState != WebSocket.OPEN);
 
     // try to join the game
     const result = await new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
@@ -106,6 +108,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
     deckSprites = [];
     for (let i = 0; i < gameState.deckCount; ++i) {
         deckSprites[i] = new Sprite(CardImages.get('Back0'));
+        console.log(`deckSprites[${i}]: ${JSON.stringify(deckSprites[i]?.animate)}`);
     }
 
     backSpritesForPlayer = [];

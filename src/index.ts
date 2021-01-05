@@ -5,19 +5,19 @@ import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
 import { Mutex, Semaphore } from "await-semaphore";
 
-import { Lib } from "./lib";
+import * as Lib from "./lib";
 
 const nanoid = customAlphabet('1234567890abcdef', 5);
 
 class Player {
+    game: Game;
     name: string;
     ws: WebSocket;
+    index: number;
     cards: Lib.Card[] = [];
     revealCount: number = 0;
     endTurn = new Semaphore(1);
     releaseEndTurn: () => void;
-    game: Game;
-    index: number;
 
     constructor(name: string, ws: WebSocket, game: Game, index: number) {
         this.name = name;
@@ -28,16 +28,32 @@ class Player {
         this.endTurn.acquire().then(releaseEndTurn => {
             this.releaseEndTurn = releaseEndTurn;
         });
-
-        //this.reportWebSocketState();
     }
-
-    /*private async reportWebSocketState() {
-        while (true) {
-            await Util.delay(1000);
-            console.log(`Player("${this.name}").ws.readyState: ${this.ws.readyState}`);
+    
+    sendState() {
+        const otherPlayers: (Lib.OtherPlayer | null)[] = [];
+        for (const player of this.game.players) {
+            if (player === this) {
+                otherPlayers.push(null);
+            } else {
+                otherPlayers.push(<Lib.OtherPlayer>{
+                    name: player.name,
+                    cardCount: player.cards.length,
+                    revealedCards: player.cards.slice(0, player.revealCount)
+                });
+            }
         }
-    }*/
+
+        // send game state
+        this.ws.send(JSON.stringify(<Lib.GameState>{
+            deckCount: this.game.cardsInDeck.length,
+            activePlayerIndex: this.game.activePlayerIndex,
+            playerIndex: this.index,
+            playerCards: this.cards,
+            playerRevealCount: this.revealCount,
+            otherPlayers: otherPlayers,
+        }));
+    }
 }
 
 class Game {
@@ -71,39 +87,9 @@ class Game {
 
     private async run() {
         while (true) {
-            const release = await this.stateMutex.acquire();
-            try {
-                if (this.turn == 0) {
-                    // first turn; draw cards for each player
-                    for (let i = 0; i < this.players.length; ++i) {
-                        let player = this.players[i];
-                        if (player === undefined) {
-                            throw new Error(`Player at index ${i} left.`);
-                        }
-
-                        /*
-                        // each player gets 25 cards
-                        for (let i = 0; i < 25; ++i) {
-                            const index = Math.floor(Math.random() * this.cardsInDeck.length);
-                            const [card] = this.cardsInDeck.splice(index, 1);
-                            
-                            if (card === undefined) {
-                                throw new Error(`Bad index: ${index}, this.cardsInDeck.length: ${this.cardsInDeck.length}`);
-                            }
-
-                            player.cards.push(card);
-                            //console.log(`player ${player.name} given ${card}`);
-                        }
-                        */
-                    }
-                }
-            } finally {
-                release();
-            }
-
             let activePlayer = this.players[this.activePlayerIndex];
             if (activePlayer !== undefined) {
-                // wait for active player to play cards
+                // wait for active player to end their turn
                 console.log(`waiting for player '${activePlayer.name}' in slot ${this.activePlayerIndex}...`);
                 activePlayer.releaseEndTurn = await activePlayer.endTurn.acquire();
                 this.turn++;
@@ -115,33 +101,9 @@ class Game {
     }
 
     public broadcastState() {
-        for (let i = 0; i < this.players.length; ++i) {
-            this.sendStateToPlayer(i);
+        for (const player of this.players) {
+            player.sendState();
         }
-    }
-
-    public sendStateToPlayer(i: number) {
-        let otherPlayers: Record<number, Lib.OtherPlayer> = {};
-
-        for (let j = 0; j < this.players.length; ++j) {
-            if (i !== j) {
-                otherPlayers[j] = {
-                    name: this.players[j].name,
-                    cardCount: this.players[j].cards.length,
-                    revealedCards: this.players[j].cards.slice(0, this.players[j].revealCount),
-                };
-            }
-        }
-
-        // send game state
-        this.players[i].ws.send(JSON.stringify(<Lib.GameState>{
-            deckCount: this.cardsInDeck.length,
-            playerIndex: i,
-            playerCards: this.players[i].cards,
-            playerRevealCount: this.players[i].revealCount,
-            otherPlayers: otherPlayers,
-            activePlayerIndex: this.activePlayerIndex
-        }));
     }
 }
 
@@ -205,7 +167,6 @@ app.get("/game", async (request, response) => {
 async function wsOnMessage(e: WebSocket.MessageEvent) {
     if (e.type !== 'message') {
         logAndSendError(e.target, `bad message type: ${e.type}`);
-
         return;
     }
 
@@ -217,7 +178,6 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
         const game = gamesById.get(joinMessage.gameId);
         if (game === undefined) {
             logAndSendError(e.target, "no such game");
-
             return;
         }
 
@@ -225,17 +185,20 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
         const release = await game.stateMutex.acquire();
         try {
-            for (let i = 0; i < game.players.length; ++i) {
-                if (game.players[i].ws.readyState !== WebSocket.OPEN) {
-                    game.players[i].name = joinMessage.playerName;
-                    game.players[i].ws = e.target;
-                    playersByWebSocket.set(e.target, game.players[i]);
+            let i = 0;
+            for (const player of game.players) {
+                if (player.ws.readyState !== WebSocket.OPEN) {
+                    player.name = joinMessage.playerName;
+                    player.ws = e.target;
+                    playersByWebSocket.set(e.target, player);
                     game.broadcastState();
 
                     console.log(`player '${joinMessage.playerName}' took over slot ${i} in game '${game.gameId}'`);
 
                     return;
                 }
+
+                ++i;
             }
 
             if (game.players.length >= 4) {
@@ -259,7 +222,6 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
     const player = playersByWebSocket.get(e.target);
     if (player === undefined) {
         logAndSendError(e.target, "you are not in a game");
-
         return;
     }
 
@@ -281,8 +243,7 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
             if (oldCards.length > 0) {
                 logAndSendError(e.target, `bad reorder: ${oldCards.map(Lib.cardToString)}`);
-                player.game.sendStateToPlayer(player.index);
-
+                player.sendState();
                 return;
             }
 
@@ -302,7 +263,7 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
                     if (!found) {
                         logAndSendError(e.target, "you are not the active player");
-                        player.game.sendStateToPlayer(player.index);
+                        player.sendState();
                         return;
                     }
                 }
@@ -318,7 +279,7 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
                     if (!found) {
                         logAndSendError(e.target, "you are not the active player");
-                        player.game.sendStateToPlayer(player.index);
+                        player.sendState();
                         return;
                     }
                 }
@@ -337,20 +298,21 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
         if (player.game.activePlayerIndex !== player.index) {
             logAndSendError(e.target, "you are not the active player");
-
             return;
         }
 
         if ('draw' in obj) {
             if ((<Lib.DrawMessage>obj).draw !== null) {
                 logAndSendError(e.target, 'bad draw message');
-                player.game.sendStateToPlayer(player.index);
-                
                 return;
             }
 
             const index = Math.floor(Math.random() * player.game.cardsInDeck.length);
             const [card] = player.game.cardsInDeck.splice(index, 1);
+            if (card === undefined) {
+                logAndSendError(e.target, `deck has no card at index ${index}`);
+                return;
+            }
 
             console.log(`player '${player.name}' in slot ${player.index} drew card ${Lib.cardToString(card)}`);
 

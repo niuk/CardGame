@@ -1,4 +1,4 @@
-module.exports = function(haystack, needle, comparator, low, high) {
+export default function(haystack, needle, comparator, low, high) {
   var mid, cmp;
 
   if(low === undefined)
