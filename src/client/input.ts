@@ -1,6 +1,6 @@
 import * as Render from './render';
 import * as State from './state';
-import * as Lib from './lib';
+import * as Lib from '../lib';
 import Vector from './vector';
 
 const canvas = <HTMLCanvasElement>document.getElementById('canvas');

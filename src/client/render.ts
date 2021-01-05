@@ -1,4 +1,4 @@
-import * as Lib from './lib';
+import * as Lib from '../lib';
 import * as State from './state';
 import * as Input from './input';
 import Vector from './vector';

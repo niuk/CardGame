@@ -1,4 +1,4 @@
-import * as Lib from './lib';
+import * as Lib from '../lib';
 
 const suits = ['Clubs', 'Dmnds', 'Hearts', 'Spades', 'Joker'];
 const ranks = ['Small', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'Big'];

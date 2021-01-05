@@ -5,7 +5,7 @@ import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
 import { Mutex, Semaphore } from "await-semaphore";
 
-import * as Lib from "./lib";
+import * as Lib from "../lib.js"; // would fail to locate the module without ".js"
 
 const nanoid = customAlphabet('1234567890abcdef', 5);
 

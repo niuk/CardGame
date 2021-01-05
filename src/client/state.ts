@@ -1,4 +1,4 @@
-import * as Lib from './lib';
+import * as Lib from '../lib';
 import * as CardImages from './card-images';
 import Sprite from './sprite';
 

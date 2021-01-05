@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "amd",
+    "outFile": "static/client.js",
+  },
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "src/server"
+  ],
+}
