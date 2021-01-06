@@ -21,7 +21,7 @@ export async function lock(): Promise<() => void> {
     return () => {
         release();
         //console.log(`released state lock`);
-    }
+    };
 }
 
 // we need to keep a copy of the previous game state around for bookkeeping purposes
@@ -232,7 +232,7 @@ export function returnCardsToDeck(gameState: Lib.GameState) {
         ws.send(JSON.stringify(<Lib.ReturnCardsToDeckMessage>{
             cardsToReturnToDeck: selectedIndices.map(i => gameState.playerCards[i])
         }));
-    })
+    });
 }
 
 export function reorderCards(gameState: Lib.GameState) {
@@ -242,7 +242,7 @@ export function reorderCards(gameState: Lib.GameState) {
             reorderedCards: gameState.playerCards,
             newRevealCount: gameState.playerRevealCount
         }));
-    })
+    });
 }
 
 export function sortBySuit(gameState: Lib.GameState) {

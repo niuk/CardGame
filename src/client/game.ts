@@ -18,4 +18,4 @@ window.onscroll = VP.recalculateParameters;
 
     // rendering must be synchronous, or else it flickers
     window.requestAnimationFrame(Render.render);
-}
+};

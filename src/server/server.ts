@@ -135,7 +135,7 @@ app.get("/game", async (request, response) => {
 
         let gameId: string;
         if (request.query.newGame === 'true') {
-            console.log(`creating a new game...`)
+            console.log(`creating a new game...`);
 
             do {
                 gameId = await nanoid();
