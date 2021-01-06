@@ -1,3 +1,5 @@
+import { Mutex } from 'await-semaphore';
+
 import * as Lib from '../lib';
 import * as CardImages from './card-images';
 import Sprite from './sprite';
@@ -9,6 +11,18 @@ export const playerName = playerNameFromCookie;
 const gameIdFromCookie = Lib.getCookie('gameId');
 if (gameIdFromCookie === undefined) throw new Error('No game id!');
 export const gameId = gameIdFromCookie;
+
+// some state-manipulating operations are asynchronous, so we need to guard against races
+const stateMutex = new Mutex();
+export async function lock(): Promise<() => void> {
+    //console.log(`acquiring state lock...\n${new Error().stack}`);
+    const release = await stateMutex.acquire();
+    //console.log(`acquired state lock\n${new Error().stack}`);
+    return () => {
+        release();
+        //console.log(`released state lock`);
+    }
+}
 
 // we need to keep a copy of the previous game state around for bookkeeping purposes
 export let previousGameState: Lib.GameState | undefined;
@@ -32,74 +46,83 @@ export let faceSpritesForPlayer: Sprite[][] = [];
 // open websocket connection to get game state updates
 let ws = new WebSocket(`wss://${window.location.hostname}/`);
 
-let wsMessageCallback: ((result: Lib.ErrorMessage | Lib.GameState) => void) | null = null;
+const callbacksForMethodName = new Map<string, ((result: Lib.MethodResult) => void)[]>();
 
-ws.onmessage = e => {
-    console.log(e.data);
+function addCallback(methodName: string, callback: (result: Lib.MethodResult) => void) {
+    let callbacks = callbacksForMethodName.get(methodName);
+    if (callbacks === undefined) {
+        callbacks = [];
+        callbacksForMethodName.set(methodName, callbacks);
+    }
 
+    callbacks.push(callback);
+}
+
+ws.onmessage = async e => {
     const obj = JSON.parse(e.data);
-    if ('errorDescription' in obj) {
-        if (wsMessageCallback !== null) { 
-            wsMessageCallback(<Lib.ErrorMessage>obj);
-            wsMessageCallback = null;
+    if ('methodName' in obj) {
+        const returnMessage = <Lib.MethodResult>obj;
+        const methodName = returnMessage.methodName;
+        const callbacks = callbacksForMethodName.get(methodName);
+        if (callbacks === undefined || callbacks.length === 0) {
+            throw new Error(`no callbacks found for method: ${methodName}`);
         }
-    } else {
-        previousGameState = gameState;
-        gameState = <Lib.GameState>obj;
 
-        // selected indices might have shifted
-        for (let i = 0; i < selectedIndices.length; ++i) {
-            const selectedIndex = selectedIndices[i];
-            if (selectedIndex === undefined) throw new Error();
+        const callback = callbacks.shift();
+        if (callback === undefined) {
+            throw new Error(`callback is undefined for method: ${methodName}`);
+        }
+        
+        callback(returnMessage);
+    } else if (
+        'deckCount' in obj &&
+        'activePlayerIndex' in obj &&
+        'playerIndex' in obj &&
+        'playerCards' in obj &&
+        'playerRevealCount' in obj &&
+        'otherPlayers' in obj
+    ) {
+        const unlock = await lock();
+        try {
+            previousGameState = gameState;
+            gameState = <Lib.GameState>obj;
 
-            if (gameState.playerCards[selectedIndex] !== previousGameState?.playerCards[selectedIndex]) {
-                let found = false;
-                for (let j = 0; j < gameState.playerCards.length; ++j) {
-                    if (gameState.playerCards[j] === previousGameState?.playerCards[selectedIndex]) {
-                        selectedIndices[i] = j;
-                        found = true;
-                        break;
+            // selected indices might have shifted
+            for (let i = 0; i < selectedIndices.length; ++i) {
+                const selectedIndex = selectedIndices[i];
+                if (selectedIndex === undefined) throw new Error();
+
+                if (JSON.stringify(gameState.playerCards[selectedIndex]) !== JSON.stringify(previousGameState?.playerCards[selectedIndex])) {
+                    let found = false;
+                    for (let j = 0; j < gameState.playerCards.length; ++j) {
+                        if (JSON.stringify(gameState.playerCards[j]) === JSON.stringify(previousGameState?.playerCards[selectedIndex])) {
+                            selectedIndices[i] = j;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        selectedIndices.splice(i, 1);
+                        --i;
                     }
                 }
-
-                if (!found) {
-                    selectedIndices.splice(i, 1);
-                    --i;
-                }
             }
+
+            // binary search still needs to work
+            selectedIndices.sort((a, b) => a - b);
+
+            // initialize animation states
+            associateAnimationsWithCards(previousGameState, gameState);
+        } finally {
+            unlock();
         }
-
-        // binary search still needs to work
-        selectedIndices.sort();
-
-        // initialize animation states
-        associateAnimationsWithCards(previousGameState, gameState);
-
-        if (wsMessageCallback !== null) {
-            wsMessageCallback(gameState);
-            wsMessageCallback = null;
-        }
+    } else {
+        throw new Error(JSON.stringify(e.data));
     }
 };
 
-export async function joinGame(gameId: string, playerName: string) {
-    // wait for connection
-    do {
-        await Lib.delay(1000);
-        console.log(`ws.readyState: ${ws.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
-    } while (ws.readyState != WebSocket.OPEN);
-
-    // try to join the game
-    const result = await new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
-        wsMessageCallback = resolve;
-        ws.send(JSON.stringify(<Lib.JoinMessage>{ gameId, playerName }));
-    });
-    
-    if ('errorDescription' in result) {
-        window.alert(result.errorDescription);
-        throw new Error(result.errorDescription);
-    }
-}
+let onAnimationsAssociated = () => {};
 
 function associateAnimationsWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
     deckSprites.splice(gameState.deckCount, deckSprites.length - gameState.deckCount);
@@ -142,10 +165,13 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
         for (let j = 0; j < faceCards.length; ++j) {
             let found = false;
             for (let k = 0; k < previousFaceCards.length; ++k) {
-                if (faceCards[j] === previousFaceCards[k]) {
+                if (JSON.stringify(faceCards[j]) === JSON.stringify(previousFaceCards[k])) {
                     const previousFaceSprite = previousFaceSprites[k];
                     if (previousFaceSprite === undefined) throw new Error();
                     faceSprites[j] = previousFaceSprite;
+                    // remove to avoid associating another sprite with the same card
+                    previousFaceSprites.splice(k, 1);
+                    previousFaceCards.splice(k, 1);
                     found = true;
                     break;
                 }
@@ -154,49 +180,77 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
             if (!found) {
                 const faceCard = faceCards[j];
                 if (faceCard === undefined) throw new Error();
-                faceSprites[j] = new Sprite(CardImages.get(Lib.cardToString(faceCard)));
+                faceSprites[j] = new Sprite(CardImages.get(JSON.stringify(faceCard)));
             }
         }
+    }
+
+    onAnimationsAssociated();
+}
+
+export async function joinGame(gameId: string, playerName: string) {
+    // wait for connection
+    do {
+        await Lib.delay(1000);
+        console.log(`ws.readyState: ${ws.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
+    } while (ws.readyState != WebSocket.OPEN);
+
+    // try to join the game
+    const result = await new Promise<Lib.MethodResult>(resolve => {
+        addCallback('joinGame', resolve);
+        ws.send(JSON.stringify(<Lib.JoinGameMessage>{ gameId, playerName }));
+    });
+
+    if (result.errorDescription !== undefined) {
+        window.alert(result.errorDescription);
+        throw new Error(result.errorDescription);
     }
 }
 
 export function drawCard() {
-    return new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
-        wsMessageCallback = resolve;
+    return new Promise<Lib.MethodResult>(resolve => {
+        addCallback('drawCard', result => {
+            if (result.errorDescription !== undefined) {
+                resolve(result);
+            } else {
+                onAnimationsAssociated = () => {
+                    onAnimationsAssociated = () => {};
+                    resolve(result);
+                };
+            }
+        });
 
-        ws.send(JSON.stringify(<Lib.DrawMessage>{
-            draw: null
+        ws.send(JSON.stringify(<Lib.DrawCardMessage>{
+            drawCard: null
         }));
     });
 }
 
-export function returnCards(gameState: Lib.GameState) {
-    return new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
-        wsMessageCallback = resolve;
-
-        ws.send(JSON.stringify(<Lib.ReturnMessage>{
-            cardsToReturn: selectedIndices.map(i => gameState.playerCards[i])
+export function returnCardsToDeck(gameState: Lib.GameState) {
+    return new Promise<Lib.MethodResult>(resolve => {
+        addCallback('cardsToReturnToDeck', resolve);
+        ws.send(JSON.stringify(<Lib.ReturnCardsToDeckMessage>{
+            cardsToReturnToDeck: selectedIndices.map(i => gameState.playerCards[i])
         }));
     })
 }
 
 export function reorderCards(gameState: Lib.GameState) {
-    return new Promise<Lib.ErrorMessage | Lib.GameState>(resolve => {
-        wsMessageCallback = resolve;
-
-        ws.send(JSON.stringify(<Lib.ReorderMessage>{
-            cards: gameState.playerCards,
-            revealCount: gameState.playerRevealCount
+    return new Promise<Lib.MethodResult>(resolve => {
+        addCallback('reorderCards', resolve);
+        ws.send(JSON.stringify(<Lib.ReorderCardsMessage>{
+            reorderedCards: gameState.playerCards,
+            newRevealCount: gameState.playerRevealCount
         }));
     })
 }
 
 export function sortBySuit(gameState: Lib.GameState) {
-    let compareFn = (a: number, b: number) => {
-        if (Lib.getSuit(a) === Lib.getSuit(b)) {
-            return Lib.getRank(a) - Lib.getRank(b);
+    let compareFn = ([aSuit, aRank]: Lib.Card, [bSuit, bRank]: Lib.Card) => {
+        if (aSuit !== bSuit) {
+            return aSuit - bSuit;
         } else {
-            return Lib.getSuit(a) - Lib.getSuit(b);
+            return aRank - bRank;
         }
     };
 
@@ -206,11 +260,11 @@ export function sortBySuit(gameState: Lib.GameState) {
 }
 
 export function sortByRank(gameState: Lib.GameState) {
-    let compareFn = (a: number, b: number) => {
-        if (Lib.getRank(a) === Lib.getRank(b)) {
-            return Lib.getSuit(a) - Lib.getSuit(b);
+    let compareFn = ([aSuit, aRank]: Lib.Card, [bSuit, bRank]: Lib.Card) => {
+        if (aRank !== bRank) {
+            return aRank - bRank;
         } else {
-            return Lib.getRank(a) - Lib.getRank(b);
+            return aSuit - bSuit;
         }
     };
 
@@ -225,7 +279,7 @@ function sortCards(
     cards: Lib.Card[],
     start: number,
     end: number,
-    compareFn: (a: number, b: number) => number
+    compareFn: (a: Lib.Card, b: Lib.Card) => number
 ) {
     cards.splice(start, end - start, ...cards.slice(start, end).sort(compareFn));
 }

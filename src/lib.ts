@@ -1,3 +1,9 @@
+import binarySearch from 'binary-search';
+
+export function binarySearchNumber(haystack: number[], needle: number, low?: number, high?: number) {
+    return binarySearch(haystack, needle, (a, b) => a - b, low, high);
+}
+
 export function getCookie(name: string): string | undefined {
     const parts = `; ${document.cookie}`.split(`; ${name}=`);
     if (parts.length === 2) {
@@ -41,23 +47,7 @@ export enum Rank {
     Big, // 14
 }
 
-export type Card = number;
-
-export function card(suit: Suit, rank: Rank): Card {
-    return suit << 4 | rank;
-}
-
-export function getSuit(card: Card): Suit {
-    return card >> 4;
-}
-
-export function getRank(card: Card): Rank {
-    return card & 0xf;
-}
-
-export function cardToString(card: Card): string {
-    return `[${getSuit(card)},${getRank(card)}]`;
-}
+export type Card = [Suit, Rank];
 
 export interface OtherPlayer {
     name: string;
@@ -74,24 +64,27 @@ export interface GameState {
     otherPlayers: OtherPlayer[];
 }
 
-export interface JoinMessage {
+export type MethodName = "joinGame" | "drawCard" | "returnCardsToDeck" | "reorderCards";
+
+export interface MethodResult {
+    methodName: MethodName;
+    errorDescription?: string;
+}
+
+export interface JoinGameMessage {
     gameId: string;
     playerName: string;
 }
 
-export interface ReorderMessage {
-    cards: Card[];
-    revealCount: number;
+export interface DrawCardMessage {
+    drawCard: null;
 }
 
-export interface DrawMessage {
-    draw: null;
+export interface ReturnCardsToDeckMessage {
+    cardsToReturnToDeck: Card[];
 }
 
-export interface ReturnMessage {
-    cardsToReturn: Card[];
-}
-
-export interface ErrorMessage {
-    errorDescription: string;
+export interface ReorderCardsMessage {
+    reorderedCards: Card[];
+    newRevealCount: number;
 }

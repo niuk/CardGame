@@ -12,7 +12,7 @@ export default class Sprite {
     position: Vector;
     velocity: Vector;
 
-    bad = false;
+    //bad = false;
 
     constructor(image: HTMLImageElement) {
         this.image = image;
@@ -26,11 +26,13 @@ export default class Sprite {
         const dragForce = this.velocity.scale(-drag);
         const acceleration = springForce.add(dragForce).scale(1 / mass);
 
-        const savedVelocity = this.velocity;
-        const savedPosition = this.position;
+        //const savedVelocity = this.velocity;
+        //const savedPosition = this.position;
+        
         this.velocity = this.velocity.add(acceleration.scale(deltaTime / 1000));
         this.position = this.position.add(this.velocity.scale(deltaTime / 1000));
 
+        /*
         if (!this.bad && (
             !isFinite(this.velocity.x) || isNaN(this.velocity.x) ||
             !isFinite(this.velocity.y) || isNaN(this.velocity.y) ||
@@ -43,6 +45,7 @@ export default class Sprite {
             console.log(`target: ${JSON.stringify(this.target)}, position: ${JSON.stringify(savedPosition)}, velocity: ${JSON.stringify(savedVelocity)}, acceleration: ${JSON.stringify(acceleration)}`);
             console.log(`new position: ${JSON.stringify(this.position)}, new velocity: ${JSON.stringify(this.velocity)}`);
         }
+        */
 
         VP.context.drawImage(this.image, this.position.x, this.position.y, VP.spriteWidth, VP.spriteHeight);
     }

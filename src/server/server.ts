@@ -3,7 +3,7 @@ import https from "https";
 import fs from "fs/promises";
 import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
-import { Mutex, Semaphore } from "await-semaphore";
+import { Semaphore } from "await-semaphore";
 
 import * as Lib from "../lib.js"; // would fail to locate the module without ".js"
 
@@ -58,7 +58,6 @@ class Player {
 
 class Game {
     gameId: string;
-    stateMutex = new Mutex();
     players: Player[] = []
     cardsInDeck: Lib.Card[] = [];
     turn: number = 0;
@@ -68,15 +67,15 @@ class Game {
 
         for (let i = 0; i < 4; ++i) {
             for (let j = 1; j <= 13; ++j) {
-                this.cardsInDeck.push(Lib.card(i, j));
-                this.cardsInDeck.push(Lib.card(i, j));
+                this.cardsInDeck.push([i, j]);
+                this.cardsInDeck.push([i, j]);
             }
         }
 
-        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Big));
-        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Big));
-        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Small));
-        this.cardsInDeck.push(Lib.card(Lib.Suit.Joker, Lib.Rank.Small));
+        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Big]);
+        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Big]);
+        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Small]);
+        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Small]);
 
         this.run();
     }
@@ -111,9 +110,12 @@ const gamesById = new Map<string, Game>();
 
 const playersByWebSocket = new Map<WebSocket, Player>();
 
-function logAndSendError(ws: WebSocket, errorDescription: string) {
-    console.error(`ERROR: ${errorDescription}`);
-    ws.send(JSON.stringify(<Lib.ErrorMessage>{ errorDescription }))
+function sendMethodResult(ws: WebSocket, methodName: Lib.MethodName, errorDescription?: string) {
+    if (errorDescription !== undefined) {
+        console.error(`methodName: ${methodName}, errorDescription: ${errorDescription}}`);
+    }
+
+    ws.send(JSON.stringify(<Lib.MethodResult>{ methodName, errorDescription }));
 }
 
 const app = express();
@@ -166,203 +168,209 @@ app.get("/game", async (request, response) => {
 
 async function wsOnMessage(e: WebSocket.MessageEvent) {
     if (e.type !== 'message') {
-        logAndSendError(e.target, `bad message type: ${e.type}`);
+        console.error(`bad message type: ${e.type}`);
+        e.target.send(`bad message type: ${e.type}`);
         return;
     }
-
-    console.log(`message: ${e}`);
 
     const obj = JSON.parse(e.data.toString());
     if ('gameId' in obj && 'playerName' in obj) {
-        const joinMessage = <Lib.JoinMessage>obj;
-        const game = gamesById.get(joinMessage.gameId);
+        const joinGameMessage = <Lib.JoinGameMessage>obj;
+        const game = gamesById.get(joinGameMessage.gameId);
         if (game === undefined) {
-            logAndSendError(e.target, "no such game");
+            sendMethodResult(e.target, 'joinGame', `game '${joinGameMessage.gameId}' does not exist`);
             return;
         }
 
-        console.log(`player '${joinMessage.playerName}' is attempting to join game '${game.gameId}'...`);
+        console.log(`player '${joinGameMessage.playerName}' is attempting to join game '${game.gameId}'...`);
 
-        const release = await game.stateMutex.acquire();
-        try {
-            let i = 0;
-            for (const player of game.players) {
-                if (player.ws.readyState !== WebSocket.OPEN) {
-                    player.name = joinMessage.playerName;
-                    player.ws = e.target;
-                    playersByWebSocket.set(e.target, player);
-                    game.broadcastState();
+        let i = 0;
+        for (const player of game.players) {
+            if (player.ws.readyState !== WebSocket.OPEN) {
+                player.name = joinGameMessage.playerName;
+                player.ws = e.target;
+                playersByWebSocket.set(e.target, player);
 
-                    console.log(`player '${joinMessage.playerName}' took over slot ${i} in game '${game.gameId}'`);
+                console.log(`player '${joinGameMessage.playerName}' took over slot ${i} in game '${game.gameId}'`);
 
-                    return;
-                }
-
-                ++i;
-            }
-
-            if (game.players.length >= 4) {
-                logAndSendError(e.target, "game is full");
+                sendMethodResult(e.target, 'joinGame');
+                game.broadcastState();
                 return;
             }
 
-            const player = new Player(joinMessage.playerName, e.target, game, game.players.length);
-            playersByWebSocket.set(e.target, player);
-            game.players.push(player);
-            game.broadcastState();
-
-            console.log(`player '${joinMessage.playerName}' filled slot ${game.players.length - 1} in game '${game.gameId}'`);
-
-            return;
-        } finally {
-            release();
+            ++i;
         }
-    }
-    
-    const player = playersByWebSocket.get(e.target);
-    if (player === undefined) {
-        logAndSendError(e.target, "you are not in a game");
+
+        if (game.players.length >= 4) {
+            sendMethodResult(e.target, 'joinGame', `game '${joinGameMessage.gameId}' is full`);
+            return;
+        }
+
+        const player = new Player(joinGameMessage.playerName, e.target, game, game.players.length);
+        playersByWebSocket.set(e.target, player);
+        game.players.push(player);
+
+        console.log(`player '${joinGameMessage.playerName}' filled slot ${game.players.length - 1} in game '${game.gameId}'`);
+
+        sendMethodResult(e.target, 'joinGame');
+        game.broadcastState();
         return;
     }
 
-    const release = await player.game.stateMutex.acquire();
-    try {
-        if ('cards' in obj && 'revealCount' in obj) {
-            const reorderMessage = <Lib.ReorderMessage>obj;
+    if ('drawCard' in obj) {
+        if ((<Lib.DrawCardMessage>obj).drawCard !== null) {
+            sendMethodResult(e.target, 'drawCard', 'bad message');
+            return;
+        }
 
-            let oldCards = player.cards.slice();
-            let newCards: Lib.Card[] = [];
-            for (let i = 0; i < reorderMessage.cards.length; ++i) {
-                for (let j = 0; j < oldCards.length; ++j) {
-                    if (reorderMessage.cards[i] === oldCards[j]) {
-                        newCards.push(...oldCards.splice(j, 1));
-                        break;
-                    }
-                }
-            }
-
-            if (oldCards.length > 0) {
-                logAndSendError(e.target, `bad reorder: ${oldCards.map(Lib.cardToString)}`);
-                player.sendState();
-                return;
-            }
-
-            if (player.game.activePlayerIndex === player.index) {
-                // only the active player can reveal/hide cards, which advances the turn
-                player.releaseEndTurn();
-            } else {
-                // we must validate that the revealed/hidden cards stay the same for inactive players
-                for (let i = 0; i < player.revealCount; ++i) {
-                    let found = false;
-                    for (let j = 0; j < reorderMessage.revealCount; ++j) {
-                        if (player.cards[i] === newCards[j]) {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        logAndSendError(e.target, "you are not the active player");
-                        player.sendState();
-                        return;
-                    }
-                }
-
-                for (let i = 0; i < reorderMessage.revealCount; ++i) {
-                    let found = false;
-                    for (let j = 0; j < player.revealCount; ++j) {
-                        if (newCards[i] === player.cards[j]) {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        logAndSendError(e.target, "you are not the active player");
-                        player.sendState();
-                        return;
-                    }
-                }
-            }
-            
-            console.log(`player '${player.name}' in slot ${player.index} reordered cards: ${
-                JSON.stringify(newCards.map(Lib.cardToString))
-            }, revealCount: ${player.revealCount}`);
-
-            player.cards = newCards;
-            player.revealCount = reorderMessage.revealCount;
-            player.game.broadcastState();
-
+        const player = playersByWebSocket.get(e.target);
+        if (player === undefined) {
+            sendMethodResult(e.target, 'drawCard', 'you are not in a game');
             return;
         }
 
         if (player.game.activePlayerIndex !== player.index) {
-            logAndSendError(e.target, "you are not the active player");
+            sendMethodResult(e.target, 'drawCard', 'you are not the active player');
             return;
         }
 
-        if ('draw' in obj) {
-            if ((<Lib.DrawMessage>obj).draw !== null) {
-                logAndSendError(e.target, 'bad draw message');
-                return;
+        const index = Math.floor(Math.random() * player.game.cardsInDeck.length);
+        const [card] = player.game.cardsInDeck.splice(index, 1);
+        if (card === undefined) {
+            sendMethodResult(e.target, 'drawCard', 'deck has no cards');
+            return;
+        }
+
+        console.log(`player '${player.name}' in slot ${player.index} drew card ${JSON.stringify(card)}`);
+
+        sendMethodResult(e.target, 'drawCard');
+        player.cards.push(card);
+        player.releaseEndTurn();
+        player.game.broadcastState();
+        return;
+    }
+
+    if ('returnCardsToDeck' in obj) {
+        const deckMessage = <Lib.ReturnCardsToDeckMessage>obj;
+
+        const player = playersByWebSocket.get(e.target);
+        if (player === undefined) {
+            sendMethodResult(e.target, 'returnCardsToDeck', 'you are not in a game');
+            return;
+        }
+
+        if (player.game.activePlayerIndex !== player.index) {
+            sendMethodResult(e.target, 'returnCardsToDeck', 'you are not the active player');
+            return;
+        }
+
+        const newCards = player.cards.slice();
+        let newRevealCount = player.revealCount;
+        for (let i = 0; i < deckMessage.cardsToReturnToDeck.length; ++i) {
+            for (let j = 0; j < newCards.length; ++j) {
+                if (JSON.stringify(deckMessage.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {
+                    newCards.splice(j, 1);
+
+                    if (j < newRevealCount) {
+                        --newRevealCount;
+                    }
+
+                    break;
+                }
             }
+        }
+    
+        if (player.cards.length - newCards.length != deckMessage.cardsToReturnToDeck.length) {
+            sendMethodResult(e.target, 'returnCardsToDeck', `could not find all cards to return: ${
+                JSON.stringify(deckMessage.cardsToReturnToDeck.map(card => JSON.stringify(card)))
+            }`);
 
-            const index = Math.floor(Math.random() * player.game.cardsInDeck.length);
-            const [card] = player.game.cardsInDeck.splice(index, 1);
-            if (card === undefined) {
-                logAndSendError(e.target, `deck has no card at index ${index}`);
-                return;
+            return;
+        }
+    
+        console.log(`'${player.name}' in slot ${player.index} returned cards: ${
+            JSON.stringify(deckMessage.cardsToReturnToDeck.map(card => JSON.stringify(card)))
+        }`);
+
+        sendMethodResult(e.target, 'returnCardsToDeck');
+        player.cards = newCards;
+        player.revealCount = newRevealCount;
+        player.releaseEndTurn();
+        player.game.broadcastState();
+        return;
+    }
+
+    if ('reorderedCards' in obj && 'newRevealCount' in obj) {
+        const reorderMessage = <Lib.ReorderCardsMessage>obj;
+
+        const player = playersByWebSocket.get(e.target);
+        if (player === undefined) {
+            sendMethodResult(e.target, 'reorderCards', 'you are not in a game');
+            return;
+        }
+
+        let newCards: Lib.Card[] = [];
+        for (const card of reorderMessage.reorderedCards) {
+            for (const oldCard of player.cards) {
+                if (JSON.stringify(card) === JSON.stringify(oldCard)) {
+                    newCards.push(card);
+                }
             }
+        }
 
-            console.log(`player '${player.name}' in slot ${player.index} drew card ${Lib.cardToString(card)}`);
+        if (newCards.length != player.cards.length) {
+            sendMethodResult(e.target, 'reorderCards', `bad reorder`);
+            player.sendState();
+            return;
+        }
 
-            player.cards.push(card);
+        if (player.game.activePlayerIndex === player.index) {
+            // only the active player can reveal/hide cards, which advances the turn
             player.releaseEndTurn();
-            player.game.broadcastState();
-
-            return;
-        }
-
-        if ('cardsToReturn' in obj) {
-            const returnMessage = <Lib.ReturnMessage>obj;
-
-            const newCards = player.cards.slice();
-            let newRevealCount = player.revealCount;
-            for (let i = 0; i < returnMessage.cardsToReturn.length; ++i) {
-                for (let j = 0; j < newCards.length; ++j) {
-                    if (returnMessage.cardsToReturn[i] === newCards[j]) {
-                        newCards.splice(j, 1);
-
-                        if (j < newRevealCount) {
-                            --newRevealCount;
-                        }
-
+        } else {
+            // we must validate that the revealed/hidden cards stay the same for inactive players
+            for (let i = 0; i < player.revealCount; ++i) {
+                let found = false;
+                for (let j = 0; j < reorderMessage.newRevealCount; ++j) {
+                    if (JSON.stringify(player.cards[i]) === JSON.stringify(newCards[j])) {
+                        found = true;
                         break;
                     }
                 }
+
+                if (!found) {
+                    sendMethodResult(e.target, 'reorderCards', 'you are not the active player');
+                    player.sendState();
+                    return;
+                }
             }
-        
-            if (player.cards.length - newCards.length != returnMessage.cardsToReturn.length) {
-                logAndSendError(e.target, `could not find all cards to return: ${
-                    JSON.stringify(returnMessage.cardsToReturn.map(Lib.cardToString))
-                }`);
 
-                return;
+            for (let i = 0; i < reorderMessage.newRevealCount; ++i) {
+                let found = false;
+                for (let j = 0; j < player.revealCount; ++j) {
+                    if (JSON.stringify(newCards[i]) === JSON.stringify(player.cards[j])) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    sendMethodResult(e.target, 'reorderCards', 'you are not the active player');
+                    player.sendState();
+                    return;
+                }
             }
-        
-            console.log(`'${player.name}' in slot ${player.index} returned cards: ${
-                JSON.stringify(returnMessage.cardsToReturn.map(Lib.cardToString))
-            }`);
-
-            player.cards = newCards;
-            player.revealCount = newRevealCount;
-            player.releaseEndTurn();
-            player.game.broadcastState();
-
-            return;
         }
-    } finally {
-        release();
+        
+        console.log(`player '${player.name}' in slot ${player.index} reordered cards: ${
+            JSON.stringify(newCards.map(card => JSON.stringify(card)))
+        }, revealCount: ${player.revealCount}`);
+
+        sendMethodResult(e.target, 'reorderCards');
+        player.cards = newCards;
+        player.revealCount = reorderMessage.newRevealCount;
+        player.game.broadcastState();
+        return;
     }
 }
 

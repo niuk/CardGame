@@ -9,15 +9,13 @@ window.history.pushState(undefined, State.gameId, `/game?gameId=${State.gameId}&
 window.onresize = VP.recalculateParameters;
 window.onscroll = VP.recalculateParameters;
 
-(async () => {
-    console.log(`async`);
-
+(<any>window).game = async function game() {
     const joinPromise = State.joinGame(State.gameId, State.playerName);
     await CardImages.load(); // concurrently
     await joinPromise;
     
     VP.recalculateParameters();
-    
+
     // rendering must be synchronous, or else it flickers
     window.requestAnimationFrame(Render.render);
-})();
+}
