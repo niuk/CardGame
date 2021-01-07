@@ -55,9 +55,13 @@ function renderDeck(time: number, deltaTime: number, deckCount: number) {
             const deckSprite = State.deckSprites[i];
             if (deckSprite === undefined) throw new Error();
 
-            if (i === deckCount - 1 && (
-                Input.action === "DrawFromDeck" ||
-                Input.action === "WaitingForNewCard"
+            if (i === deckCount - 1 &&
+                Input.action !== "None" &&
+                Input.action !== "SortBySuit" &&
+                Input.action !== "SortByRank" &&
+                Input.action !== "Deselect" && (
+                Input.action.type === "DrawFromDeck" ||
+                Input.action.type === "WaitingForNewCard"
             )) {
                 // set in onmousemove
             } else if (time - deckDealTime < i * deckDealDuration / deckCount) {
