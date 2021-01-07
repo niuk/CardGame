@@ -46,8 +46,8 @@ export let faceSpritesForPlayer: Sprite[][] = [];
 // open websocket connection to get game state updates
 let ws = new WebSocket(`wss://${window.location.hostname}/`);
 
-const callbacksForMethodName = new Map<string, ((result: Lib.MethodResult) => void)[]>();
-function addCallback(methodName: string, resolve: () => void, reject: (reason: any) => void) {
+const callbacksForMethodName = new Map<Lib.MethodName, ((result: Lib.MethodResult) => void)[]>();
+function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: any) => void) {
     console.log(`adding callback for method '${methodName}'`);
 
     let callbacks = callbacksForMethodName.get(methodName);
@@ -240,7 +240,7 @@ export async function drawCard(): Promise<void> {
 
 export async function returnCardsToDeck(gameState: Lib.GameState) {
     await new Promise<void>((resolve, reject) => {
-        addCallback('cardsToReturnToDeck', resolve, reject);
+        addCallback('returnCardsToDeck', resolve, reject);
         ws.send(JSON.stringify(<Lib.ReturnCardsToDeckMessage>{
             cardsToReturnToDeck: selectedIndices.map(i => gameState.playerCards[i])
         }));

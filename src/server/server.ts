@@ -250,8 +250,8 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
         return;
     }
 
-    if ('returnCardsToDeck' in obj) {
-        const deckMessage = <Lib.ReturnCardsToDeckMessage>obj;
+    if ('cardsToReturnToDeck' in obj) {
+        const returnCardsToDeckMessage = <Lib.ReturnCardsToDeckMessage>obj;
 
         const player = playersByWebSocket.get(e.target);
         if (player === undefined) {
@@ -266,9 +266,9 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
 
         const newCards = player.cards.slice();
         let newRevealCount = player.revealCount;
-        for (let i = 0; i < deckMessage.cardsToReturnToDeck.length; ++i) {
+        for (let i = 0; i < returnCardsToDeckMessage.cardsToReturnToDeck.length; ++i) {
             for (let j = 0; j < newCards.length; ++j) {
-                if (JSON.stringify(deckMessage.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {
+                if (JSON.stringify(returnCardsToDeckMessage.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {
                     newCards.splice(j, 1);
 
                     if (j < newRevealCount) {
@@ -280,22 +280,23 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
             }
         }
     
-        if (player.cards.length - newCards.length != deckMessage.cardsToReturnToDeck.length) {
+        if (player.cards.length - newCards.length != returnCardsToDeckMessage.cardsToReturnToDeck.length) {
             sendMethodResult(e.target, 'returnCardsToDeck', `could not find all cards to return: ${
-                JSON.stringify(deckMessage.cardsToReturnToDeck.map(card => JSON.stringify(card)))
+                JSON.stringify(returnCardsToDeckMessage.cardsToReturnToDeck.map(card => JSON.stringify(card)))
             }`);
 
             return;
         }
     
         console.log(`'${player.name}' in slot ${player.index} returned cards: ${
-            JSON.stringify(deckMessage.cardsToReturnToDeck.map(card => JSON.stringify(card)))
+            JSON.stringify(returnCardsToDeckMessage.cardsToReturnToDeck.map(card => JSON.stringify(card)))
         }`);
 
         sendMethodResult(e.target, 'returnCardsToDeck');
         player.cards = newCards;
         player.revealCount = newRevealCount;
         player.releaseEndTurn();
+        player.game.cardsInDeck.push(...returnCardsToDeckMessage.cardsToReturnToDeck);
         player.game.broadcastState();
         return;
     }
