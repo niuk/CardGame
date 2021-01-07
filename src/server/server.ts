@@ -309,17 +309,19 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
             return;
         }
 
+        let oldCards = player.cards.slice();
         let newCards: Lib.Card[] = [];
         for (const card of reorderMessage.reorderedCards) {
-            for (const oldCard of player.cards) {
-                if (JSON.stringify(card) === JSON.stringify(oldCard)) {
-                    newCards.push(card);
+            for (let i = 0; i < oldCards.length; ++i) {
+                if (JSON.stringify(card) === JSON.stringify(oldCards[i])) {
+                    newCards.push(...oldCards.splice(i, 1));
+                    break;
                 }
             }
         }
 
-        if (newCards.length != player.cards.length) {
-            sendMethodResult(e.target, 'reorderCards', `bad reorder`);
+        if (newCards.length != player.cards.length || oldCards.length > 0) {
+            sendMethodResult(e.target, 'reorderCards', `bad reorder:\r\n${JSON.stringify(reorderMessage.reorderedCards)}\r\nnewCards.length: ${newCards.length}\r\nnewCards: ${JSON.stringify(newCards)}\r\nplayer.cards.length: ${player.cards.length}, player.cards: ${JSON.stringify(player.cards)}`);
             player.sendState();
             return;
         }

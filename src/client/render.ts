@@ -60,8 +60,8 @@ function renderDeck(time: number, deckCount: number) {
             if (deckSprite === undefined) throw new Error();
 
             if (i === deckCount - 1 && (
-                Input.action === "drawFromDeck" ||
-                Input.action === "waitingForNewCard"
+                Input.action === "DrawFromDeck" ||
+                Input.action === "WaitingForNewCard"
             )) {
                 // set in onmousemove
             } else if (time - deckDealTime < i * deckDealDuration / deckCount) {
@@ -158,14 +158,15 @@ function renderPlayer(gameState: Lib.GameState) {
     const reservedSpritesAndCards: [Sprite, Lib.Card][] = [];
 
     let splitIndex: number;
-    if (Input.action !== "none" &&
-        Input.action !== "drawFromDeck" &&
-        Input.action !== "waitingForNewCard" &&
-        Input.action !== "sortBySuit" &&
-        Input.action !== "sortByRank" && (
-            Input.action.type === "returnToDeck" ||
-            Input.action.type === "hide" ||
-            Input.action.type === "reveal"
+    if (Input.action !== "None" &&
+        Input.action !== "DrawFromDeck" &&
+        Input.action !== "WaitingForNewCard" &&
+        Input.action !== "SortBySuit" &&
+        Input.action !== "SortByRank" &&
+        Input.action !== "Deselect" && (
+            Input.action.type === "Hide" ||
+            Input.action.type === "Reveal" ||
+            Input.action.type === "ReturnToDeck"
         )
     ) {
         let revealCountAdjustment = 0;
@@ -195,7 +196,7 @@ function renderPlayer(gameState: Lib.GameState) {
         }
 
         // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
-        const splitRevealed = Input.action.type === "reveal";
+        const splitRevealed = Input.action.type === "Reveal";
         const start = splitRevealed ? 0 : gameState.playerRevealCount;
         const end = splitRevealed ? gameState.playerRevealCount : reservedSpritesAndCards.length;
 
@@ -248,6 +249,10 @@ function renderPlayer(gameState: Lib.GameState) {
 
         // adjust selected indices
         for (let i = 0; i < State.selectedIndices.length; ++i) {
+            if (Input.action.cardIndex === State.selectedIndices[i]) {
+                Input.action.cardIndex = splitIndex + i;
+            }
+
             State.selectedIndices[i] = splitIndex + i;
         }
 
@@ -279,10 +284,16 @@ function renderPlayer(gameState: Lib.GameState) {
         const y = sprites.length < gameState.playerRevealCount ? 2 * VP.spriteHeight : VP.spriteHeight;
         reservedSprite.target = new Vector(
             VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - j / 2) * VP.spriteGap,
-            VP.canvas.height - y - (Lib.binarySearchNumber(State.selectedIndices, sprites.length) < 0 ? 0 : 2 * VP.spriteGap)
+            VP.canvas.height - y
         );
 
         reservedSprite.animate(deltaTime);
+
+        if (Lib.binarySearchNumber(State.selectedIndices, sprites.length) >= 0) {
+            VP.context.fillStyle = '#00808040';
+            VP.context.fillRect(reservedSprite.position.x, reservedSprite.position.y, VP.spriteWidth, VP.spriteHeight);
+        }
+
         sprites.push(reservedSprite);
         cards.push(reservedCard);
     }
@@ -295,8 +306,9 @@ function renderPlayer(gameState: Lib.GameState) {
         }
     }
 
-    if (cards.length !== oldCardsLength || sprites.length !== oldSpritesLength) {
-        throw new Error(`oldCards: ${oldCards}${oldSprites}\nnewCards: ${JSON.stringify(cards)}\noldSprites: ${oldSprites}\nnewSprites: ${JSON.stringify(sprites)}`);
+    if (oldCards !== JSON.stringify(cards)) {
+        console.log(`oldCards: ${oldCards}`);
+        console.log(`newCards: ${JSON.stringify(cards)}`);
     }
 }
 

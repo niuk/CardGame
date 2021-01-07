@@ -49,13 +49,18 @@ let ws = new WebSocket(`wss://${window.location.hostname}/`);
 const callbacksForMethodName = new Map<string, ((result: Lib.MethodResult) => void)[]>();
 
 function addCallback(methodName: string, callback: (result: Lib.MethodResult) => void) {
+    console.log(`adding callback for method '${methodName}'`);
+
     let callbacks = callbacksForMethodName.get(methodName);
     if (callbacks === undefined) {
         callbacks = [];
         callbacksForMethodName.set(methodName, callbacks);
     }
 
-    callbacks.push(callback);
+    callbacks.push(result => {
+        console.log(`invoking callback for method '${methodName}'`);
+        callback(result);
+    });
 }
 
 ws.onmessage = async e => {
@@ -87,6 +92,12 @@ ws.onmessage = async e => {
             previousGameState = gameState;
             gameState = <Lib.GameState>obj;
 
+            if (previousGameState !== undefined) {
+                console.log(`previousGameState.playerCards: ${JSON.stringify(previousGameState.playerCards)}`);
+                console.log(`previous selectedIndices: ${JSON.stringify(selectedIndices)}`);
+                console.log(`previous selectedCards: ${JSON.stringify(selectedIndices.map(i => previousGameState?.playerCards[i]))}`);
+            }
+
             // selected indices might have shifted
             for (let i = 0; i < selectedIndices.length; ++i) {
                 const selectedIndex = selectedIndices[i];
@@ -114,6 +125,10 @@ ws.onmessage = async e => {
 
             // initialize animation states
             associateAnimationsWithCards(previousGameState, gameState);
+
+            console.log(`gameState.playerCards: ${JSON.stringify(gameState.playerCards)}`);
+            console.log(`selectedIndices: ${JSON.stringify(selectedIndices)}`);
+            console.log(`selectedCards: ${JSON.stringify(selectedIndices.map(i => gameState?.playerCards[i]))}`);
         } finally {
             unlock();
         }
@@ -254,8 +269,10 @@ export function sortBySuit(gameState: Lib.GameState) {
         }
     };
 
+    previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
     sortCards(gameState.playerCards, 0, gameState.playerRevealCount, compareFn);
     sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
+    associateAnimationsWithCards(gameState, previousGameState);
     return reorderCards(gameState);
 }
 
