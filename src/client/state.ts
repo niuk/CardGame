@@ -215,7 +215,8 @@ export function setSpriteTargets(
     reservedSpritesAndCards?: [Sprite, Lib.Card][],
     movingSpritesAndCards?: [Sprite, Lib.Card][],
     revealCount?: number,
-    splitIndex?: number
+    splitIndex?: number,
+    returnToDeck?: boolean
 ) {
     const sprites = faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
@@ -226,12 +227,11 @@ export function setSpriteTargets(
     movingSpritesAndCards = movingSpritesAndCards ?? [];
     revealCount = revealCount ?? gameState.playerRevealCount;
     splitIndex = splitIndex ?? cards.length;
+    returnToDeck = returnToDeck ?? false;
 
     // clear for reinsertion
     sprites.splice(0, sprites.length);
     cards.splice(0, cards.length);
-
-    console.log(revealCount, reservedSpritesAndCards.length);
 
     for (const [reservedSprite, reservedCard] of reservedSpritesAndCards) {
         if (cards.length === splitIndex) {
@@ -242,7 +242,7 @@ export function setSpriteTargets(
         }
 
         const i = cards.length < revealCount ? cards.length : cards.length - revealCount;
-        const j = cards.length < revealCount ? revealCount : reservedSpritesAndCards.length + movingSpritesAndCards.length - revealCount;
+        const j = cards.length < revealCount ? revealCount : reservedSpritesAndCards.length + (returnToDeck ? 0 : movingSpritesAndCards.length) - revealCount;
         const y = cards.length < revealCount ? 2 * VP.spriteHeight : VP.spriteHeight;
         reservedSprite.target = new Vector(
             VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - j / 2) * VP.spriteGap,
