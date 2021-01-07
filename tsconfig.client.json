@@ -1,7 +1,6 @@
 {
-  "compilerOptions": {
-    "outDir": "static"
-  },
   "extends": "./tsconfig.base.json",
-  "exclude": [ "src/server" ]
+  "exclude": [
+    "src/server"
+  ]
 }

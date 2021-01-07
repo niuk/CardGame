@@ -47,8 +47,7 @@ export let faceSpritesForPlayer: Sprite[][] = [];
 let ws = new WebSocket(`wss://${window.location.hostname}/`);
 
 const callbacksForMethodName = new Map<string, ((result: Lib.MethodResult) => void)[]>();
-
-function addCallback(methodName: string, callback: (result: Lib.MethodResult) => void) {
+function addCallback(methodName: string, resolve: () => void, reject: (reason: any) => void) {
     console.log(`adding callback for method '${methodName}'`);
 
     let callbacks = callbacksForMethodName.get(methodName);
@@ -59,7 +58,11 @@ function addCallback(methodName: string, callback: (result: Lib.MethodResult) =>
 
     callbacks.push(result => {
         console.log(`invoking callback for method '${methodName}'`);
-        callback(result);
+        if ('errorDescription' in result) {
+            reject(result.errorDescription);
+        } else {
+            resolve();
+        }
     });
 }
 
@@ -211,48 +214,45 @@ export async function joinGame(gameId: string, playerName: string) {
     } while (ws.readyState != WebSocket.OPEN);
 
     // try to join the game
-    const result = await new Promise<Lib.MethodResult>(resolve => {
-        addCallback('joinGame', resolve);
+    await new Promise<void>((resolve, reject) => {
+        addCallback('joinGame', resolve, reject);
         ws.send(JSON.stringify(<Lib.JoinGameMessage>{ gameId, playerName }));
     });
-
-    if (result.errorDescription !== undefined) {
-        window.alert(result.errorDescription);
-        throw new Error(result.errorDescription);
-    }
 }
 
-export function drawCard() {
-    return new Promise<Lib.MethodResult>(resolve => {
-        addCallback('drawCard', result => {
-            if (result.errorDescription !== undefined) {
-                resolve(result);
-            } else {
-                onAnimationsAssociated = () => {
-                    onAnimationsAssociated = () => {};
-                    resolve(result);
-                };
-            }
-        });
+export async function drawCard(): Promise<void> {
+    const animationsAssociated = new Promise<void>(resolve => {
+        onAnimationsAssociated = () => {
+            onAnimationsAssociated = () => {};
+            resolve();
+        };
+    });
 
+    await new Promise<void>((resolve, reject) => {
+        addCallback('drawCard', resolve, reject);
         ws.send(JSON.stringify(<Lib.DrawCardMessage>{
             drawCard: null
         }));
     });
+
+    await animationsAssociated;
 }
 
-export function returnCardsToDeck(gameState: Lib.GameState) {
-    return new Promise<Lib.MethodResult>(resolve => {
-        addCallback('cardsToReturnToDeck', resolve);
+export async function returnCardsToDeck(gameState: Lib.GameState) {
+    await new Promise<void>((resolve, reject) => {
+        addCallback('cardsToReturnToDeck', resolve, reject);
         ws.send(JSON.stringify(<Lib.ReturnCardsToDeckMessage>{
             cardsToReturnToDeck: selectedIndices.map(i => gameState.playerCards[i])
         }));
     });
+    
+    // make the selected cards disappear
+    selectedIndices.splice(0, selectedIndices.length);
 }
 
 export function reorderCards(gameState: Lib.GameState) {
-    return new Promise<Lib.MethodResult>(resolve => {
-        addCallback('reorderCards', resolve);
+    return new Promise<void>((resolve, reject) => {
+        addCallback('reorderCards', resolve, reject);
         ws.send(JSON.stringify(<Lib.ReorderCardsMessage>{
             reorderedCards: gameState.playerCards,
             newRevealCount: gameState.playerRevealCount

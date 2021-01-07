@@ -16,9 +16,14 @@ function bundle() {
     b.bundle()
         .on('end', () => {
             if (error !== null) {
+                console.error(`failure:`);
                 console.error(error);
             } else {
-                console.log(`success: { timestamp: '${new Date()}', bundle: '${path}' }`);
+                console.log(`success:`);
+                console.log({
+                    timestamp: new Date(),
+                    bundle: path
+                });
             }
         })
         .on('error', e => {
