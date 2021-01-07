@@ -3,7 +3,6 @@ import * as State from './state';
 import * as VP from './view-params';
 import * as CardImages from './card-images';
 import * as Render from './render';
-import * as Input from './input';
 import Sprite from './sprite';
 
 // refreshing should rejoin the same game
@@ -27,9 +26,10 @@ window.onscroll = VP.recalculateParameters;
         await Lib.delay(100);
     }
 
-    const sprites = State.faceSpritesForPlayer[State.gameState.playerIndex];
-    if (sprites === undefined) throw new Error();
-    const cards = State.gameState.playerCards;
-    const spritesAndCards = cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
-    Input.setSpriteTargets(sprites, cards, spritesAndCards, [], cards.length, State.gameState.playerRevealCount);
+    const unlock = await State.lock();
+    try {
+        State.setSpriteTargets(State.gameState);
+    } finally {
+        unlock();
+    }
 };

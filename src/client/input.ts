@@ -67,32 +67,6 @@ window.onkeyup = (e: KeyboardEvent) => {
     }
 };
 
-/*
-function setDropAction(gameState: Lib.GameState, cardIndex: number) {
-    const dropPosition = (State.faceSpritesForPlayer[gameState.playerIndex] ?? [])[State.selectedIndices[0] ?? 0]?.position;
-    if (dropPosition === undefined) throw new Error(`${JSON.stringify(State.faceSpritesForPlayer)}`);
-*/
-    /*
-    console.log(`dropPosition.x: ${dropPosition.x}, ${
-        deckPositions[gameState.deckCount - 1].x - cardWidth / 2}, ${
-        deckPositions[0].x + cardWidth / 2
-    }`);
-    console.log(`dropPosition.y: ${dropPosition.y}, ${
-        deckPositions[gameState.deckCount - 1].y - cardHeight / 2}, ${
-        deckPositions[0].y + cardHeight / 2
-    }`);
-    */
-/*
-    const hideDistance   = Math.abs(dropPosition.y - (VP.canvas.height -     VP.spriteHeight));
-    const revealDistance = Math.abs(dropPosition.y - (VP.canvas.height - 2 * VP.spriteHeight));
-    if (hideDistance < revealDistance) {
-        action = { type: "Hide", cardIndex };
-    } else {
-        action = { type: "Reveal", cardIndex };
-    }
-}
-*/
-
 function getMousePosition(e: MouseEvent) {
     return new Vector(
         VP.canvas.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
@@ -306,11 +280,7 @@ VP.canvas.onmouseup = async () => {
             State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
         }
 
-        const sprites = State.faceSpritesForPlayer[State.gameState.playerIndex];
-        if (sprites === undefined) throw new Error();
-        const cards = State.gameState.playerCards;
-        const spritesAndCards = cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
-        setSpriteTargets(sprites, cards, spritesAndCards, [], cards.length, State.gameState.playerRevealCount);
+        State.setSpriteTargets(State.gameState);
 
         action = "None";
     } finally {
@@ -356,7 +326,7 @@ function drag(gameState: Lib.GameState) {
     const reservedSpritesAndCards: [Sprite, Lib.Card][] = [];
 
     let splitIndex: number;
-    let revealCountAdjustment = 0;
+    let revealCount = gameState.playerRevealCount;
 
     // extract moving sprites
     for (const i of State.selectedIndices) {
@@ -366,11 +336,9 @@ function drag(gameState: Lib.GameState) {
         movingSpritesAndCards.push([sprite, card]);
 
         if (i < gameState.playerRevealCount) {
-            ++revealCountAdjustment;
+            --revealCount;
         }
     }
-
-    gameState.playerRevealCount -= revealCountAdjustment;
 
     // extract reserved sprites
     for (let i = 0; i < sprites.length; ++i) {
@@ -399,8 +367,8 @@ function drag(gameState: Lib.GameState) {
 
     // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
     const splitRevealed = reorderDistance < Math.abs(leftMovingSprite.target.y - (VP.canvas.height - VP.spriteHeight));
-    const start = splitRevealed ? 0 : gameState.playerRevealCount;
-    const end = splitRevealed ? gameState.playerRevealCount : reservedSpritesAndCards.length;
+    const start = splitRevealed ? 0 : revealCount;
+    const end = splitRevealed ? revealCount : reservedSpritesAndCards.length;
 
     let leftIndex: number | undefined = undefined;
     let rightIndex: number | undefined = undefined;
@@ -446,51 +414,11 @@ function drag(gameState: Lib.GameState) {
     }
 
     // adjust the reveal count
-    if (splitIndex < gameState.playerRevealCount ||
-        splitIndex === gameState.playerRevealCount && splitRevealed
+    if (splitIndex < revealCount ||
+        splitIndex === revealCount && splitRevealed
     ) {
-        gameState.playerRevealCount += movingSpritesAndCards.length;
+        revealCount += movingSpritesAndCards.length;
     }
 
-    setSpriteTargets(sprites, cards, reservedSpritesAndCards, movingSpritesAndCards, splitIndex, gameState.playerRevealCount);
-}
-
-export function setSpriteTargets(
-    sprites: Sprite[],
-    cards: Lib.Card[],
-    reservedSpritesAndCards: [Sprite, Lib.Card][],
-    movingSpritesAndCards: [Sprite, Lib.Card][],
-    splitIndex: number,
-    revealCount: number
-) {
-    // clear for reinsertion
-    sprites.splice(0, sprites.length);
-    cards.splice(0, cards.length);
-
-    for (const [reservedSprite, reservedCard] of reservedSpritesAndCards) {
-        if (cards.length === splitIndex) {
-            for (const [movingSprite, movingCard] of movingSpritesAndCards) {
-                sprites.push(movingSprite);
-                cards.push(movingCard);
-            }
-        }
-
-        const i = cards.length < revealCount ? cards.length : cards.length - revealCount;
-        const j = cards.length < revealCount ? revealCount : reservedSpritesAndCards.length - revealCount;
-        const y = cards.length < revealCount ? 2 * VP.spriteHeight : VP.spriteHeight;
-        reservedSprite.target = new Vector(
-            VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - j / 2) * VP.spriteGap,
-            VP.canvas.height - y
-        );
-
-        sprites.push(reservedSprite);
-        cards.push(reservedCard);
-    }
-
-    if (cards.length === splitIndex) {
-        for (const [movingSprite, movingCard] of movingSpritesAndCards) {
-            sprites.push(movingSprite);
-            cards.push(movingCard);
-        }
-    }
+    State.setSpriteTargets(gameState, reservedSpritesAndCards, movingSpritesAndCards, revealCount, splitIndex);
 }

@@ -2,7 +2,9 @@ import { Mutex } from 'await-semaphore';
 
 import * as Lib from '../lib';
 import * as CardImages from './card-images';
+import * as VP from './view-params';
 import Sprite from './sprite';
+import Vector from './vector';
 
 const playerNameFromCookie = Lib.getCookie('playerName');
 if (playerNameFromCookie === undefined) throw new Error('No player name!');
@@ -204,6 +206,59 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
     }
 
     onAnimationsAssociated();
+    
+    setSpriteTargets(gameState);
+}
+
+export function setSpriteTargets(
+    gameState: Lib.GameState,
+    reservedSpritesAndCards?: [Sprite, Lib.Card][],
+    movingSpritesAndCards?: [Sprite, Lib.Card][],
+    revealCount?: number,
+    splitIndex?: number
+) {
+    const sprites = faceSpritesForPlayer[gameState.playerIndex];
+    if (sprites === undefined) throw new Error();
+
+    const cards = gameState.playerCards;
+
+    reservedSpritesAndCards = reservedSpritesAndCards ?? cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
+    movingSpritesAndCards = movingSpritesAndCards ?? [];
+    revealCount = revealCount ?? gameState.playerRevealCount;
+    splitIndex = splitIndex ?? cards.length;
+
+    // clear for reinsertion
+    sprites.splice(0, sprites.length);
+    cards.splice(0, cards.length);
+
+    for (const [reservedSprite, reservedCard] of reservedSpritesAndCards) {
+        if (cards.length === splitIndex) {
+            for (const [movingSprite, movingCard] of movingSpritesAndCards) {
+                sprites.push(movingSprite);
+                cards.push(movingCard);
+            }
+        }
+
+        const i = cards.length < revealCount ? cards.length : cards.length - revealCount;
+        const j = cards.length < revealCount ? revealCount : reservedSpritesAndCards.length - revealCount;
+        const y = cards.length < revealCount ? 2 * VP.spriteHeight : VP.spriteHeight;
+        reservedSprite.target = new Vector(
+            VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - j / 2) * VP.spriteGap,
+            VP.canvas.height - y
+        );
+
+        sprites.push(reservedSprite);
+        cards.push(reservedCard);
+    }
+
+    if (cards.length === splitIndex) {
+        for (const [movingSprite, movingCard] of movingSpritesAndCards) {
+            sprites.push(movingSprite);
+            cards.push(movingCard);
+        }
+    }
+
+    gameState.playerRevealCount = revealCount;
 }
 
 export async function joinGame(gameId: string, playerName: string) {
