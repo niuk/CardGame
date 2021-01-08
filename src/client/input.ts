@@ -437,19 +437,19 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         }
     }
 
-    const savedCardIndex = action.cardIndex;
-
     // adjust selected indices
+    // modifying action.cardIndex directly in the loop would cause us to
+    // check its adjusted value against old indices, which is incorrect
+    let newCardIndex = action.cardIndex;
     for (let i = 0; i < State.selectedIndices.length; ++i) {
         if (action.cardIndex === State.selectedIndices[i]) {
-            console.log(`set action.cardIndex to ${splitIndex + i}`)
-            action.cardIndex = splitIndex + i;
+            newCardIndex = splitIndex + i;
         }
 
         State.selectedIndices[i] = splitIndex + i;
     }
 
-    console.log(savedCardIndex, action.cardIndex, State.selectedIndices);
+    action.cardIndex = newCardIndex;
 
     State.setSpriteTargets(
         gameState,
