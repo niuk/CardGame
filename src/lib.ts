@@ -49,22 +49,38 @@ export enum Rank {
 
 export type Card = [Suit, Rank];
 
+export type PlayerState = "Wait" | "Proceed" | "Ready" | Active;
+
+export interface Active {
+    type: "Active";
+    activeTime: number;
+}
+
+export const activeCooldown = 10000; //milliseconds
+
 export interface OtherPlayer {
     name: string;
     cardCount: number;
     revealedCards: Card[];
+    //state: PlayerState;
 }
 
 export interface GameState {
     deckCount: number;
-    activePlayerIndex: number;
     playerIndex: number;
     playerCards: Card[];
     playerRevealCount: number;
+    //playerState: PlayerState;
     otherPlayers: OtherPlayer[];
 }
 
-export type MethodName = "joinGame" | "drawCard" | "returnCardsToDeck" | "reorderCards";
+export type MethodName =
+    "joinGame" |
+    "drawCard" |
+    "returnCardsToDeck" |
+    "reorderCards" |
+    "wait" |
+    "proceed";
 
 export interface MethodResult {
     methodName: MethodName;
@@ -87,4 +103,12 @@ export interface ReturnCardsToDeckMessage {
 export interface ReorderCardsMessage {
     reorderedCards: Card[];
     newRevealCount: number;
+}
+
+export interface WaitMessage {
+    wait: null;
+}
+
+export interface ProceedMessage {
+    proceed: null;
 }

@@ -4,6 +4,7 @@ import * as Input from './input';
 import * as VP from './view-params';
 import Vector from './vector';
 import Sprite from './sprite';
+import { random } from 'nanoid';
 
 const deckDealDuration = 1000;
 let deckDealTime: number | undefined = undefined;
@@ -26,7 +27,7 @@ export async function render(time: number) {
         renderDeck(time, deltaTime, State.gameState.deckCount);
         renderOtherPlayers(deltaTime, State.gameState);
         renderPlayer(deltaTime, State.gameState);
-        renderButtons();
+        renderButtons(time, State.gameState);
     } finally {
         unlock();
     }
@@ -39,8 +40,8 @@ function renderBasics(gameId: string, playerName: string) {
     VP.context.font = '0.75cm Irregularis';
     VP.context.fillText(`Game: ${gameId}`, 0, 0.75 * VP.pixelsPerCM);
     VP.context.fillText(`Your name is: ${playerName}`, 0, VP.canvas.height);
-    
-    VP.context.setLineDash([4, 2]);
+
+    VP.context.setLineDash([4, 1]);
     VP.context.strokeRect(VP.spriteHeight, VP.spriteHeight, VP.canvas.width - 2 * VP.spriteHeight, VP.canvas.height - 2 * VP.spriteHeight);
 }
 
@@ -59,6 +60,8 @@ function renderDeck(time: number, deltaTime: number, deckCount: number) {
                 Input.action !== "None" &&
                 Input.action !== "SortBySuit" &&
                 Input.action !== "SortByRank" &&
+                Input.action !== "Wait" &&
+                Input.action !== "Proceed" &&
                 Input.action !== "Deselect" && (
                 Input.action.type === "DrawFromDeck" ||
                 Input.action.type === "WaitingForNewCard"
@@ -85,8 +88,9 @@ function renderDeck(time: number, deltaTime: number, deckCount: number) {
 function renderOtherPlayers(deltaTime: number, gameState: Lib.GameState) {
     VP.context.save();
     try {
-        VP.context.translate(0, (VP.canvas.width + VP.canvas.height) / 2);
-        VP.context.rotate(-Math.PI / 2);
+        VP.context.setTransform(VP.getTransformForPlayer(1));
+        //VP.context.translate(0, (VP.canvas.width + VP.canvas.height) / 2);
+        //VP.context.rotate(-Math.PI / 2);
         renderOtherPlayer(deltaTime, gameState, (gameState.playerIndex + 1) % 4);
     } finally {
         VP.context.restore();
@@ -94,6 +98,7 @@ function renderOtherPlayers(deltaTime: number, gameState: Lib.GameState) {
     
     VP.context.save();
     try {
+        VP.context.setTransform(VP.getTransformForPlayer(2));
         renderOtherPlayer(deltaTime, gameState, (gameState.playerIndex + 2) % 4);
     } finally {
         VP.context.restore();
@@ -101,8 +106,9 @@ function renderOtherPlayers(deltaTime: number, gameState: Lib.GameState) {
 
     VP.context.save();
     try {
-        VP.context.translate(VP.canvas.width, (VP.canvas.height - VP.canvas.width) / 2);
-        VP.context.rotate(Math.PI);
+        VP.context.setTransform(VP.getTransformForPlayer(3));
+        //VP.context.translate(VP.canvas.width, (VP.canvas.height - VP.canvas.width) / 2);
+        //VP.context.rotate(Math.PI / 2);
         renderOtherPlayer(deltaTime, gameState, (gameState.playerIndex + 3) % 4);
     } finally {
         VP.context.restore();
@@ -159,12 +165,12 @@ function renderPlayer(deltaTime: number, gameState: Lib.GameState) {
     }
 }
 
-function renderButtons() {
+function renderButtons(time: number, gameState: Lib.GameState) {
     VP.context.save();
     try {
         // blur image behind
         //stackBlurCanvasRGBA('canvas', x, y, canvas.width - x, canvas.height - y, 16);
-
+        /*
         const x = VP.sortBySuitBounds[0].x - 4 * VP.pixelsPerCM;
         const y = VP.sortBySuitBounds[0].y;
         VP.context.fillStyle = '#00ffff77';
@@ -182,7 +188,7 @@ function renderButtons() {
 
         VP.context.font = '1.5cm Irregularis';
         VP.context.fillText('RANK', VP.sortByRankBounds[0].x, VP.sortByRankBounds[1].y);
-
+        */
         //context.fillStyle = '#ff000077';
         //context.fillRect(VP.sortBySuitBounds[0].x, VP.sortBySuitBounds[0].y,
             //sortBySuitBounds[1].x - sortBySuitBounds[0].x, sortBySuitBounds[1].y - sortBySuitBounds[0].y);
@@ -190,7 +196,53 @@ function renderButtons() {
         //context.fillStyle = '#0000ff77';
         //context.fillRect(sortByRankBounds[0].x, sortByRankBounds[0].y,
             //sortByRankBounds[1].x - sortByRankBounds[0].x, sortByRankBounds[1].y - sortByRankBounds[0].y);
+
+        /*if (gameState.playerState === "Proceed" || gameState.playerState === "Wait") {
+            VP.context.textBaseline = 'top';
+
+            if (gameState.playerState === "Wait") {
+                VP.context.fillStyle = '#00ffff60';
+                VP.context.fillRect(
+                    VP.waitBounds[0].x, VP.waitBounds[0].y,
+                    VP.waitBounds[1].x - VP.waitBounds[0].x, VP.waitBounds[1].y - VP.waitBounds[0].y
+                );
+            }
+            
+            VP.context.fillStyle = '#000000ff';
+            VP.context.font = VP.waitFont;
+            VP.context.fillText('Wait!', VP.waitBounds[0].x, VP.waitBounds[0].y);
+            boundsRect(VP.waitBounds);
+
+            if (gameState.playerState === "Proceed") {
+                VP.context.fillStyle = '#00ffff60';
+                VP.context.fillRect(
+                    VP.proceedBounds[0].x, VP.proceedBounds[0].y,
+                    VP.proceedBounds[1].x - VP.proceedBounds[0].x, VP.proceedBounds[1].y - VP.proceedBounds[0].y
+                );
+            }
+
+            VP.context.fillStyle = '#000000ff';
+            VP.context.font = VP.proceedFont;
+            VP.context.fillText('Proceed.', VP.proceedBounds[0].x, VP.proceedBounds[0].y);
+            boundsRect(VP.proceedBounds);
+        } else {
+            if (gameState.playerState === 'Ready') {
+                VP.context.fillStyle = '#000000ff';
+                VP.context.font = VP.readyFont;
+                VP.context.fillText('Ready!', VP.readyBounds[0].x, VP.readyBounds[0].y);
+            } else {
+                VP.context.fillStyle = '#000000ff';
+                VP.context.font = VP.countdownFont;
+                VP.context.fillText(`Waiting ${
+                    Math.floor(1 + (gameState.playerState.activeTime + Lib.activeCooldown - Date.now()) / 1000)
+                } seconds...`, VP.countdownBounds[0].x, VP.countdownBounds[0].y);
+            }
+        }*/
     } finally {
         VP.context.restore();
     }
+}
+
+function boundsRect([topLeft, bottomRight]: [Vector, Vector]) {
+    VP.context.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
 }

@@ -86,10 +86,10 @@ ws.onmessage = async e => {
         callback(returnMessage);
     } else if (
         'deckCount' in obj &&
-        'activePlayerIndex' in obj &&
         'playerIndex' in obj &&
         'playerCards' in obj &&
         'playerRevealCount' in obj &&
+        //'playerState' in obj &&
         'otherPlayers' in obj
     ) {
         const unlock = await lock();
@@ -145,64 +145,166 @@ ws.onmessage = async e => {
 let onAnimationsAssociated = () => {};
 
 function associateAnimationsWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
-    deckSprites.splice(gameState.deckCount, deckSprites.length - gameState.deckCount);
-    for (let i = deckSprites.length; i < gameState.deckCount; ++i) {
-        deckSprites[i] = new Sprite(CardImages.get('Back0'));
-    }
-
+    const previousDeckSprites = deckSprites;
     const previousBackSpritesForPlayer = backSpritesForPlayer;
-    backSpritesForPlayer = [];
-
-    // reuse previous face sprites as much as possible to maintain continuity
     const previousFaceSpritesForPlayer = faceSpritesForPlayer;
-    faceSpritesForPlayer = [];
 
+    backSpritesForPlayer = [];
+    faceSpritesForPlayer = [];
     for (let i = 0; i < 4; ++i) {
+        const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
+        previousBackSpritesForPlayer[i] = previousBackSprites;
+
+        const previousFaceSprites = previousFaceSpritesForPlayer[i] ?? [];
+        previousFaceSpritesForPlayer[i] = previousFaceSprites;
+
         let previousFaceCards: Lib.Card[];
         let faceCards: Lib.Card[];
-
-        let previousBackSprites: Sprite[] = previousBackSpritesForPlayer[i] ?? [];
-        let backSprites: Sprite[] = [];
-        backSpritesForPlayer[i] = backSprites;
-        if (i == gameState.playerIndex) {
+        if (i === gameState.playerIndex) {
             previousFaceCards = previousGameState?.playerCards ?? [];
             faceCards = gameState.playerCards;
         } else {
-            let previousOtherPlayer = previousGameState?.otherPlayers[i];
-            let otherPlayer = gameState.otherPlayers[i];
-
-            previousFaceCards = previousOtherPlayer?.revealedCards ?? [];  
-            faceCards = otherPlayer?.revealedCards ?? [];
-
-            for (let j = 0; j < (otherPlayer?.cardCount ?? 0) - (otherPlayer?.revealedCards?.length ?? 0); ++j) {
-                backSprites[j] = new Sprite(CardImages.get(`Back${i}`));
-            }
+            previousFaceCards = previousGameState?.otherPlayers[i]?.revealedCards ?? [];
+            faceCards = gameState.otherPlayers[i]?.revealedCards ?? [];
         }
 
-        let previousFaceSprites: Sprite[] = previousFaceSpritesForPlayer[i] ?? [];
         let faceSprites: Sprite[] = [];
         faceSpritesForPlayer[i] = faceSprites;
-        for (let j = 0; j < faceCards.length; ++j) {
-            let found = false;
-            for (let k = 0; k < previousFaceCards.length; ++k) {
-                if (JSON.stringify(faceCards[j]) === JSON.stringify(previousFaceCards[k])) {
-                    const previousFaceSprite = previousFaceSprites[k];
-                    if (previousFaceSprite === undefined) throw new Error();
-                    faceSprites[j] = previousFaceSprite;
-                    // remove to avoid associating another sprite with the same card
-                    previousFaceSprites.splice(k, 1);
-                    previousFaceCards.splice(k, 1);
-                    found = true;
-                    break;
+        for (const faceCard of faceCards) {
+            let faceSprite: Sprite | undefined = undefined;
+            if (faceSprite === undefined) {
+                for (let j = 0; j < previousFaceCards.length; ++j) {
+                    const previousFaceCard = previousFaceCards[j];
+                    if (previousFaceCard === undefined) throw new Error();
+                    if (JSON.stringify(faceCard) === JSON.stringify(previousFaceCard)) {
+                        previousFaceCards.splice(j, 1);
+                        faceSprite = previousFaceSprites.splice(j, 1)[0];
+                        if (faceSprite === undefined) throw new Error();
+                        break;
+                    }
                 }
             }
+            
+            if (faceSprite === undefined && previousBackSprites.length > 0) {
+                // make it look like this card was revealed among previously hidden cards
+                // which, of course, requires that the player had previously hidden cards
+                faceSprite = previousBackSprites.splice(0, 1)[0];
+                if (faceSprite === undefined) throw new Error();
+                faceSprite.image = CardImages.get(JSON.stringify(faceCard));
+            }
 
-            if (!found) {
-                const faceCard = faceCards[j];
-                if (faceCard === undefined) throw new Error();
-                faceSprites[j] = new Sprite(CardImages.get(JSON.stringify(faceCard)));
+            if (faceSprite === undefined && previousDeckSprites.length > 0) {
+                // make it look like this card came from the deck;
+                const faceSprite = previousDeckSprites.splice(0, 1)[0];
+                if (faceSprite === undefined) throw new Error();
+                faceSprite.image = CardImages.get(JSON.stringify(faceCard));
+
+                // this sprite is rendered in the player's transformed canvas context
+                const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
+                transform.invertSelf();
+                const point = transform.transformPoint(faceSprite.position);
+                faceSprite.position = new Vector(point.x, point.y);
+            }
+
+            if (faceSprite === undefined) {
+                faceSprite = new Sprite(CardImages.get(JSON.stringify(faceCard)));
+            }
+
+            faceSprites.push(faceSprite);
+        }
+
+        let backSprites: Sprite[] = [];
+        backSpritesForPlayer[i] = backSprites;
+        const otherPlayer = gameState.otherPlayers[i];
+        if (i !== gameState.playerIndex && otherPlayer !== undefined) {
+            // only other players have any hidden cards
+            while (backSprites.length < otherPlayer.cardCount - otherPlayer.revealedCards.length) {
+                let backSprite: Sprite | undefined = undefined;
+                if (backSprite === undefined && previousBackSprites.length > 0) {
+                    backSprite = previousBackSprites.splice(0, 1)[0];
+                    if (backSprite === undefined) throw new Error();
+                }
+                
+                if (backSprite === undefined && previousFaceSprites.length > 0) {
+                    backSprite = previousFaceSprites.splice(0, 1)[0];
+                    if (backSprite === undefined) throw new Error();
+                    backSprite.image = CardImages.get(`Back${i}`);
+                }
+                
+                if (backSprite === undefined && previousDeckSprites.length > 0) {
+                    backSprite = previousDeckSprites.splice(0, 1)[0];
+                    if (backSprite === undefined) throw new Error();
+                    backSprite.image = CardImages.get(`Back${i}`);
+                    
+                    // this sprite is rendered in the player's transformed canvas context
+                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
+                    transform.invertSelf();
+                    const point = transform.transformPoint(backSprite.position);
+                    backSprite.position = new Vector(point.x, point.y);
+                }
+                
+                if (backSprite === undefined) {
+                    backSprite = new Sprite(CardImages.get(`Back${i}`));
+                }
+
+                backSprites.push(backSprite);
             }
         }
+    }
+
+    deckSprites = [];
+    while (deckSprites.length < gameState.deckCount) {
+        let deckSprite: Sprite | undefined = undefined;
+        if (deckSprite == undefined && previousDeckSprites.length > 0) {
+            deckSprite = previousDeckSprites.splice(0, 1)[0];
+            if (deckSprite === undefined) throw new Error();
+        }
+
+        if (deckSprite === undefined) {
+            let i = 0;
+            for (const previousBackSprites of previousBackSpritesForPlayer) {
+                if (previousBackSprites.length > 0) {
+                    deckSprite = previousBackSprites.splice(0, 1)[0];
+                    if (deckSprite === undefined) throw new Error();
+                    deckSprite.image = CardImages.get('Back0');
+
+                    // the sprite came from the player's transformed canvas context
+                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
+                    const point = transform.transformPoint(deckSprite.position);
+                    deckSprite.position = new Vector(point.x, point.y);
+
+                    break;
+                }
+
+                ++i;
+            }
+        }
+
+        if (deckSprite === undefined) {
+            let i = 0;
+            for (const previousFaceSprites of previousFaceSpritesForPlayer) {
+                if (previousFaceSprites.length > 0) {
+                    deckSprite = previousFaceSprites.splice(0, 1)[0];
+                    if (deckSprite === undefined) throw new Error();
+                    deckSprite.image = CardImages.get('Back0');
+                    
+                    // the sprite came from the player's transformed canvas context
+                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
+                    const point = transform.transformPoint(deckSprite.position);
+                    deckSprite.position = new Vector(point.x, point.y);
+
+                    break;
+                }
+
+                ++i;
+            }
+        }
+
+        if (deckSprite === undefined) {
+            deckSprite = new Sprite(CardImages.get('Back0'));
+        }
+
+        deckSprites.push(deckSprite);
     }
 
     setSpriteTargets(gameState);
@@ -356,4 +458,22 @@ function sortCards(
     compareFn: (a: Lib.Card, b: Lib.Card) => number
 ) {
     cards.splice(start, end - start, ...cards.slice(start, end).sort(compareFn));
+}
+
+export function wait() {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('wait', resolve, reject);
+        ws.send(JSON.stringify(<Lib.WaitMessage>{
+            wait: null
+        }));
+    });
+}
+
+export function proceed() {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('proceed', resolve, reject);
+        ws.send(JSON.stringify(<Lib.ProceedMessage>{
+            proceed: null
+        }));
+    });
 }

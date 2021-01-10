@@ -54,6 +54,8 @@ export type Action =
     "None" |
     "SortBySuit" |
     "SortByRank" |
+    "Wait" |
+    "Proceed" |
     "Deselect" |
     DrawFromDeck |
     WaitingForNewCard |
@@ -118,6 +120,16 @@ VP.canvas.onmousedown = async (event: MouseEvent) => {
             VP.sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortBySuitBounds[1].y
         ) {
             action = "SortBySuit";
+        } else if (
+            VP.waitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.waitBounds[1].x &&
+            VP.waitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.waitBounds[1].y
+        ) {
+            action = "Wait";
+        } else if (
+            VP.proceedBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.proceedBounds[1].x &&
+            VP.proceedBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.proceedBounds[1].y
+        ) {
+            action = "Proceed";
         } else if (deckPosition !== undefined &&
             deckPosition.x < mouseDownPosition.x && mouseDownPosition.x < deckPosition.x + VP.spriteWidth &&
             deckPosition.y < mouseDownPosition.y && mouseDownPosition.y < deckPosition.y + VP.spriteHeight
@@ -162,7 +174,7 @@ VP.canvas.onmousedown = async (event: MouseEvent) => {
 };
 
 VP.canvas.onmousemove = async (event: MouseEvent) => {
-    if (State.gameState === undefined) throw new Error();
+    if (State.gameState === undefined) return;
 
     const unlock = await State.lock();
     try {
@@ -174,6 +186,10 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
         } else if (action === "SortBySuit") {
             // TODO: check whether mouse position has left button bounds
         } else if (action === "SortByRank") {
+            // TODO: check whether mouse position has left button bounds
+        } else if (action === "Wait") {
+            // TODO: check whether mouse position has left button bounds
+        } else if (action === "Proceed") {
             // TODO: check whether mouse position has left button bounds
         } else if (action === "Deselect") {
             // TODO: box selection?
@@ -191,6 +207,8 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
                         action !== "Deselect" &&
                         action !== "SortByRank" &&
                         action !== "SortBySuit" &&
+                        action !== "Wait" &&
+                        action !== "Proceed" &&
                         action.type === "WaitingForNewCard"
                     ) {
                         action = "None";
@@ -200,8 +218,6 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
         } else if (action.type === "ReturnToDeck" || action.type === "Reorder" ) {
             const sprites = State.faceSpritesForPlayer[State.gameState.playerIndex];
             if (sprites === undefined) throw new Error();
-            const mouseDownSprite = sprites[action.cardIndex];
-            if (mouseDownSprite === undefined) throw new Error();
 
             // move all selected cards as a group around the card under the mouse position
             for (const selectedIndex of State.selectedIndices) {
@@ -236,7 +252,7 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
 };
 
 VP.canvas.onmouseup = async () => {
-    if (State.gameState === undefined) throw new Error();
+    if (State.gameState === undefined) return;
 
     const unlock = await State.lock();
     try {
@@ -246,6 +262,12 @@ VP.canvas.onmouseup = async () => {
             await State.sortByRank(State.gameState);
         } else if (action === "SortBySuit") {
             await State.sortBySuit(State.gameState);
+        } else if (action === "Wait") {
+            console.log('waiting');
+            await State.wait();
+        } else if (action === "Proceed") {
+            console.log('proceeding');
+            await State.proceed();
         } else if (action === "Deselect") {
             State.selectedIndices.splice(0, State.selectedIndices.length);
         } else if (action.type === "DrawFromDeck" || action.type === "WaitingForNewCard") {
@@ -310,6 +332,8 @@ function onCardDrawn(deckSprite: Sprite) {
             if (action !== "None" &&
                 action !== "SortBySuit" &&
                 action !== "SortByRank" &&
+                action !== "Wait" &&
+                action !== "Proceed" &&
                 action !== "Deselect" &&
                 action.type === "WaitingForNewCard"
             ) {

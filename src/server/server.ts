@@ -3,7 +3,7 @@ import https from "https";
 import fs from "fs/promises";
 import { customAlphabet } from "nanoid/async";
 import WebSocket from "ws";
-import { Semaphore } from "await-semaphore";
+//import { Semaphore } from "await-semaphore";
 
 import * as Lib from "../lib.js"; // would fail to locate the module without ".js"
 
@@ -14,20 +14,17 @@ class Player {
     name: string;
     ws: WebSocket;
     index: number;
+    //state: Lib.PlayerState;
     cards: Lib.Card[] = [];
+    shareCount: number = 0;
     revealCount: number = 0;
-    endTurn = new Semaphore(1);
-    releaseEndTurn: () => void;
 
     constructor(name: string, ws: WebSocket, game: Game, index: number) {
         this.name = name;
         this.ws = ws;
         this.game = game;
         this.index = index;
-        this.releaseEndTurn = () => {};
-        this.endTurn.acquire().then(releaseEndTurn => {
-            this.releaseEndTurn = releaseEndTurn;
-        });
+        //this.state = "Wait";
     }
     
     sendState() {
@@ -39,7 +36,8 @@ class Player {
                 otherPlayers.push(<Lib.OtherPlayer>{
                     name: player.name,
                     cardCount: player.cards.length,
-                    revealedCards: player.cards.slice(0, player.revealCount)
+                    revealedCards: player.cards.slice(0, player.revealCount),
+                    //state: player.state
                 });
             }
         }
@@ -47,10 +45,10 @@ class Player {
         // send game state
         this.ws.send(JSON.stringify(<Lib.GameState>{
             deckCount: this.game.cardsInDeck.length,
-            activePlayerIndex: this.game.activePlayerIndex,
             playerIndex: this.index,
             playerCards: this.cards,
             playerRevealCount: this.revealCount,
+            //playerState: this.state,
             otherPlayers: otherPlayers,
         }));
     }
@@ -60,7 +58,7 @@ class Game {
     gameId: string;
     players: Player[] = []
     cardsInDeck: Lib.Card[] = [];
-    turn: number = 0;
+    //turn: number = 0;
 
     constructor(gameId: string) {
         this.gameId = gameId;
@@ -80,23 +78,50 @@ class Game {
         this.run();
     }
 
-    get activePlayerIndex(): number {
-        return this.turn % this.players.length;
-    }
-
     private async run() {
-        while (true) {
-            let activePlayer = this.players[this.activePlayerIndex];
-            if (activePlayer !== undefined) {
-                // wait for active player to end their turn
-                console.log(`waiting for player '${activePlayer.name}' in slot ${this.activePlayerIndex}...`);
-                activePlayer.releaseEndTurn = await activePlayer.endTurn.acquire();
-                this.turn++;
-            } else {
-                // still waiting for playersByIndex to join
-                await Lib.delay(1000);
-            }
+        while (this.players.length === 0) {
+            await Lib.delay(100);
         }
+
+        /*
+        for (this.turn = 0; ; ++this.turn) {
+            for (let i = 0; i < this.players.length; ++i) {
+                const player = this.players[i];
+                if (player === undefined) throw new Error();
+                
+                if (this.turn % this.players.length === i) {
+                    console.log(`active player is: ${player.name}`);
+
+                    player.state = { type: "Active", activeTime: Date.now() };
+                } else {
+                    player.state = "Wait";
+                }
+            }
+
+            this.broadcastState();
+
+            let waiting: boolean;
+            do {
+                await Lib.delay(100);
+
+                waiting = false;
+                for (const player of this.players) {
+                    if (player.state !== "Wait" &&
+                        player.state !== "Proceed" &&
+                        player.state !== "Ready" &&
+                        player.state.activeTime + Lib.activeCooldown < Date.now()
+                    ) {
+                        player.state = "Ready";
+                        player.sendState();
+                    }
+
+                    if (player.state !== "Ready" && player.state !== "Proceed") {
+                        waiting = true;
+                    }
+                }
+            } while (waiting);
+        }
+        */
     }
 
     public broadcastState() {
@@ -166,7 +191,7 @@ app.get("/game", async (request, response) => {
     }
 });
 
-async function wsOnMessage(e: WebSocket.MessageEvent) {
+function wsOnMessage(e: WebSocket.MessageEvent) {
     if (e.type !== 'message') {
         console.error(`bad message type: ${e.type}`);
         e.target.send(`bad message type: ${e.type}`);
@@ -229,10 +254,10 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
             return;
         }
 
-        if (player.game.activePlayerIndex !== player.index) {
+        /*if (player.state === "Wait" || player.state === "Proceed") {
             sendMethodResult(e.target, 'drawCard', 'you are not the active player');
             return;
-        }
+        }*/
 
         const index = Math.floor(Math.random() * player.game.cardsInDeck.length);
         const [card] = player.game.cardsInDeck.splice(index, 1);
@@ -244,8 +269,8 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
         console.log(`player '${player.name}' in slot ${player.index} drew card ${JSON.stringify(card)}`);
 
         sendMethodResult(e.target, 'drawCard');
+        //player.state = { type: "Active", activeTime: Date.now() };
         player.cards.push(card);
-        player.releaseEndTurn();
         player.game.broadcastState();
         return;
     }
@@ -259,10 +284,10 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
             return;
         }
 
-        if (player.game.activePlayerIndex !== player.index) {
+        /*if (player.state === "Wait" || player.state === "Proceed") {
             sendMethodResult(e.target, 'returnCardsToDeck', 'you are not the active player');
             return;
-        }
+        }*/
 
         const newCards = player.cards.slice();
         let newRevealCount = player.revealCount;
@@ -293,9 +318,9 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
         }`);
 
         sendMethodResult(e.target, 'returnCardsToDeck');
+        //player.state = { type: "Active", activeTime: Date.now() };
         player.cards = newCards;
         player.revealCount = newRevealCount;
-        player.releaseEndTurn();
         player.game.cardsInDeck.push(...returnCardsToDeckMessage.cardsToReturnToDeck);
         player.game.broadcastState();
         return;
@@ -327,10 +352,7 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
             return;
         }
 
-        if (player.game.activePlayerIndex === player.index) {
-            // only the active player can reveal/hide cards, which advances the turn
-            player.releaseEndTurn();
-        } else {
+        /*if (falseplayer.state === "Wait" || player.state === "Proceed") {
             // we must validate that the revealed/hidden cards stay the same for inactive players
             for (let i = 0; i < player.revealCount; ++i) {
                 let found = false;
@@ -363,7 +385,10 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
                     return;
                 }
             }
-        }
+        } else {
+            // active player must reset active time
+            player.state = { type: "Active", activeTime: Date.now() };
+        }*/
         
         console.log(`player '${player.name}' in slot ${player.index} reordered cards: ${
             JSON.stringify(newCards.map(card => JSON.stringify(card)))
@@ -372,6 +397,54 @@ async function wsOnMessage(e: WebSocket.MessageEvent) {
         sendMethodResult(e.target, 'reorderCards');
         player.cards = newCards;
         player.revealCount = reorderMessage.newRevealCount;
+        player.game.broadcastState();
+        return;
+    }
+
+    if ('wait' in obj) {
+        const waitMessage = <Lib.WaitMessage>obj;
+        if (waitMessage.wait !== null) {
+            sendMethodResult(e.target, 'wait', 'bad message');
+        }
+
+        const player = playersByWebSocket.get(e.target);
+        if (player === undefined) {
+            sendMethodResult(e.target, 'wait', 'you are not in a game');
+            return;
+        }
+
+        /*if (player.state !== "Proceed" && player.state !== "Wait") {
+            sendMethodResult(e.target, 'wait', 'you are the active player');
+        }*/
+
+        console.log(`player '${player.name}' in slot ${player.index} is waiting.`)
+
+        sendMethodResult(e.target, 'wait');
+        //player.state = "Wait";
+        player.game.broadcastState();
+        return;
+    }
+
+    if ('proceed' in obj) {
+        const proceedMessage = <Lib.ProceedMessage>obj;
+        if (proceedMessage.proceed !== null) {
+            sendMethodResult(e.target, 'proceed', 'bad message');
+        }
+
+        const player = playersByWebSocket.get(e.target);
+        if (player === undefined) {
+            sendMethodResult(e.target, 'proceed', 'you are not in a game');
+            return;
+        }
+
+        /*if (player.state !== "Proceed" && player.state !== "Wait") {
+            sendMethodResult(e.target, 'proceed', 'you are the active player');
+        }*/
+
+        console.log(`player '${player.name}' in slot ${player.index} can proceed.`)
+
+        sendMethodResult(e.target, 'proceed');
+        //player.state = "Proceed";
         player.game.broadcastState();
         return;
     }
