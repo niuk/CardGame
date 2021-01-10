@@ -47,6 +47,7 @@ class Player {
             deckCount: this.game.cardsInDeck.length,
             playerIndex: this.index,
             playerCards: this.cards,
+            playerShareCount: this.shareCount,
             playerRevealCount: this.revealCount,
             //playerState: this.state,
             otherPlayers: otherPlayers,
@@ -290,11 +291,16 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
         }*/
 
         const newCards = player.cards.slice();
+        let newShareCount = player.shareCount;
         let newRevealCount = player.revealCount;
         for (let i = 0; i < returnCardsToDeckMessage.cardsToReturnToDeck.length; ++i) {
             for (let j = 0; j < newCards.length; ++j) {
                 if (JSON.stringify(returnCardsToDeckMessage.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {
                     newCards.splice(j, 1);
+
+                    if (j < newShareCount) {
+                        --newShareCount;
+                    }
 
                     if (j < newRevealCount) {
                         --newRevealCount;
@@ -320,6 +326,7 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
         sendMethodResult(e.target, 'returnCardsToDeck');
         //player.state = { type: "Active", activeTime: Date.now() };
         player.cards = newCards;
+        player.shareCount = newShareCount;
         player.revealCount = newRevealCount;
         player.game.cardsInDeck.push(...returnCardsToDeckMessage.cardsToReturnToDeck);
         player.game.broadcastState();
@@ -385,6 +392,9 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
                     return;
                 }
             }
+
+            // we must also validate that the shared/non-shared cards stay the same
+            // TODO
         } else {
             // active player must reset active time
             player.state = { type: "Active", activeTime: Date.now() };
@@ -396,6 +406,7 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
 
         sendMethodResult(e.target, 'reorderCards');
         player.cards = newCards;
+        player.shareCount = reorderMessage.newShareCount;
         player.revealCount = reorderMessage.newRevealCount;
         player.game.broadcastState();
         return;

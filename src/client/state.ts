@@ -132,6 +132,8 @@ ws.onmessage = async e => {
             associateAnimationsWithCards(previousGameState, gameState);
 
             console.log(`gameState.playerCards: ${JSON.stringify(gameState.playerCards)}`);
+            console.log(`gameState.playerShareCount = ${gameState.playerShareCount}`);
+            console.log(`gameState.playerRevealCount = ${gameState.playerRevealCount}`);
             console.log(`selectedIndices: ${JSON.stringify(selectedIndices)}`);
             console.log(`selectedCards: ${JSON.stringify(selectedIndices.map(i => gameState?.playerCards[i]))}`);
         } finally {
@@ -316,6 +318,7 @@ export function setSpriteTargets(
     gameState: Lib.GameState,
     reservedSpritesAndCards?: [Sprite, Lib.Card][],
     movingSpritesAndCards?: [Sprite, Lib.Card][],
+    shareCount?: number,
     revealCount?: number,
     splitIndex?: number,
     returnToDeck?: boolean
@@ -327,6 +330,7 @@ export function setSpriteTargets(
 
     reservedSpritesAndCards = reservedSpritesAndCards ?? cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
     movingSpritesAndCards = movingSpritesAndCards ?? [];
+    shareCount = shareCount ?? gameState.playerShareCount;
     revealCount = revealCount ?? gameState.playerRevealCount;
     splitIndex = splitIndex ?? cards.length;
     returnToDeck = returnToDeck ?? false;
@@ -343,14 +347,28 @@ export function setSpriteTargets(
             }
         }
 
-        const i = cards.length < revealCount ? cards.length : cards.length - revealCount;
-        const j = cards.length < revealCount ? revealCount : reservedSpritesAndCards.length + (returnToDeck ? 0 : movingSpritesAndCards.length) - revealCount;
-        const y = cards.length < revealCount ? 2 * VP.spriteHeight : VP.spriteHeight;
-        reservedSprite.target = new Vector(
-            VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - j / 2) * VP.spriteGap,
-            VP.canvas.height - y
-        );
+        if (cards.length < shareCount) {
+            reservedSprite.target = new Vector(
+                VP.canvas.width / 2 - VP.spriteWidth - shareCount * VP.spriteGap + cards.length * VP.spriteGap,
+                VP.canvas.height - 2 * VP.spriteHeight
+            );
+        } else if (cards.length < revealCount) {
+            reservedSprite.target = new Vector(
+                VP.canvas.width / 2 + (cards.length - shareCount + 1) * VP.spriteGap,
+                VP.canvas.height - 2 * VP.spriteHeight
+            );
+        } else {
+            let count = reservedSpritesAndCards.length - revealCount;
+            if (!returnToDeck) {
+                count += movingSpritesAndCards.length;
+            }
 
+            reservedSprite.target = new Vector(
+                VP.canvas.width / 2 - VP.spriteWidth / 2 + (cards.length - revealCount - (count - 1) / 2) * VP.spriteGap,
+                VP.canvas.height - VP.spriteHeight
+            );
+        }
+        
         sprites.push(reservedSprite);
         cards.push(reservedCard);
     }
@@ -362,6 +380,7 @@ export function setSpriteTargets(
         }
     }
 
+    gameState.playerShareCount = shareCount;
     gameState.playerRevealCount = revealCount;
 }
 
@@ -414,6 +433,7 @@ export function reorderCards(gameState: Lib.GameState) {
         addCallback('reorderCards', resolve, reject);
         ws.send(JSON.stringify(<Lib.ReorderCardsMessage>{
             reorderedCards: gameState.playerCards,
+            newShareCount: gameState.playerShareCount,
             newRevealCount: gameState.playerRevealCount
         }));
     });
@@ -429,7 +449,8 @@ export function sortBySuit(gameState: Lib.GameState) {
     };
 
     previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(gameState.playerCards, 0, gameState.playerRevealCount, compareFn);
+    sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
+    sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
     sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
     associateAnimationsWithCards(gameState, previousGameState);
     return reorderCards(gameState);
@@ -445,7 +466,8 @@ export function sortByRank(gameState: Lib.GameState) {
     };
 
     previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(gameState.playerCards, 0, gameState.playerRevealCount, compareFn);
+    sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
+    sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
     sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
     associateAnimationsWithCards(gameState, previousGameState);
     return reorderCards(gameState);
@@ -457,7 +479,9 @@ function sortCards(
     end: number,
     compareFn: (a: Lib.Card, b: Lib.Card) => number
 ) {
-    cards.splice(start, end - start, ...cards.slice(start, end).sort(compareFn));
+    const section = cards.slice(start, end);
+    section.sort(compareFn);
+    cards.splice(start, end - start, ...section);
 }
 
 export function wait() {

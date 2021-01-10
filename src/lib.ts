@@ -69,6 +69,7 @@ export interface GameState {
     deckCount: number;
     playerIndex: number;
     playerCards: Card[];
+    playerShareCount: number;
     playerRevealCount: number;
     //playerState: PlayerState;
     otherPlayers: OtherPlayer[];
@@ -102,6 +103,7 @@ export interface ReturnCardsToDeckMessage {
 
 export interface ReorderCardsMessage {
     reorderedCards: Card[];
+    newShareCount: number;
     newRevealCount: number;
 }
 

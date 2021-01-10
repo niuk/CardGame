@@ -366,7 +366,8 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
     const movingSpritesAndCards: [Sprite, Lib.Card][] = [];
     const reservedSpritesAndCards: [Sprite, Lib.Card][] = [];
 
-    let splitIndex: number;
+    let splitIndex: number | undefined = undefined;
+    let shareCount = gameState.playerShareCount;
     let revealCount = gameState.playerRevealCount;
 
     // extract moving sprites
@@ -375,6 +376,10 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         const card = cards[i];
         if (sprite === undefined || card === undefined) throw new Error();
         movingSpritesAndCards.push([sprite, card]);
+
+        if (i < gameState.playerShareCount) {
+            --shareCount;
+        }
 
         if (i < gameState.playerRevealCount) {
             --revealCount;
@@ -412,37 +417,64 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
 
         // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
         const splitRevealed = revealDistance < hideDistance;
-        const start = splitRevealed ? 0 : revealCount;
-        const end = splitRevealed ? revealCount : reservedSpritesAndCards.length;
-    
-        let leftIndex: number | undefined = undefined;
-        let rightIndex: number | undefined = undefined;
-        for (let i = start; i < end; ++i) {
-            const reservedSprite = reservedSpritesAndCards[i]?.[0];
-            if (reservedSprite === undefined) throw new Error();
-            if (leftMovingSprite.target.x < reservedSprite.target.x &&
-                reservedSprite.target.x < rightMovingSprite.target.x
+        let splitShared: boolean;
+        let specialSplit: boolean;
+        let start: number;
+        let end: number;
+        if (splitRevealed) {
+            if (leftMovingSprite.target.x < VP.canvas.width / 2 &&
+                VP.canvas.width / 2 < rightMovingSprite.target.x + VP.spriteWidth
             ) {
-                if (leftIndex === undefined) {
-                    leftIndex = i;
-                }
-    
-                rightIndex = i;
+                splitIndex = shareCount;
             }
-        }
-    
-        if (leftIndex !== undefined && rightIndex !== undefined) {
-            const leftReservedSprite = reservedSpritesAndCards[leftIndex]?.[0];
-            const rightReservedSprite = reservedSpritesAndCards[rightIndex]?.[0];
-            if (leftReservedSprite === undefined || rightReservedSprite === undefined) throw new Error();
-            const leftGap = leftReservedSprite.target.x - leftMovingSprite.target.x;
-            const rightGap = rightMovingSprite.target.x - rightReservedSprite.target.x;
-            if (leftGap < rightGap) {
-                splitIndex = leftIndex;
+            
+            splitShared = (leftMovingSprite.target.x + rightMovingSprite.target.x + VP.spriteWidth) / 2 < VP.canvas.width / 2;
+            if (splitShared) {
+                start = 0;
+                end = shareCount;
             } else {
-                splitIndex = rightIndex + 1;
+                start = shareCount;
+                end = revealCount;
             }
         } else {
+            splitShared = false;
+            specialSplit = false;
+            start = revealCount;
+            end = reservedSpritesAndCards.length;
+        }
+
+        if (splitIndex === undefined) {
+            let leftIndex: number | undefined = undefined;
+            let rightIndex: number | undefined = undefined;
+            for (let i = start; i < end; ++i) {
+                const reservedSprite = reservedSpritesAndCards[i]?.[0];
+                if (reservedSprite === undefined) throw new Error();
+                if (leftMovingSprite.target.x < reservedSprite.target.x &&
+                    reservedSprite.target.x < rightMovingSprite.target.x
+                ) {
+                    if (leftIndex === undefined) {
+                        leftIndex = i;
+                    }
+        
+                    rightIndex = i;
+                }
+            }
+        
+            if (leftIndex !== undefined && rightIndex !== undefined) {
+                const leftReservedSprite = reservedSpritesAndCards[leftIndex]?.[0];
+                const rightReservedSprite = reservedSpritesAndCards[rightIndex]?.[0];
+                if (leftReservedSprite === undefined || rightReservedSprite === undefined) throw new Error();
+                const leftGap = leftReservedSprite.target.x - leftMovingSprite.target.x;
+                const rightGap = rightMovingSprite.target.x - rightReservedSprite.target.x;
+                if (leftGap < rightGap) {
+                    splitIndex = leftIndex;
+                } else {
+                    splitIndex = rightIndex + 1;
+                }
+            }
+        }
+        
+        if (splitIndex === undefined) {
             // no overlapped sprites, so the index is the first reserved sprite to the right of the moving sprites
             for (splitIndex = start; splitIndex < end; ++splitIndex) {
                 const reservedSprite = reservedSpritesAndCards[splitIndex]?.[0];
@@ -452,12 +484,17 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
                 }
             }
         }
+
+        // adjust share count
+        if (splitIndex < shareCount || splitIndex === shareCount && splitShared) {
+            shareCount += movingSpritesAndCards.length;
+            console.log(`set shareCount to ${shareCount}`);
+        }
     
         // adjust reveal count
-        if (splitIndex < revealCount ||
-            splitIndex === revealCount && splitRevealed
-        ) {
+        if (splitIndex < revealCount || splitIndex === revealCount && splitRevealed) {
             revealCount += movingSpritesAndCards.length;
+            console.log(`set revealCount to ${revealCount}`);
         }
     }
 
@@ -479,6 +516,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         gameState,
         reservedSpritesAndCards,
         movingSpritesAndCards,
+        shareCount,
         revealCount,
         splitIndex,
         action.type === "ReturnToDeck"
