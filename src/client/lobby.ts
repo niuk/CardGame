@@ -3,7 +3,7 @@ import * as Lib from "../lib";
 const playerNameElement = document.getElementById('playerName');
 const playerNameValue = Lib.getCookie('playerName');
 if (playerNameElement !== null && playerNameValue !== undefined) {
-    (<HTMLInputElement>playerNameElement).value = playerNameValue;
+    (<HTMLInputElement>playerNameElement).value = decodeURI(playerNameValue);
 }
 
 const gameIdElement = document.getElementById('gameId');

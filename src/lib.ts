@@ -60,8 +60,9 @@ export const activeCooldown = 10000; //milliseconds
 
 export interface OtherPlayer {
     name: string;
-    cardCount: number;
+    shareCount: number;
     revealedCards: Card[];
+    cardCount: number;
     //state: PlayerState;
 }
 

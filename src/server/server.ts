@@ -35,8 +35,9 @@ class Player {
             } else {
                 otherPlayers.push(<Lib.OtherPlayer>{
                     name: player.name,
-                    cardCount: player.cards.length,
+                    shareCount: player.shareCount,
                     revealedCards: player.cards.slice(0, player.revealCount),
+                    cardCount: player.cards.length,
                     //state: player.state
                 });
             }

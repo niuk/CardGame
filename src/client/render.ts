@@ -37,8 +37,14 @@ export async function render(time: number) {
 
 function renderBasics(gameId: string, playerName: string) {
     VP.context.fillStyle = '#000000ff';
-    VP.context.font = '0.75cm Irregularis';
-    VP.context.fillText(`Game: ${gameId}`, 0, 0.75 * VP.pixelsPerCM);
+    VP.context.textAlign = 'left';
+    VP.context.font = `${VP.spriteHeight / 4}px Oliver`;
+    VP.context.fillStyle = 'font-variant-east-asian: full-width';
+
+    VP.context.textBaseline = 'top';
+    VP.context.fillText(`Game: ${gameId}`, 0, 1 * VP.pixelsPerPercent);
+
+    VP.context.textBaseline = 'bottom';
     VP.context.fillText(`Your name is: ${playerName}`, 0, VP.canvas.height);
 
     VP.context.setLineDash([4, 1]);
@@ -119,10 +125,6 @@ function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIn
     const player = gameState.otherPlayers[playerIndex];
     if (player === undefined) return;
 
-    VP.context.fillStyle = '#000000ff';
-    VP.context.font = `${VP.spriteGap}px Irregularis`;
-    VP.context.fillText(player.name, VP.canvas.width / 2, VP.spriteHeight + VP.spriteGap);
-
     const deckPosition = State.deckSprites[State.deckSprites.length - 1]?.position ??
         new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2, VP.canvas.height / 2 - VP.spriteHeight / 2);
     const deckPoint = VP.context.getTransform().inverse().transformPoint({
@@ -132,21 +134,40 @@ function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIn
         z: 0
     });
 
+    const faceSprites = State.faceSpritesForPlayer[playerIndex] ?? [];
     let i = 0;
-    const faceSprites = State.faceSpritesForPlayer[playerIndex];
-    if (faceSprites === undefined) throw new Error();
     for (const faceSprite of faceSprites) {
-        faceSprite.target = new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2 + (i++ - faceSprites.length / 2) * VP.spriteGap, VP.spriteHeight);
+        if (i < player.shareCount) {
+            faceSprite.target = new Vector(
+                VP.canvas.width / 2 + (player.shareCount - i) * VP.spriteGap,
+                VP.spriteHeight + VP.spriteGap
+            );
+        } else {
+            faceSprite.target = new Vector(
+                VP.canvas.width / 2 - VP.spriteWidth - (i - player.shareCount) * VP.spriteGap,
+                VP.spriteHeight
+            );
+        }
+
         faceSprite.animate(deltaTime);
+
+        ++i;
     }
 
+    const backSprites = State.backSpritesForPlayer[playerIndex] ?? [];
     i = 0;
-    const backSprites = State.backSpritesForPlayer[playerIndex];
-    if (backSprites === undefined) throw new Error();
     for (const backSprite of backSprites) {
-        backSprite.target = new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2 + (i++ - backSprites.length / 2) * VP.spriteGap, 0);
+        backSprite.target = new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - backSprites.length / 2) * VP.spriteGap, 0);
         backSprite.animate(deltaTime);
+
+        ++i;
     }
+    
+    VP.context.fillStyle = '#000000ff';
+    VP.context.font = `${VP.spriteHeight / 2}px Oliver`;
+    VP.context.textBaseline = "middle";
+    VP.context.textAlign = "center";
+    VP.context.fillText(player.name, VP.canvas.width / 2, VP.spriteHeight / 2);
 }
 
 // returns the adjusted reveal index
@@ -177,16 +198,16 @@ function renderButtons(time: number, gameState: Lib.GameState) {
         VP.context.fillRect(x, y, VP.canvas.width - x, VP.canvas.height - y);
         
         VP.context.fillStyle = '#000000ff';
-        VP.context.font = '1.5cm Irregularis';
+        VP.context.font = '1.5cm Oliver';
         VP.context.fillText('SORT', x + 0.25 * VP.pixelsPerCM, y + 2.25 * VP.pixelsPerCM);
 
-        VP.context.font = '3cm Irregularis';
+        VP.context.font = '3cm Oliver';
         VP.context.fillText('{', x + 3 * VP.pixelsPerCM, y + 2.75 * VP.pixelsPerCM);
 
-        VP.context.font = '1.5cm Irregularis';
+        VP.context.font = '1.5cm Oliver';
         VP.context.fillText('SUIT', VP.sortBySuitBounds[0].x, VP.sortBySuitBounds[1].y);
 
-        VP.context.font = '1.5cm Irregularis';
+        VP.context.font = '1.5cm Oliver';
         VP.context.fillText('RANK', VP.sortByRankBounds[0].x, VP.sortByRankBounds[1].y);
         */
         //context.fillStyle = '#ff000077';

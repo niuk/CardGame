@@ -8,7 +8,7 @@ import Vector from './vector';
 
 const playerNameFromCookie = Lib.getCookie('playerName');
 if (playerNameFromCookie === undefined) throw new Error('No player name!');
-export const playerName = playerNameFromCookie;
+export const playerName = decodeURI(playerNameFromCookie);
 
 const gameIdFromCookie = Lib.getCookie('gameId');
 if (gameIdFromCookie === undefined) throw new Error('No game id!');
@@ -197,7 +197,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
             if (faceSprite === undefined && previousDeckSprites.length > 0) {
                 // make it look like this card came from the deck;
-                const faceSprite = previousDeckSprites.splice(0, 1)[0];
+                const faceSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                 if (faceSprite === undefined) throw new Error();
                 faceSprite.image = CardImages.get(JSON.stringify(faceCard));
 
@@ -234,7 +234,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 }
                 
                 if (backSprite === undefined && previousDeckSprites.length > 0) {
-                    backSprite = previousDeckSprites.splice(0, 1)[0];
+                    backSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                     if (backSprite === undefined) throw new Error();
                     backSprite.image = CardImages.get(`Back${i}`);
                     
@@ -268,7 +268,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 if (previousBackSprites.length > 0) {
                     deckSprite = previousBackSprites.splice(0, 1)[0];
                     if (deckSprite === undefined) throw new Error();
-                    deckSprite.image = CardImages.get('Back0');
+                    deckSprite.image = CardImages.get('Back4');
 
                     // the sprite came from the player's transformed canvas context
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -288,7 +288,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 if (previousFaceSprites.length > 0) {
                     deckSprite = previousFaceSprites.splice(0, 1)[0];
                     if (deckSprite === undefined) throw new Error();
-                    deckSprite.image = CardImages.get('Back0');
+                    deckSprite.image = CardImages.get('Back4');
                     
                     // the sprite came from the player's transformed canvas context
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -303,7 +303,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
         }
 
         if (deckSprite === undefined) {
-            deckSprite = new Sprite(CardImages.get('Back0'));
+            deckSprite = new Sprite(CardImages.get('Back4'));
         }
 
         deckSprites.push(deckSprite);
@@ -350,11 +350,11 @@ export function setSpriteTargets(
         if (cards.length < shareCount) {
             reservedSprite.target = new Vector(
                 VP.canvas.width / 2 - VP.spriteWidth - shareCount * VP.spriteGap + cards.length * VP.spriteGap,
-                VP.canvas.height - 2 * VP.spriteHeight
+                VP.canvas.height - 2 * VP.spriteHeight - VP.spriteGap
             );
         } else if (cards.length < revealCount) {
             reservedSprite.target = new Vector(
-                VP.canvas.width / 2 + (cards.length - shareCount + 1) * VP.spriteGap,
+                VP.canvas.width / 2 + (cards.length - shareCount) * VP.spriteGap,
                 VP.canvas.height - 2 * VP.spriteHeight
             );
         } else {

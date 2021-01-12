@@ -28,7 +28,7 @@ export async function load() {
         }
     }
 
-    for (let i = 0; i < 4; ++i) {
+    for (let i = 0; i < 5; ++i) {
         const image = new Image();
         image.src = `PaperCards/CardBack${i}.png`;
         image.onload = () => {
