@@ -244,7 +244,6 @@ VP.canvas.onmousemove = async event => {
 };
 
 let previousTouch: Touch | undefined;
-
 VP.canvas.ontouchmove = async event => {
     const touch = event.touches[0];
     if (touch !== undefined) {
@@ -360,17 +359,14 @@ async function onMove(event: HasClientPosition, movement: HasMovement) {
 };
 
 VP.canvas.onmouseup = async event => {
-    await onUp(event);
+    await onUp();
 };
 
 VP.canvas.ontouchend = async event => {
-    const touch = event.touches[0];
-    if (touch !== undefined) {
-        onUp(touch);
-    }
+    await onUp();
 };
 
-async function onUp(event: HasClientPosition, ) {
+async function onUp() {
     const gameState = State.gameState;
     if (gameState === undefined) return;
 
