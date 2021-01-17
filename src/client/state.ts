@@ -186,7 +186,44 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                     }
                 }
             }
-            
+
+            if (faceSprite === undefined) {
+                for (let j = 0; j < 4; ++j) {
+                    const previousOtherPlayer = previousGameState?.otherPlayers[j];
+                    const otherPlayer = gameState.otherPlayers[j];
+                    if (previousOtherPlayer === undefined || previousOtherPlayer === null ||
+                        otherPlayer === undefined || otherPlayer === null
+                    ) {
+                        continue;
+                    }
+
+                    if (previousOtherPlayer.shareCount > otherPlayer.shareCount) {
+                        for (let k = 0; k < previousOtherPlayer.shareCount; ++k) {
+                            if (JSON.stringify(faceCard) === JSON.stringify(previousOtherPlayer.revealedCards[k])) {
+                                --previousOtherPlayer.shareCount;
+                                previousOtherPlayer.revealedCards.splice(k, 1);
+
+                                faceSprite = previousFaceSpritesForPlayer[j]?.splice(k, 1)[0];
+                                if (faceSprite === undefined) throw new Error();
+                                
+                                const sourceTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(j, gameState.playerIndex));
+                                const destinationTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
+                                destinationTransform.invertSelf();
+
+                                let p = sourceTransform.transformPoint(faceSprite.position);
+                                p = destinationTransform.transformPoint(p);
+                                faceSprite.position = new Vector(p.x, p.y);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (faceSprite !== undefined) {
+                        break;
+                    }
+                }
+            }
+
             if (faceSprite === undefined && previousBackSprites.length > 0) {
                 // make it look like this card was revealed among previously hidden cards
                 // which, of course, requires that the player had previously hidden cards
@@ -214,6 +251,14 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
             faceSprites.push(faceSprite);
         }
+    }
+
+    for (let i = 0; i < 4; ++i) {
+        const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
+        previousBackSpritesForPlayer[i] = previousBackSprites;
+
+        const previousFaceSprites = previousFaceSpritesForPlayer[i] ?? [];
+        previousFaceSpritesForPlayer[i] = previousFaceSprites;
 
         let backSprites: Sprite[] = [];
         backSpritesForPlayer[i] = backSprites;
@@ -222,6 +267,35 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
             // only other players have any hidden cards
             while (backSprites.length < otherPlayer.cardCount - otherPlayer.revealedCards.length) {
                 let backSprite: Sprite | undefined = undefined;
+                if (backSprite === undefined) {
+                    for (let j = 0; j < 4; ++j) {
+                        const previousOtherPlayer = previousGameState?.otherPlayers[j];
+                        const otherPlayer = gameState.otherPlayers[j];
+                        if (previousOtherPlayer === undefined || previousOtherPlayer === null ||
+                            otherPlayer === undefined || otherPlayer === null
+                        ) {
+                            continue;
+                        }
+
+                        if (previousOtherPlayer.shareCount > otherPlayer.shareCount) {
+                            previousOtherPlayer.shareCount--;
+                            previousOtherPlayer.revealedCards.splice(0, 1);
+
+                            backSprite = previousFaceSpritesForPlayer[j]?.splice(0, 1)[0];
+                            if (backSprite === undefined) throw new Error();
+                            backSprite.image = CardImages.get(`Back${i}`);
+
+                            const sourceTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(j, gameState.playerIndex));
+                            const destinationTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
+                            
+                            let p = sourceTransform.transformPoint(backSprite.position);
+                            p = destinationTransform.transformPoint(p);
+                            backSprite.position = new Vector(p.x, p.y);
+                            break;
+                        }
+                    }
+                }
+
                 if (backSprite === undefined && previousBackSprites.length > 0) {
                     backSprite = previousBackSprites.splice(0, 1)[0];
                     if (backSprite === undefined) throw new Error();
@@ -238,7 +312,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                     if (backSprite === undefined) throw new Error();
                     backSprite.image = CardImages.get(`Back${i}`);
                     
-                    // this sprite is rendered in the player's transformed canvas context
+                    // this sprite comes from the deck, which is rendered in the client player's transform
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
                     transform.invertSelf();
                     const point = transform.transformPoint(backSprite.position);
