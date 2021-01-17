@@ -62,8 +62,8 @@ export type Action =
     "None" |
     "SortBySuit" |
     "SortByRank" |
-    "Wait" |
-    "Proceed" |
+    //"Wait" |
+    //"Proceed" |
     "Deselect" |
     TakeFromOtherPlayer |
     DrawFromDeck |
@@ -104,14 +104,37 @@ window.onkeyup = (e: KeyboardEvent) => {
     }
 };
 
-function getMousePosition(e: MouseEvent) {
+interface HasClientPosition {
+    clientX: number;
+    clientY: number;
+}
+
+interface HasMovement {
+    movementX: number;
+    movementY: number;
+}
+
+function getMousePosition(e: HasClientPosition) {
     return new Vector(
         VP.canvas.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
         VP.canvas.height * (e.clientY - VP.canvasRect.top) / VP.canvasRect.height
     );
 }
 
-VP.canvas.onmousedown = async (event: MouseEvent) => {
+let previousTouch: Touch | undefined;
+VP.canvas.onmousedown = async event => {
+    await onDown(event);
+}
+
+VP.canvas.ontouchstart = async event => {
+    const touch = event.touches[0];
+    if (touch !== undefined) {
+        await onDown(touch);
+        previousTouch = touch;
+    }
+};
+
+async function onDown(event: HasClientPosition) {
     const unlock = await State.lock();
     try {
         mouseDownPosition = getMousePosition(event);
@@ -129,7 +152,7 @@ VP.canvas.onmousedown = async (event: MouseEvent) => {
             VP.sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortBySuitBounds[1].y
         ) {
             action = "SortBySuit";
-        } else if (
+        } /*else if (
             VP.waitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.waitBounds[1].x &&
             VP.waitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.waitBounds[1].y
         ) {
@@ -139,7 +162,7 @@ VP.canvas.onmousedown = async (event: MouseEvent) => {
             VP.proceedBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.proceedBounds[1].y
         ) {
             action = "Proceed";
-        } else if (deckPosition !== undefined &&
+        } */else if (deckPosition !== undefined &&
             deckPosition.x < mouseDownPosition.x && mouseDownPosition.x < deckPosition.x + VP.spriteWidth &&
             deckPosition.y < mouseDownPosition.y && mouseDownPosition.y < deckPosition.y + VP.spriteHeight
         ) {
@@ -216,9 +239,24 @@ VP.canvas.onmousedown = async (event: MouseEvent) => {
     } finally {
         unlock();
     }
+}
+
+VP.canvas.onmousemove = async event => {
+    await onMove(event, event);
 };
 
-VP.canvas.onmousemove = async (event: MouseEvent) => {
+VP.canvas.ontouchmove = async event => {
+    const touch = event.touches[0];
+    if (touch !== undefined) {
+        await onMove(touch, {
+            movementX: touch.clientX - (previousTouch?.clientX ?? touch.clientX),
+            movementY: touch.clientY - (previousTouch?.clientY ?? touch.clientY)
+        });
+        previousTouch = touch;
+    }
+};
+
+async function onMove(event: HasClientPosition, movement: HasMovement) {
     const gameState = State.gameState;
     if (gameState === undefined) return;
 
@@ -233,11 +271,11 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
             // TODO: check whether mouse position has left button bounds
         } else if (action === "SortByRank") {
             // TODO: check whether mouse position has left button bounds
-        } else if (action === "Wait") {
+        } /*else if (action === "Wait") {
             // TODO: check whether mouse position has left button bounds
         } else if (action === "Proceed") {
             // TODO: check whether mouse position has left button bounds
-        } else if (action === "Deselect") {
+        } */else if (action === "Deselect") {
             // TODO: box selection?
         } else if (
             action.type === "TakeFromOtherPlayer" ||
@@ -272,8 +310,8 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
                             action !== "Deselect" &&
                             action !== "SortByRank" &&
                             action !== "SortBySuit" &&
-                            action !== "Wait" &&
-                            action !== "Proceed" &&
+                            //action !== "Wait" &&
+                            //action !== "Proceed" &&
                             action.type === "WaitingForNewCard"
                         ) {
                             action = "None";
@@ -304,12 +342,12 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
                 if (i < 0) {
                     const sprite = sprites[action.cardIndex];
                     if (sprite === undefined) throw new Error();
-                    sprite.target = sprite.target.add(new Vector(event.movementX, event.movementY));
+                    sprite.target = sprite.target.add(new Vector(movement.movementX, movement.movementY));
                 } else {
                     for (const j of State.selectedIndices) {
                         const sprite = sprites[j];
                         if (sprite === undefined) throw new Error();
-                        sprite.target = sprite.target.add(new Vector(event.movementX, event.movementY));
+                        sprite.target = sprite.target.add(new Vector(movement.movementX, movement.movementY));
                     }
                 }
             }
@@ -321,7 +359,15 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
     }
 };
 
-VP.canvas.onmouseup = async () => {
+VP.canvas.onmouseup = async event => {
+    await onUp();
+};
+
+VP.canvas.ontouchend = async event => {
+    await onUp();
+};
+
+async function onUp() {
     const gameState = State.gameState;
     if (gameState === undefined) return;
 
@@ -333,13 +379,13 @@ VP.canvas.onmouseup = async () => {
             await State.sortByRank(gameState);
         } else if (action === "SortBySuit") {
             await State.sortBySuit(gameState);
-        } else if (action === "Wait") {
+        } /*else if (action === "Wait") {
             console.log('waiting');
             await State.wait();
         } else if (action === "Proceed") {
             console.log('proceeding');
             await State.proceed();
-        } else if (action === "Deselect") {
+        } */else if (action === "Deselect") {
             State.selectedIndices.splice(0, State.selectedIndices.length);
         } else if (action.type === "DrawFromDeck" || action.type === "WaitingForNewCard") {
             // do nothing
@@ -404,8 +450,8 @@ function onCardDrawn(deckSprite: Sprite) {
             if (action !== "None" &&
                 action !== "SortBySuit" &&
                 action !== "SortByRank" &&
-                action !== "Wait" &&
-                action !== "Proceed" &&
+                //action !== "Wait" &&
+                //action !== "Proceed" &&
                 action !== "Deselect" &&
                 action.type === "WaitingForNewCard"
             ) {
@@ -419,7 +465,7 @@ function onCardDrawn(deckSprite: Sprite) {
                 if (faceSpriteAtMouseDown === undefined) throw new Error();
                 faceSpriteAtMouseDown.target = deckSprite.position;
                 faceSpriteAtMouseDown.position = deckSprite.position;
-                faceSpriteAtMouseDown.velocity = deckSprite.velocity;
+                //faceSpriteAtMouseDown.velocity = deckSprite.velocity;
                 
                 drag(gameState, cardIndex, action.mousePositionToSpritePosition);
             }
@@ -475,7 +521,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         throw new Error();
     }
 
-    const deckDistance = Math.abs(leftMovingSprite.target.y - (State.deckSprites[0]?.position.y ?? Infinity));
+    const deckDistance = Math.abs(leftMovingSprite.target.y - (VP.canvas.height / 2 - VP.spriteHeight / 2));
     const revealDistance = Math.abs(leftMovingSprite.target.y - (VP.canvas.height - 2 * VP.spriteHeight));
     const hideDistance = Math.abs(leftMovingSprite.target.y - (VP.canvas.height - VP.spriteHeight));
 

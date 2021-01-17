@@ -11,11 +11,15 @@ let deckDealTime: number | undefined = undefined;
 let currentTime: number | undefined = undefined;
 
 export async function render(time: number) {
+    if (currentTime === undefined) {
+        currentTime = time;
+    }
+
     while (State.gameState === undefined) {
         await Lib.delay(100);
     }
 
-    const deltaTime = time - (currentTime !== undefined ? currentTime : time);
+    const deltaTime = time - currentTime;
     currentTime = time;
 
     const unlock = await State.lock();
@@ -109,8 +113,8 @@ function renderDeck(time: number, deltaTime: number, deckCount: number) {
                 Input.action !== "None" &&
                 Input.action !== "SortBySuit" &&
                 Input.action !== "SortByRank" &&
-                Input.action !== "Wait" &&
-                Input.action !== "Proceed" &&
+                //Input.action !== "Wait" &&
+                //Input.action !== "Proceed" &&
                 Input.action !== "Deselect" && (
                 Input.action.type === "DrawFromDeck" ||
                 Input.action.type === "WaitingForNewCard"

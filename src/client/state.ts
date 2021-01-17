@@ -1,7 +1,6 @@
 import { Mutex } from 'await-semaphore';
 
 import * as Lib from '../lib';
-import * as CardImages from './card-images';
 import * as VP from './view-params';
 import Sprite from './sprite';
 import Vector from './vector';
@@ -246,14 +245,14 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 // which, of course, requires that the player had previously hidden cards
                 faceSprite = previousBackSprites.splice(0, 1)[0];
                 if (faceSprite === undefined) throw new Error();
-                faceSprite.image = CardImages.get(JSON.stringify(card));
+                faceSprite.image = Sprite.getImage(JSON.stringify(card));
             }
 
             if (faceSprite === undefined && previousDeckSprites.length > 0) {
                 // make it look like this card came from the deck;
                 const faceSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                 if (faceSprite === undefined) throw new Error();
-                faceSprite.image = CardImages.get(JSON.stringify(card));
+                faceSprite.image = Sprite.getImage(JSON.stringify(card));
 
                 // this sprite is rendered in the player's transformed canvas context
                 const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -263,7 +262,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
             }
 
             if (faceSprite === undefined) {
-                faceSprite = new Sprite(CardImages.get(JSON.stringify(card)));
+                faceSprite = new Sprite(Sprite.getImage(JSON.stringify(card)));
             }
 
             faceSprites.push(faceSprite);
@@ -299,7 +298,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
                             backSprite = previousFaceSpritesForPlayer[j]?.splice(0, 1)[0];
                             if (backSprite === undefined) throw new Error();
-                            backSprite.image = CardImages.get(`Back${i}`);
+                            backSprite.image = Sprite.getImage(`Back${i + 1}`);
 
                             const sourceTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(j, gameState.playerIndex));
                             const destinationTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -320,13 +319,13 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 if (backSprite === undefined && previousFaceSprites.length > 0) {
                     backSprite = previousFaceSprites.splice(0, 1)[0];
                     if (backSprite === undefined) throw new Error();
-                    backSprite.image = CardImages.get(`Back${i}`);
+                    backSprite.image = Sprite.getImage(`Back${i + 1}`);
                 }
                 
                 if (backSprite === undefined && previousDeckSprites.length > 0) {
                     backSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                     if (backSprite === undefined) throw new Error();
-                    backSprite.image = CardImages.get(`Back${i}`);
+                    backSprite.image = Sprite.getImage(`Back${i + 1}`);
                     
                     // this sprite comes from the deck, which is rendered in the client player's transform
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -336,7 +335,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 }
                 
                 if (backSprite === undefined) {
-                    backSprite = new Sprite(CardImages.get(`Back${i}`));
+                    backSprite = new Sprite(Sprite.getImage(`Back${i + 1}`));
                 }
 
                 backSprites.push(backSprite);
@@ -358,7 +357,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 if (previousBackSprites.length > 0) {
                     deckSprite = previousBackSprites.splice(0, 1)[0];
                     if (deckSprite === undefined) throw new Error();
-                    deckSprite.image = CardImages.get('Back4');
+                    deckSprite.image = Sprite.getImage('Back0');
 
                     // the sprite came from the player's transformed canvas context
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -378,7 +377,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 if (previousFaceSprites.length > 0) {
                     deckSprite = previousFaceSprites.splice(0, 1)[0];
                     if (deckSprite === undefined) throw new Error();
-                    deckSprite.image = CardImages.get('Back4');
+                    deckSprite.image = Sprite.getImage('Back0');
                     
                     // the sprite came from the player's transformed canvas context
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -393,7 +392,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
         }
 
         if (deckSprite === undefined) {
-            deckSprite = new Sprite(CardImages.get('Back4'));
+            deckSprite = new Sprite(Sprite.getImage('Back0'));
         }
 
         deckSprites.push(deckSprite);
@@ -597,7 +596,7 @@ function sortCards(
     section.sort(compareFn);
     cards.splice(start, end - start, ...section);
 }
-
+/*
 export function wait() {
     return new Promise<void>((resolve, reject) => {
         addCallback('wait', resolve, reject);
@@ -615,3 +614,4 @@ export function proceed() {
         }));
     });
 }
+*/

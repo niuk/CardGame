@@ -307,7 +307,7 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
         }*/
 
         const index = Math.floor(Math.random() * player.game.cardsInDeck.length);
-        const [card] = player.game.cardsInDeck.splice(index, 1);
+        const card = player.game.cardsInDeck.splice(index, 1)[0];
         if (card === undefined) {
             sendMethodResult(e.target, 'drawCard', 'deck has no cards');
             return;
@@ -458,10 +458,12 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
         return;
     }
 
+    /*
     if ('wait' in obj) {
         const waitMessage = <Lib.WaitMessage>obj;
         if (waitMessage.wait !== null) {
             sendMethodResult(e.target, 'wait', 'bad message');
+            return;
         }
 
         const player = playersByWebSocket.get(e.target);
@@ -470,9 +472,9 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
             return;
         }
 
-        /*if (player.state !== "Proceed" && player.state !== "Wait") {
+        if (player.state !== "Proceed" && player.state !== "Wait") {
             sendMethodResult(e.target, 'wait', 'you are the active player');
-        }*/
+        }
 
         console.log(`player '${player.name}' in slot ${player.index} is waiting.`)
 
@@ -494,9 +496,9 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
             return;
         }
 
-        /*if (player.state !== "Proceed" && player.state !== "Wait") {
+        if (player.state !== "Proceed" && player.state !== "Wait") {
             sendMethodResult(e.target, 'proceed', 'you are the active player');
-        }*/
+        }
 
         console.log(`player '${player.name}' in slot ${player.index} can proceed.`)
 
@@ -505,6 +507,7 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
         player.game.broadcastState();
         return;
     }
+    */
 }
 
 (async () => {

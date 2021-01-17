@@ -1,52 +1,84 @@
-import Vector from './vector';
+import * as Lib from '../lib';
 import * as VP from './view-params';
+import Vector from './vector';
 
-const springConstant = 1000;
-const mass = 1;
-const drag = Math.sqrt(4 * mass * springConstant);
+const decayPerSecond = 1/60;
 
-// state for physics-based animations
+const colors = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
+const suits = ['Club', 'Diamond', 'Heart', 'Spade', 'Joker'];
+
 export default class Sprite {
     image: HTMLImageElement;
     target: Vector;
     position: Vector;
-    velocity: Vector;
 
-    //bad = false;
-
-    constructor(image: HTMLImageElement) {
+    public constructor(image: HTMLImageElement) {
         this.image = image;
         this.target = new Vector(0, 0);
         this.position = new Vector(0, 0);
-        this.velocity = new Vector(0, 0);
     }
 
     animate(deltaTime: number) {
-        const springForce = this.target.sub(this.position).scale(springConstant);
-        const dragForce = this.velocity.scale(-drag);
-        const acceleration = springForce.add(dragForce).scale(1 / mass);
+        this.position = this.position.add(this.target.sub(this.position).scale(
+            1 - Math.pow(1 - decayPerSecond, deltaTime)
+        ));
 
-        //const savedVelocity = this.velocity;
-        //const savedPosition = this.position;
-        
-        this.velocity = this.velocity.add(acceleration.scale(deltaTime / 1000));
-        this.position = this.position.add(this.velocity.scale(deltaTime / 1000));
+        VP.context.drawImage(
+            this.image,
+            397, 54, 1248, 1935,
+            this.position.x, this.position.y, VP.spriteWidth, VP.spriteHeight
+        );
+    }
 
-        /*
-        if (!this.bad && (
-            !isFinite(this.velocity.x) || isNaN(this.velocity.x) ||
-            !isFinite(this.velocity.y) || isNaN(this.velocity.y) ||
-            !isFinite(this.position.x) || isNaN(this.position.x) ||
-            !isFinite(this.position.y) || isNaN(this.position.y)
-        )) {
-            this.bad = true;
-            
-            console.log(`deltaTime: ${deltaTime}, springForce: ${JSON.stringify(springForce)}, dragForce: ${JSON.stringify(dragForce)}`);
-            console.log(`target: ${JSON.stringify(this.target)}, position: ${JSON.stringify(savedPosition)}, velocity: ${JSON.stringify(savedVelocity)}, acceleration: ${JSON.stringify(acceleration)}`);
-            console.log(`new position: ${JSON.stringify(this.position)}, new velocity: ${JSON.stringify(this.velocity)}`);
+    private static images = new Map<string, HTMLImageElement>();
+
+    static getImage(stringForCard: string) {
+        const image = this.images.get(stringForCard);
+        if (image === undefined) {
+            throw new Error(`couldn't get sprite '${stringForCard}'`);
         }
-        */
 
-        VP.context.drawImage(this.image, this.position.x, this.position.y, VP.spriteWidth, VP.spriteHeight);
+        return image;
+    }
+
+    private static async loadImage(key: string, src: string) {
+        const image = new Image();
+        image.src = src;
+        await new Promise(resolve => {
+            image.onload = resolve;
+        });
+        console.log(`loaded ${image.src}`);
+        this.images.set(key, image);
+    }
+
+    static async load() {
+        const loads: Promise<void>[] = [];
+        for (let suit = 0; suit <= 4; ++suit) {
+            for (let rank = 0; rank <= 14; ++rank) {
+                if (suit === Lib.Suit.Joker) {
+                    if (0 < rank && rank < 14) {
+                        continue;
+                    }
+                } else {
+                    if (rank < 1 || 13 < rank) {
+                        continue;
+                    }
+                }
+
+                loads.push(this.loadImage(
+                    JSON.stringify([suit, rank]),
+                    `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`
+                ));
+            }
+        }
+
+        let i = 0;
+        for (const color of colors) {
+            loads.push(this.loadImage(`Back${i++}`, `PlayingCards/BackColor_${color}.png`));
+        }
+
+        await Promise.all(loads);
+
+        console.log('all card images loaded');
     }
 }
