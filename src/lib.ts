@@ -73,11 +73,12 @@ export interface GameState {
     playerShareCount: number;
     playerRevealCount: number;
     //playerState: PlayerState;
-    otherPlayers: OtherPlayer[];
+    otherPlayers: (OtherPlayer | null)[];
 }
 
 export type MethodName =
     "joinGame" |
+    "takeCard" |
     "drawCard" |
     "returnCardsToDeck" |
     "reorderCards" |
@@ -92,6 +93,12 @@ export interface MethodResult {
 export interface JoinGameMessage {
     gameId: string;
     playerName: string;
+}
+
+export interface TakeCardMessage {
+    otherPlayerIndex: number;
+    cardIndex: number;
+    card: Card;
 }
 
 export interface DrawCardMessage {

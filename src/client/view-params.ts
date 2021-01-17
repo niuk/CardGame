@@ -53,19 +53,19 @@ export function recalculateParameters() {
     sortBySuitBounds = [new Vector(0, 0), new Vector(0, 0)];
 
     const approvePosition = new Vector(canvas.width - 2 * spriteHeight, canvas.height - 11 * spriteHeight / 12);
-    waitFont = `${spriteHeight / 3}px Oliver`;
+    waitFont = `${spriteHeight / 3}px Sugarlike`;
     waitBounds = [approvePosition, getBottomRight('Wait!', waitFont, approvePosition)];
 
     const disapprovePosition = new Vector(canvas.width - 2 * spriteHeight, canvas.height - 5 * spriteHeight / 12);
-    proceedFont = `${spriteHeight / 3}px Oliver`;
+    proceedFont = `${spriteHeight / 3}px Sugarlike`;
     proceedBounds = [disapprovePosition, getBottomRight('Proceed.', proceedFont, disapprovePosition)];
 
     const readyPosition = new Vector(canvas.width - 2 * spriteHeight, canvas.height - 3 * spriteHeight / 4);
-    readyFont = `${spriteHeight / 2}px Oliver`;
+    readyFont = `${spriteHeight / 2}px Sugarlike`;
     readyBounds = [readyPosition, getBottomRight('Ready!', readyFont, readyPosition)];
 
     const countdownPosition = new Vector(canvas.width - 3.5 * spriteHeight, canvas.height - 2 * spriteHeight / 3);
-    countdownFont = `${spriteHeight / 2}px Oliver`;
+    countdownFont = `${spriteHeight / 2}px Sugarlike`;
     countdownBounds = [countdownPosition, getBottomRight('Waiting 10 seconds...', countdownFont, countdownPosition)];
 }
 

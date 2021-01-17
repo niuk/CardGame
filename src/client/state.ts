@@ -218,7 +218,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
         let backSprites: Sprite[] = [];
         backSpritesForPlayer[i] = backSprites;
         const otherPlayer = gameState.otherPlayers[i];
-        if (i !== gameState.playerIndex && otherPlayer !== undefined) {
+        if (i !== gameState.playerIndex && otherPlayer !== null && otherPlayer !== undefined) {
             // only other players have any hidden cards
             while (backSprites.length < otherPlayer.cardCount - otherPlayer.revealedCards.length) {
                 let backSprite: Sprite | undefined = undefined;
@@ -310,7 +310,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
     }
 
     setSpriteTargets(gameState);
-    
+
     onAnimationsAssociated();
 }
 
@@ -396,6 +396,27 @@ export async function joinGame(gameId: string, playerName: string) {
         addCallback('joinGame', resolve, reject);
         ws.send(JSON.stringify(<Lib.JoinGameMessage>{ gameId, playerName }));
     });
+}
+
+export async function takeCard(otherPlayerIndex: number, cardIndex: number, card: Lib.Card) {
+    const animationsAssociated = new Promise<void>(resolve => {
+        onAnimationsAssociated = () => {
+            console.log(`associated animations`);
+            onAnimationsAssociated = () => {};
+            resolve();
+        };
+    });
+
+    await new Promise<void>((resolve, reject) => {
+        addCallback('takeCard', resolve, reject);
+        ws.send(JSON.stringify(<Lib.TakeCardMessage>{
+            otherPlayerIndex,
+            cardIndex,
+            card
+        }));
+    });
+
+    await animationsAssociated;
 }
 
 export async function drawCard(): Promise<void> {

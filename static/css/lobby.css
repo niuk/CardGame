@@ -1,21 +1,15 @@
 @font-face {
-    font-family: "Irregularis";
-    src: url("Irregularis-raa9.ttf");
-    unicode-range: U+20-7F;
-}
-
-@font-face {
-    font-family: "Oliver";
-    src: url("Oliver-Regular.otf");
+    font-family: "Sugarlike";
+    src: url("Sugarlike-Bold.otf");
     unicode-range: U+20-7F;
 }
 
 form {
-    font-family: Oliver;
+    font-family: Sugarlike;
     font-size: large;
 }
 
 button {
-    font-family: Oliver;
+    font-family: Sugarlike;
     font-size: large;
 }

@@ -244,6 +244,51 @@ function wsOnMessage(e: WebSocket.MessageEvent) {
         return;
     }
 
+    if ('otherPlayerIndex' in obj && 'card' in obj) {
+        const takeCardMessage = <Lib.TakeCardMessage>obj;
+
+        const player = playersByWebSocket.get(e.target);
+        if (player === undefined) {
+            sendMethodResult(e.target, 'takeCard', 'you are not in a game');
+            return;
+        }
+
+        const otherPlayer = player.game.players[takeCardMessage.otherPlayerIndex];
+        if (otherPlayer === undefined) {
+            sendMethodResult(e.target, 'takeCard', `player with index ${takeCardMessage.otherPlayerIndex} doesn't exist`);
+            return;
+        }
+
+        if (takeCardMessage.cardIndex < 0 || otherPlayer.shareCount <= takeCardMessage.cardIndex) {
+            sendMethodResult(e.target, 'takeCard', `player '${otherPlayer.name}' at index ${takeCardMessage.otherPlayerIndex} doesn't have a shared card at index ${takeCardMessage.cardIndex}`);
+            return;
+        }
+
+        if (JSON.stringify(otherPlayer.cards[takeCardMessage.cardIndex]) !== JSON.stringify(takeCardMessage.card)) {
+            console.log(`have: ${otherPlayer.cards[takeCardMessage.cardIndex]}`);
+            console.log(`want: ${takeCardMessage.card}`);
+            sendMethodResult(e.target, 'takeCard', `player '${otherPlayer.name}' at index ${takeCardMessage.otherPlayerIndex} does not have card ${JSON.stringify(takeCardMessage.card)} at ${takeCardMessage.cardIndex}`);
+            return;
+        }
+
+        console.log(`player '${player.name}' at index ${player.index} took card ${takeCardMessage.card} from player '${otherPlayer.name}' at index ${otherPlayer.index}`);
+
+        sendMethodResult(e.target, 'takeCard');
+
+        if (takeCardMessage.cardIndex < otherPlayer.shareCount) {
+            --otherPlayer.shareCount;
+        }
+
+        if (takeCardMessage.cardIndex < otherPlayer.revealCount) {
+            --otherPlayer.revealCount;
+        }
+
+        otherPlayer.cards.splice(takeCardMessage.cardIndex, 1);
+        player.cards.push(takeCardMessage.card);
+        player.game.broadcastState();
+        return;
+    }
+
     if ('drawCard' in obj) {
         if ((<Lib.DrawCardMessage>obj).drawCard !== null) {
             sendMethodResult(e.target, 'drawCard', 'bad message');

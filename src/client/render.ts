@@ -1,10 +1,10 @@
+import { random } from 'nanoid';
+
 import * as Lib from '../lib';
 import * as State from './state';
 import * as Input from './input';
 import * as VP from './view-params';
 import Vector from './vector';
-import Sprite from './sprite';
-import { random } from 'nanoid';
 
 const deckDealDuration = 1000;
 let deckDealTime: number | undefined = undefined;
@@ -34,11 +34,54 @@ export async function render(time: number) {
 
     window.requestAnimationFrame(render);
 }
+/*
+const wiggles = new Map<string, [string, number[], number]>();
+const wiggleInterval = 100;
+function wiggleText(s: string, x: number, y: number) {
+    if (currentTime === undefined) {
+        return;
+    }
 
+    const lower = s.toLowerCase();
+    let wiggle = wiggles.get(lower);
+    if (wiggle === undefined) {
+        const upper = s.toUpperCase();
+        const widths = [];
+        for (let i = 0; i < lower.length; ++i) {
+            widths.push((
+                VP.context.measureText(<string>lower[i]).width +
+                VP.context.measureText(<string>upper[i]).width) / 2);
+        }
+
+        wiggle = [s, widths, currentTime];
+        wiggles.set(lower, wiggle);
+    }
+
+    const [ss, ws, t] = wiggle;
+    s = "";
+    let tt = t;
+    for (let i = 0; i < ss.length; ++i) {
+        let c = <string>ss[i];
+        if (t + wiggleInterval < currentTime) {
+            tt = currentTime;
+            if (<number>random(1)[0] < 127) {
+                c = c.toUpperCase();
+            } else {
+                c = c.toLowerCase();
+            }
+        }
+
+        s += c;
+        VP.context.fillText(c, x += <number>ws[i], y);
+    }
+
+    wiggles.set(lower, [s, ws, tt]);
+}
+*/
 function renderBasics(gameId: string, playerName: string) {
     VP.context.fillStyle = '#000000ff';
     VP.context.textAlign = 'left';
-    VP.context.font = `${VP.spriteHeight / 4}px Oliver`;
+    VP.context.font = `${VP.spriteHeight / 4}px Sugarlike`;
     VP.context.fillStyle = 'font-variant-east-asian: full-width';
 
     VP.context.textBaseline = 'top';
@@ -123,16 +166,7 @@ function renderOtherPlayers(deltaTime: number, gameState: Lib.GameState) {
 
 function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIndex: number) {
     const player = gameState.otherPlayers[playerIndex];
-    if (player === undefined) return;
-
-    const deckPosition = State.deckSprites[State.deckSprites.length - 1]?.position ??
-        new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2, VP.canvas.height / 2 - VP.spriteHeight / 2);
-    const deckPoint = VP.context.getTransform().inverse().transformPoint({
-        w: 1,
-        x: deckPosition.x,
-        y: deckPosition.y,
-        z: 0
-    });
+    if (player === undefined || player === null) return;
 
     const faceSprites = State.faceSpritesForPlayer[playerIndex] ?? [];
     let i = 0;
@@ -164,7 +198,7 @@ function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIn
     }
     
     VP.context.fillStyle = '#000000ff';
-    VP.context.font = `${VP.spriteHeight / 2}px Oliver`;
+    VP.context.font = `${VP.spriteHeight / 2}px Sugarlike`;
     VP.context.textBaseline = "middle";
     VP.context.textAlign = "center";
     VP.context.fillText(player.name, VP.canvas.width / 2, VP.spriteHeight / 2);
@@ -198,16 +232,16 @@ function renderButtons(time: number, gameState: Lib.GameState) {
         VP.context.fillRect(x, y, VP.canvas.width - x, VP.canvas.height - y);
         
         VP.context.fillStyle = '#000000ff';
-        VP.context.font = '1.5cm Oliver';
+        VP.context.font = '1.5cm Sugarlike';
         VP.context.fillText('SORT', x + 0.25 * VP.pixelsPerCM, y + 2.25 * VP.pixelsPerCM);
 
-        VP.context.font = '3cm Oliver';
+        VP.context.font = '3cm Sugarlike';
         VP.context.fillText('{', x + 3 * VP.pixelsPerCM, y + 2.75 * VP.pixelsPerCM);
 
-        VP.context.font = '1.5cm Oliver';
+        VP.context.font = '1.5cm Sugarlike';
         VP.context.fillText('SUIT', VP.sortBySuitBounds[0].x, VP.sortBySuitBounds[1].y);
 
-        VP.context.font = '1.5cm Oliver';
+        VP.context.font = '1.5cm Sugarlike';
         VP.context.fillText('RANK', VP.sortByRankBounds[0].x, VP.sortByRankBounds[1].y);
         */
         //context.fillStyle = '#ff000077';
