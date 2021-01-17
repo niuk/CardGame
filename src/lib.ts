@@ -58,22 +58,19 @@ export interface Active {
 
 export const activeCooldown = 10000; //milliseconds
 
-export interface OtherPlayer {
+export interface Player {
     name: string;
     shareCount: number;
-    revealedCards: Card[];
-    cardCount: number;
+    revealCount: number;
+    totalCount: number;
+    cards: Card[];
     //state: PlayerState;
 }
 
 export interface GameState {
     deckCount: number;
     playerIndex: number;
-    playerCards: Card[];
-    playerShareCount: number;
-    playerRevealCount: number;
-    //playerState: PlayerState;
-    otherPlayers: (OtherPlayer | null)[];
+    players: (Player | null)[];
 }
 
 export type MethodName =

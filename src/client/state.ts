@@ -108,7 +108,9 @@ ws.onmessage = async e => {
                 const selectedIndex = selectedIndices[i];
                 if (selectedIndex === undefined) throw new Error();
 
-                if (JSON.stringify(gameState.playerCards[selectedIndex]) !== JSON.stringify(previousGameState?.playerCards[selectedIndex])) {
+                if (JSON.stringify(gameState.players[gameState.playerIndex]?.cards[selectedIndex]) !==
+                    JSON.stringify(previousGameState?.players[previousGameState.playerIndex]?.cards[selectedIndex])
+                ) {
                     let found = false;
                     for (let j = 0; j < gameState.playerCards.length; ++j) {
                         if (JSON.stringify(gameState.playerCards[j]) === JSON.stringify(previousGameState?.playerCards[selectedIndex])) {
@@ -154,34 +156,48 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
     backSpritesForPlayer = [];
     faceSpritesForPlayer = [];
     for (let i = 0; i < 4; ++i) {
+        const player = gameState.players[i];
+        if (player === undefined || player === null) continue;
+
+        let previousPlayer = previousGameState?.players[i];
+        if (previousPlayer === undefined || previousPlayer === null) {
+            previousPlayer = <Lib.Player>{
+                name: player.name,
+                shareCount: 0,
+                revealCount: 0,
+                totalCount: 0,
+                cards: []
+            };
+        }
+        
         const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
         previousBackSpritesForPlayer[i] = previousBackSprites;
 
         const previousFaceSprites = previousFaceSpritesForPlayer[i] ?? [];
         previousFaceSpritesForPlayer[i] = previousFaceSprites;
 
-        let previousFaceCards: Lib.Card[];
-        let faceCards: Lib.Card[];
-        if (i === gameState.playerIndex) {
-            previousFaceCards = previousGameState?.playerCards ?? [];
-            faceCards = gameState.playerCards;
-        } else {
-            previousFaceCards = previousGameState?.otherPlayers[i]?.revealedCards ?? [];
-            faceCards = gameState.otherPlayers[i]?.revealedCards ?? [];
-        }
-
         let faceSprites: Sprite[] = [];
         faceSpritesForPlayer[i] = faceSprites;
-        for (const faceCard of faceCards) {
+        for (const card of player.cards) {
             let faceSprite: Sprite | undefined = undefined;
             if (faceSprite === undefined) {
-                for (let j = 0; j < previousFaceCards.length; ++j) {
-                    const previousFaceCard = previousFaceCards[j];
-                    if (previousFaceCard === undefined) throw new Error();
-                    if (JSON.stringify(faceCard) === JSON.stringify(previousFaceCard)) {
-                        previousFaceCards.splice(j, 1);
+                for (let j = 0; j < previousPlayer.cards.length; ++j) {
+                    if (JSON.stringify(card) === JSON.stringify(previousPlayer.cards[j])) {
                         faceSprite = previousFaceSprites.splice(j, 1)[0];
                         if (faceSprite === undefined) throw new Error();
+
+                        previousPlayer.cards.splice(j, 1);
+
+                        if (j < previousPlayer.shareCount) {
+                            --previousPlayer.shareCount;
+                        }
+
+                        if (j < previousPlayer.revealCount) {
+                            --previousPlayer.revealCount;
+                        }
+
+                        --previousPlayer.totalCount;
+
                         break;
                     }
                 }
@@ -189,8 +205,8 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
             if (faceSprite === undefined) {
                 for (let j = 0; j < 4; ++j) {
-                    const previousOtherPlayer = previousGameState?.otherPlayers[j];
-                    const otherPlayer = gameState.otherPlayers[j];
+                    const previousOtherPlayer = previousGameState?.players[j];
+                    const otherPlayer = gameState.players[j];
                     if (previousOtherPlayer === undefined || previousOtherPlayer === null ||
                         otherPlayer === undefined || otherPlayer === null
                     ) {
@@ -199,17 +215,18 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
                     if (previousOtherPlayer.shareCount > otherPlayer.shareCount) {
                         for (let k = 0; k < previousOtherPlayer.shareCount; ++k) {
-                            if (JSON.stringify(faceCard) === JSON.stringify(previousOtherPlayer.revealedCards[k])) {
-                                --previousOtherPlayer.shareCount;
-                                previousOtherPlayer.revealedCards.splice(k, 1);
-
+                            if (JSON.stringify(card) === JSON.stringify(previousOtherPlayer.cards[k])) {
                                 faceSprite = previousFaceSpritesForPlayer[j]?.splice(k, 1)[0];
                                 if (faceSprite === undefined) throw new Error();
                                 
+                                previousOtherPlayer.shareCount--;
+                                previousOtherPlayer.revealCount--;
+                                previousOtherPlayer.totalCount--;
+                                previousOtherPlayer.cards.splice(k, 1);
+
                                 const sourceTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(j, gameState.playerIndex));
                                 const destinationTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
                                 destinationTransform.invertSelf();
-
                                 let p = sourceTransform.transformPoint(faceSprite.position);
                                 p = destinationTransform.transformPoint(p);
                                 faceSprite.position = new Vector(p.x, p.y);
@@ -229,14 +246,14 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
                 // which, of course, requires that the player had previously hidden cards
                 faceSprite = previousBackSprites.splice(0, 1)[0];
                 if (faceSprite === undefined) throw new Error();
-                faceSprite.image = CardImages.get(JSON.stringify(faceCard));
+                faceSprite.image = CardImages.get(JSON.stringify(card));
             }
 
             if (faceSprite === undefined && previousDeckSprites.length > 0) {
                 // make it look like this card came from the deck;
                 const faceSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                 if (faceSprite === undefined) throw new Error();
-                faceSprite.image = CardImages.get(JSON.stringify(faceCard));
+                faceSprite.image = CardImages.get(JSON.stringify(card));
 
                 // this sprite is rendered in the player's transformed canvas context
                 const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
@@ -246,7 +263,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
             }
 
             if (faceSprite === undefined) {
-                faceSprite = new Sprite(CardImages.get(JSON.stringify(faceCard)));
+                faceSprite = new Sprite(CardImages.get(JSON.stringify(card)));
             }
 
             faceSprites.push(faceSprite);
@@ -262,15 +279,14 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
         let backSprites: Sprite[] = [];
         backSpritesForPlayer[i] = backSprites;
-        const otherPlayer = gameState.otherPlayers[i];
-        if (i !== gameState.playerIndex && otherPlayer !== null && otherPlayer !== undefined) {
-            // only other players have any hidden cards
-            while (backSprites.length < otherPlayer.cardCount - otherPlayer.revealedCards.length) {
+        const player = gameState.players[i];
+        if (player !== null && player !== undefined) {
+            while (backSprites.length < player.totalCount - player.cards.length) {
                 let backSprite: Sprite | undefined = undefined;
                 if (backSprite === undefined) {
                     for (let j = 0; j < 4; ++j) {
-                        const previousOtherPlayer = previousGameState?.otherPlayers[j];
-                        const otherPlayer = gameState.otherPlayers[j];
+                        const previousOtherPlayer = previousGameState?.players[j];
+                        const otherPlayer = gameState.players[j];
                         if (previousOtherPlayer === undefined || previousOtherPlayer === null ||
                             otherPlayer === undefined || otherPlayer === null
                         ) {
@@ -279,7 +295,7 @@ function associateAnimationsWithCards(previousGameState: Lib.GameState | undefin
 
                         if (previousOtherPlayer.shareCount > otherPlayer.shareCount) {
                             previousOtherPlayer.shareCount--;
-                            previousOtherPlayer.revealedCards.splice(0, 1);
+                            previousOtherPlayer.cards.splice(0, 1);
 
                             backSprite = previousFaceSpritesForPlayer[j]?.splice(0, 1)[0];
                             if (backSprite === undefined) throw new Error();
@@ -400,12 +416,15 @@ export function setSpriteTargets(
     const sprites = faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
 
-    const cards = gameState.playerCards;
+    const player = gameState.players[gameState.playerIndex];
+    if (player === undefined || player === null) throw new Error();
+
+    const cards = player.cards;
 
     reservedSpritesAndCards = reservedSpritesAndCards ?? cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
     movingSpritesAndCards = movingSpritesAndCards ?? [];
-    shareCount = shareCount ?? gameState.playerShareCount;
-    revealCount = revealCount ?? gameState.playerRevealCount;
+    shareCount = shareCount ?? player.shareCount;
+    revealCount = revealCount ?? player.revealCount;
     splitIndex = splitIndex ?? cards.length;
     returnToDeck = returnToDeck ?? false;
 
@@ -454,8 +473,8 @@ export function setSpriteTargets(
         }
     }
 
-    gameState.playerShareCount = shareCount;
-    gameState.playerRevealCount = revealCount;
+    player.shareCount = shareCount;
+    player.revealCount = revealCount;
 }
 
 export async function joinGame(gameId: string, playerName: string) {
@@ -515,7 +534,7 @@ export async function returnCardsToDeck(gameState: Lib.GameState) {
     await new Promise<void>((resolve, reject) => {
         addCallback('returnCardsToDeck', resolve, reject);
         ws.send(JSON.stringify(<Lib.ReturnCardsToDeckMessage>{
-            cardsToReturnToDeck: selectedIndices.map(i => gameState.playerCards[i])
+            cardsToReturnToDeck: selectedIndices.map(i => gameState.players[gameState.playerIndex]?.cards[i])
         }));
     });
     
@@ -527,9 +546,9 @@ export function reorderCards(gameState: Lib.GameState) {
     return new Promise<void>((resolve, reject) => {
         addCallback('reorderCards', resolve, reject);
         ws.send(JSON.stringify(<Lib.ReorderCardsMessage>{
-            reorderedCards: gameState.playerCards,
-            newShareCount: gameState.playerShareCount,
-            newRevealCount: gameState.playerRevealCount
+            reorderedCards: gameState?.players[gameState.playerIndex]?.cards,
+            newShareCount: gameState?.players[gameState.playerIndex]?.shareCount,
+            newRevealCount: gameState?.players[gameState.playerIndex]?.revealCount
         }));
     });
 }
@@ -544,9 +563,9 @@ export function sortBySuit(gameState: Lib.GameState) {
     };
 
     previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
+    //sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
+    //sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
+    //sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
     associateAnimationsWithCards(gameState, previousGameState);
     return reorderCards(gameState);
 }
@@ -561,9 +580,9 @@ export function sortByRank(gameState: Lib.GameState) {
     };
 
     previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
+    //sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
+    //sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
+    //sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
     associateAnimationsWithCards(gameState, previousGameState);
     return reorderCards(gameState);
 }
