@@ -121,6 +121,7 @@ function getMousePosition(e: HasClientPosition) {
     );
 }
 
+let previousTouch: Touch | undefined;
 VP.canvas.onmousedown = async event => {
     await onDown(event);
 }
@@ -129,6 +130,7 @@ VP.canvas.ontouchstart = async event => {
     const touch = event.touches[0];
     if (touch !== undefined) {
         await onDown(touch);
+        previousTouch = touch;
     }
 };
 
@@ -243,7 +245,6 @@ VP.canvas.onmousemove = async event => {
     await onMove(event, event);
 };
 
-let previousTouch: Touch | undefined;
 VP.canvas.ontouchmove = async event => {
     const touch = event.touches[0];
     if (touch !== undefined) {

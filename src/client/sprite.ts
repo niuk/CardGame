@@ -1,7 +1,7 @@
 import Vector from './vector';
 import * as VP from './view-params';
 
-const springConstant = 1000;
+const springConstant = 33;
 const mass = 1;
 const drag = Math.sqrt(4 * mass * springConstant);
 
@@ -23,8 +23,8 @@ export default class Sprite {
 
     animate(deltaTime: number) {
         const springForce = this.target.sub(this.position).scale(springConstant);
-        const dragForce = this.velocity.scale(-drag);
-        const acceleration = springForce.add(dragForce).scale(1 / mass);
+        const dragForce = this.velocity.scale(drag);
+        const acceleration = springForce.sub(dragForce).scale(1 / mass);
 
         //const savedVelocity = this.velocity;
         //const savedPosition = this.position;

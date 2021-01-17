@@ -10,26 +10,35 @@ const deckDealDuration = 1000;
 let deckDealTime: number | undefined = undefined;
 let currentTime: number | undefined = undefined;
 
+const frameInterval = 1000 / 10;
 export async function render(time: number) {
+    if (currentTime === undefined) {
+        currentTime = time;
+    }
+
     while (State.gameState === undefined) {
         await Lib.delay(100);
     }
 
-    const deltaTime = time - (currentTime !== undefined ? currentTime : time);
-    currentTime = time;
+    const deltaTime = time - currentTime;
+    if (deltaTime < frameInterval) {
+        await Lib.delay(frameInterval - deltaTime);
+    } else {
+        currentTime = time;
 
-    const unlock = await State.lock();
-    try {
-        // clear the screen
-        VP.context.clearRect(0, 0, VP.canvas.width, VP.canvas.height);
+        const unlock = await State.lock();
+        try {
+            // clear the screen
+            VP.context.clearRect(0, 0, VP.canvas.width, VP.canvas.height);
 
-        renderBasics(State.gameId, State.playerName);
-        renderDeck(time, deltaTime, State.gameState.deckCount);
-        renderOtherPlayers(deltaTime, State.gameState);
-        renderPlayer(deltaTime, State.gameState);
-        renderButtons(time, State.gameState);
-    } finally {
-        unlock();
+            renderBasics(State.gameId, State.playerName);
+            renderDeck(time, deltaTime, State.gameState.deckCount);
+            renderOtherPlayers(deltaTime, State.gameState);
+            renderPlayer(deltaTime, State.gameState);
+            renderButtons(time, State.gameState);
+        } finally {
+            unlock();
+        }
     }
 
     window.requestAnimationFrame(render);
