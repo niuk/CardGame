@@ -12,7 +12,6 @@ export default class Sprite {
         this.image = image;
         this.target = new Vector(0, 0);
         this.position = new Vector(0, 0);
-        //this.velocity = new Vector(0, 0);
     }
 
     animate(deltaTime: number) {
@@ -20,6 +19,10 @@ export default class Sprite {
             1 - Math.pow(1 - decayPerSecond, deltaTime)
         ));
 
-        VP.context.drawImage(this.image, this.position.x, this.position.y, VP.spriteWidth, VP.spriteHeight);
+        VP.context.drawImage(
+            this.image,
+            0, 0, VP.spriteWidth, VP.spriteHeight,
+            this.position.x, this.position.y, VP.spriteWidth, VP.spriteHeight
+        );
     }
 }

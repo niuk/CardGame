@@ -578,7 +578,7 @@ function sortCards(
     section.sort(compareFn);
     cards.splice(start, end - start, ...section);
 }
-
+/*
 export function wait() {
     return new Promise<void>((resolve, reject) => {
         addCallback('wait', resolve, reject);
@@ -596,3 +596,4 @@ export function proceed() {
         }));
     });
 }
+*/

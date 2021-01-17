@@ -113,8 +113,8 @@ function renderDeck(time: number, deltaTime: number, deckCount: number) {
                 Input.action !== "None" &&
                 Input.action !== "SortBySuit" &&
                 Input.action !== "SortByRank" &&
-                Input.action !== "Wait" &&
-                Input.action !== "Proceed" &&
+                //Input.action !== "Wait" &&
+                //Input.action !== "Proceed" &&
                 Input.action !== "Deselect" && (
                 Input.action.type === "DrawFromDeck" ||
                 Input.action.type === "WaitingForNewCard"

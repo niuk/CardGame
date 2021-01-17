@@ -62,8 +62,8 @@ export type Action =
     "None" |
     "SortBySuit" |
     "SortByRank" |
-    "Wait" |
-    "Proceed" |
+    //"Wait" |
+    //"Proceed" |
     "Deselect" |
     TakeFromOtherPlayer |
     DrawFromDeck |
@@ -152,7 +152,7 @@ async function onDown(event: HasClientPosition) {
             VP.sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortBySuitBounds[1].y
         ) {
             action = "SortBySuit";
-        } else if (
+        } /*else if (
             VP.waitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.waitBounds[1].x &&
             VP.waitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.waitBounds[1].y
         ) {
@@ -162,7 +162,7 @@ async function onDown(event: HasClientPosition) {
             VP.proceedBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.proceedBounds[1].y
         ) {
             action = "Proceed";
-        } else if (deckPosition !== undefined &&
+        } */else if (deckPosition !== undefined &&
             deckPosition.x < mouseDownPosition.x && mouseDownPosition.x < deckPosition.x + VP.spriteWidth &&
             deckPosition.y < mouseDownPosition.y && mouseDownPosition.y < deckPosition.y + VP.spriteHeight
         ) {
@@ -271,11 +271,11 @@ async function onMove(event: HasClientPosition, movement: HasMovement) {
             // TODO: check whether mouse position has left button bounds
         } else if (action === "SortByRank") {
             // TODO: check whether mouse position has left button bounds
-        } else if (action === "Wait") {
+        } /*else if (action === "Wait") {
             // TODO: check whether mouse position has left button bounds
         } else if (action === "Proceed") {
             // TODO: check whether mouse position has left button bounds
-        } else if (action === "Deselect") {
+        } */else if (action === "Deselect") {
             // TODO: box selection?
         } else if (
             action.type === "TakeFromOtherPlayer" ||
@@ -310,8 +310,8 @@ async function onMove(event: HasClientPosition, movement: HasMovement) {
                             action !== "Deselect" &&
                             action !== "SortByRank" &&
                             action !== "SortBySuit" &&
-                            action !== "Wait" &&
-                            action !== "Proceed" &&
+                            //action !== "Wait" &&
+                            //action !== "Proceed" &&
                             action.type === "WaitingForNewCard"
                         ) {
                             action = "None";
@@ -379,13 +379,13 @@ async function onUp() {
             await State.sortByRank(gameState);
         } else if (action === "SortBySuit") {
             await State.sortBySuit(gameState);
-        } else if (action === "Wait") {
+        } /*else if (action === "Wait") {
             console.log('waiting');
             await State.wait();
         } else if (action === "Proceed") {
             console.log('proceeding');
             await State.proceed();
-        } else if (action === "Deselect") {
+        } */else if (action === "Deselect") {
             State.selectedIndices.splice(0, State.selectedIndices.length);
         } else if (action.type === "DrawFromDeck" || action.type === "WaitingForNewCard") {
             // do nothing
@@ -450,8 +450,8 @@ function onCardDrawn(deckSprite: Sprite) {
             if (action !== "None" &&
                 action !== "SortBySuit" &&
                 action !== "SortByRank" &&
-                action !== "Wait" &&
-                action !== "Proceed" &&
+                //action !== "Wait" &&
+                //action !== "Proceed" &&
                 action !== "Deselect" &&
                 action.type === "WaitingForNewCard"
             ) {

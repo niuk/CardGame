@@ -114,7 +114,7 @@ export interface ReorderCardsMessage {
     newShareCount: number;
     newRevealCount: number;
 }
-
+/*
 export interface WaitMessage {
     wait: null;
 }
@@ -122,3 +122,4 @@ export interface WaitMessage {
 export interface ProceedMessage {
     proceed: null;
 }
+*/
