@@ -465,7 +465,7 @@ function onCardDrawn(deckSprite: Sprite) {
                 if (faceSpriteAtMouseDown === undefined) throw new Error();
                 faceSpriteAtMouseDown.target = deckSprite.position;
                 faceSpriteAtMouseDown.position = deckSprite.position;
-                faceSpriteAtMouseDown.velocity = deckSprite.velocity;
+                //faceSpriteAtMouseDown.velocity = deckSprite.velocity;
                 
                 drag(gameState, cardIndex, action.mousePositionToSpritePosition);
             }
