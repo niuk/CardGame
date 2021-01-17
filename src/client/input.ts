@@ -104,14 +104,35 @@ window.onkeyup = (e: KeyboardEvent) => {
     }
 };
 
-function getMousePosition(e: MouseEvent) {
+interface HasClientPosition {
+    clientX: number;
+    clientY: number;
+}
+
+interface HasMovement {
+    movementX: number;
+    movementY: number;
+}
+
+function getMousePosition(e: HasClientPosition) {
     return new Vector(
         VP.canvas.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
         VP.canvas.height * (e.clientY - VP.canvasRect.top) / VP.canvasRect.height
     );
 }
 
-VP.canvas.onmousedown = async (event: MouseEvent) => {
+VP.canvas.onmousedown = async event => {
+    await onDown(event);
+}
+
+VP.canvas.ontouchstart = async event => {
+    const touch = event.touches[0];
+    if (touch !== undefined) {
+        await onDown(touch);
+    }
+};
+
+async function onDown(event: HasClientPosition) {
     const unlock = await State.lock();
     try {
         mouseDownPosition = getMousePosition(event);
@@ -216,9 +237,26 @@ VP.canvas.onmousedown = async (event: MouseEvent) => {
     } finally {
         unlock();
     }
+}
+
+VP.canvas.onmousemove = async event => {
+    await onMove(event, event);
 };
 
-VP.canvas.onmousemove = async (event: MouseEvent) => {
+let previousTouch: Touch | undefined;
+
+VP.canvas.ontouchmove = async event => {
+    const touch = event.touches[0];
+    if (touch !== undefined) {
+        await onMove(touch, {
+            movementX: touch.clientX - (previousTouch?.clientX ?? touch.clientX),
+            movementY: touch.clientY - (previousTouch?.clientY ?? touch.clientY)
+        });
+        previousTouch = touch;
+    }
+};
+
+async function onMove(event: HasClientPosition, movement: HasMovement) {
     const gameState = State.gameState;
     if (gameState === undefined) return;
 
@@ -304,12 +342,12 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
                 if (i < 0) {
                     const sprite = sprites[action.cardIndex];
                     if (sprite === undefined) throw new Error();
-                    sprite.target = sprite.target.add(new Vector(event.movementX, event.movementY));
+                    sprite.target = sprite.target.add(new Vector(movement.movementX, movement.movementY));
                 } else {
                     for (const j of State.selectedIndices) {
                         const sprite = sprites[j];
                         if (sprite === undefined) throw new Error();
-                        sprite.target = sprite.target.add(new Vector(event.movementX, event.movementY));
+                        sprite.target = sprite.target.add(new Vector(movement.movementX, movement.movementY));
                     }
                 }
             }
@@ -321,7 +359,18 @@ VP.canvas.onmousemove = async (event: MouseEvent) => {
     }
 };
 
-VP.canvas.onmouseup = async () => {
+VP.canvas.onmouseup = async event => {
+    await onUp(event);
+};
+
+VP.canvas.ontouchend = async event => {
+    const touch = event.touches[0];
+    if (touch !== undefined) {
+        onUp(touch);
+    }
+};
+
+async function onUp(event: HasClientPosition, ) {
     const gameState = State.gameState;
     if (gameState === undefined) return;
 
