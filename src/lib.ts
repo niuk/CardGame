@@ -49,77 +49,76 @@ export enum Rank {
 
 export type Card = [Suit, Rank];
 
-export type PlayerState = "Wait" | "Proceed" | "Ready" | Active;
-
-export interface Active {
-    type: "Active";
-    activeTime: number;
-}
-
-export const activeCooldown = 10000; //milliseconds
-
-export interface OtherPlayer {
+export interface PlayerState {
     name: string;
     shareCount: number;
-    revealedCards: Card[];
-    cardCount: number;
-    //state: PlayerState;
+    revealCount: number;
+    totalCount: number;
+    cards: Card[];
 }
 
 export interface GameState {
     deckCount: number;
     playerIndex: number;
-    playerCards: Card[];
-    playerShareCount: number;
-    playerRevealCount: number;
-    //playerState: PlayerState;
-    otherPlayers: (OtherPlayer | null)[];
+    playerStates: (PlayerState | null)[];
 }
 
-export type MethodName =
-    "joinGame" |
-    "takeCard" |
-    "drawCard" |
-    "returnCardsToDeck" |
-    "reorderCards" |
-    "wait" |
-    "proceed";
+export type Method =
+    SetName |
+    NewGame |
+    JoinGame |
+    TakeCard |
+    DrawCard |
+    ReturnCardsToDeck |
+    ReorderCards;
 
-export interface MethodResult {
+export type MethodName =
+    'SetName' |
+    'NewGame' |
+    'JoinGame' |
+    'TakeCard' |
+    'DrawCard' |
+    'ReturnCardsToDeck' |
+    'ReorderCards';
+
+export interface Result {
     methodName: MethodName;
     errorDescription?: string;
 }
 
-export interface JoinGameMessage {
-    gameId: string;
+export interface SetName {
+    methodName: 'SetName';
     playerName: string;
 }
 
-export interface TakeCardMessage {
+export interface NewGame {
+    methodName: 'NewGame';
+}
+
+export interface JoinGame {
+    methodName: 'JoinGame';
+    gameId: string;
+}
+
+export interface TakeCard {
+    methodName: 'TakeCard';
     otherPlayerIndex: number;
     cardIndex: number;
     card: Card;
 }
 
-export interface DrawCardMessage {
-    drawCard: null;
+export interface DrawCard {
+    methodName: 'DrawCard';
 }
 
-export interface ReturnCardsToDeckMessage {
+export interface ReturnCardsToDeck {
+    methodName: 'ReturnCardsToDeck'
     cardsToReturnToDeck: Card[];
 }
 
-export interface ReorderCardsMessage {
+export interface ReorderCards {
+    methodName: 'ReorderCards';
     reorderedCards: Card[];
     newShareCount: number;
     newRevealCount: number;
 }
-/*
-export interface WaitMessage {
-    wait: null;
-}
-
-export interface ProceedMessage {
-    proceed: null;
-}
-*/

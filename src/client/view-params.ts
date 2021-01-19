@@ -1,7 +1,9 @@
+import * as PIXI from 'pixi.js'
 import Vector from './vector';
 
-export const canvas = <HTMLCanvasElement>document.getElementById('canvas');
-export const context = <CanvasRenderingContext2D>canvas.getContext('2d');
+// setup according to https://www.npmjs.com/package/pixi.js/v/5.0.0-rc
+export const app = new PIXI.Application();
+document.body.appendChild(app.view);
 
 // get pixels per centimeter, which is constant
 const testElement = document.createElement('div');
@@ -11,7 +13,6 @@ export const pixelsPerCM = testElement.offsetWidth;
 document.body.removeChild(testElement);
 
 // these parameters change with resizing
-export let canvasRect = canvas.getBoundingClientRect();
 export let pixelsPerPercent = 0;
 
 export let spriteWidth: number;
@@ -38,10 +39,7 @@ export let countdownFont: string;
 export let countdownBounds: [Vector, Vector];
 
 export function recalculateParameters() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - 0.5 * pixelsPerCM;
-    canvasRect = canvas.getBoundingClientRect();
-
+/*
     pixelsPerPercent = canvas.height / 100;
     spriteWidth = 12 * pixelsPerPercent;
     spriteHeight = 18 * pixelsPerPercent;
@@ -67,8 +65,9 @@ export function recalculateParameters() {
     const countdownPosition = new Vector(canvas.width - 3.5 * spriteHeight, canvas.height - 2 * spriteHeight / 3);
     countdownFont = `${spriteHeight / 2}px Sugarlike`;
     countdownBounds = [countdownPosition, getBottomRight('Waiting 10 seconds...', countdownFont, countdownPosition)];
+*/
 }
-
+/*
 function getBottomRight(text: string, font: string, position: Vector): Vector {
     context.font = font;
     context.textBaseline = 'top';
@@ -99,7 +98,7 @@ export function getTransformForPlayer(relativeIndex: number): DOMMatrix {
         context.restore();
     }
 }
-
+*/
 export function getRelativePlayerIndex(otherPlayerIndex: number, playerIndex: number) {
     let relativeIndex = otherPlayerIndex - playerIndex;
     if (relativeIndex >= 0) {

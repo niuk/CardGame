@@ -25,7 +25,7 @@ export async function render(time: number) {
     const unlock = await State.lock();
     try {
         // clear the screen
-        VP.context.clearRect(0, 0, VP.canvas.width, VP.canvas.height);
+        //VP.context.clearRect(0, 0, VP.canvas.width, VP.canvas.height);
 
         renderBasics(State.gameId, State.playerName);
         renderDeck(time, deltaTime, State.gameState.deckCount);
@@ -83,6 +83,7 @@ function wiggleText(s: string, x: number, y: number) {
 }
 */
 function renderBasics(gameId: string, playerName: string) {
+/*
     VP.context.fillStyle = '#000000ff';
     VP.context.textAlign = 'left';
     VP.context.font = `${VP.spriteHeight / 4}px Sugarlike`;
@@ -96,49 +97,46 @@ function renderBasics(gameId: string, playerName: string) {
 
     VP.context.setLineDash([4, 1]);
     VP.context.strokeRect(VP.spriteHeight, VP.spriteHeight, VP.canvas.width - 2 * VP.spriteHeight, VP.canvas.height - 2 * VP.spriteHeight);
+*/
 }
 
 function renderDeck(time: number, deltaTime: number, deckCount: number) {
-    VP.context.save();
-    try {
-        if (deckDealTime === undefined) {
-            deckDealTime = time;
+    if (deckDealTime === undefined) {
+        deckDealTime = time;
+    }
+
+    for (let i = 0; i < State.deckSprites.length; ++i) {
+        const deckSprite = State.deckSprites[i];
+        if (deckSprite === undefined) throw new Error();
+
+        if (i === deckCount - 1 &&
+            Input.action !== "None" &&
+            Input.action !== "SortBySuit" &&
+            Input.action !== "SortByRank" &&
+            //Input.action !== "Wait" &&
+            //Input.action !== "Proceed" &&
+            Input.action !== "Deselect" && (
+            Input.action.type === "DrawFromDeck" ||
+            Input.action.type === "WaitingForNewCard"
+        )) {
+            // set in onmousemove
+        } else if (time - deckDealTime < i * deckDealDuration / deckCount) {
+            // card not yet dealt; keep top left
+            deckSprite.position = new Vector(-VP.spriteWidth, -VP.spriteHeight);
+            deckSprite.target = new Vector(-VP.spriteWidth, -VP.spriteHeight);
+        } else {
+            deckSprite.target = new Vector(
+                VP.app.view.width / 2 - VP.spriteWidth / 2 - (i - deckCount / 2) * VP.spriteDeckGap,
+                VP.app.view.height / 2 - VP.spriteHeight / 2
+            );
         }
 
-        for (let i = 0; i < State.deckSprites.length; ++i) {
-            const deckSprite = State.deckSprites[i];
-            if (deckSprite === undefined) throw new Error();
-
-            if (i === deckCount - 1 &&
-                Input.action !== "None" &&
-                Input.action !== "SortBySuit" &&
-                Input.action !== "SortByRank" &&
-                //Input.action !== "Wait" &&
-                //Input.action !== "Proceed" &&
-                Input.action !== "Deselect" && (
-                Input.action.type === "DrawFromDeck" ||
-                Input.action.type === "WaitingForNewCard"
-            )) {
-                // set in onmousemove
-            } else if (time - deckDealTime < i * deckDealDuration / deckCount) {
-                // card not yet dealt; keep top left
-                deckSprite.position = new Vector(-VP.spriteWidth, -VP.spriteHeight);
-                deckSprite.target = new Vector(-VP.spriteWidth, -VP.spriteHeight);
-            } else {
-                deckSprite.target = new Vector(
-                    VP.canvas.width / 2 - VP.spriteWidth / 2 - (i - deckCount / 2) * VP.spriteDeckGap,
-                    VP.canvas.height / 2 - VP.spriteHeight / 2
-                );
-            }
-
-            deckSprite.animate(deltaTime);
-        }
-    } finally {
-        VP.context.restore();
+        deckSprite.animate(deltaTime);
     }
 }
 
 function renderOtherPlayers(deltaTime: number, gameState: Lib.GameState) {
+    /*
     VP.context.save();
     try {
         VP.context.setTransform(VP.getTransformForPlayer(1));
@@ -166,6 +164,7 @@ function renderOtherPlayers(deltaTime: number, gameState: Lib.GameState) {
     } finally {
         VP.context.restore();
     }
+    */
 }
 
 function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIndex: number) {
@@ -177,12 +176,12 @@ function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIn
     for (const faceSprite of faceSprites) {
         if (i < player.shareCount) {
             faceSprite.target = new Vector(
-                VP.canvas.width / 2 + (player.shareCount - i) * VP.spriteGap,
+                VP.app.view.width / 2 + (player.shareCount - i) * VP.spriteGap,
                 VP.spriteHeight + VP.spriteGap
             );
         } else {
             faceSprite.target = new Vector(
-                VP.canvas.width / 2 - VP.spriteWidth - (i - player.shareCount) * VP.spriteGap,
+                VP.app.view.width / 2 - VP.spriteWidth - (i - player.shareCount) * VP.spriteGap,
                 VP.spriteHeight
             );
         }
@@ -195,17 +194,19 @@ function renderOtherPlayer(deltaTime: number, gameState: Lib.GameState, playerIn
     const backSprites = State.backSpritesForPlayer[playerIndex] ?? [];
     i = 0;
     for (const backSprite of backSprites) {
-        backSprite.target = new Vector(VP.canvas.width / 2 - VP.spriteWidth / 2 + (i - backSprites.length / 2) * VP.spriteGap, 0);
+        backSprite.target = new Vector(VP.app.view.width / 2 - VP.spriteWidth / 2 + (i - backSprites.length / 2) * VP.spriteGap, 0);
         backSprite.animate(deltaTime);
 
         ++i;
     }
     
+    /*
     VP.context.fillStyle = '#000000ff';
     VP.context.font = `${VP.spriteHeight / 2}px Sugarlike`;
     VP.context.textBaseline = "middle";
     VP.context.textAlign = "center";
     VP.context.fillText(player.name, VP.canvas.width / 2, VP.spriteHeight / 2);
+    */
 }
 
 // returns the adjusted reveal index
@@ -217,19 +218,22 @@ function renderPlayer(deltaTime: number, gameState: Lib.GameState) {
     for (const sprite of sprites) {
         sprite.animate(deltaTime);
 
+        /*
         if (Lib.binarySearchNumber(State.selectedIndices, i++) >= 0) {
             VP.context.fillStyle = '#00808040';
             VP.context.fillRect(sprite.position.x, sprite.position.y, VP.spriteWidth, VP.spriteHeight);
         }
+        */
     }
 }
 
 function renderButtons(time: number, gameState: Lib.GameState) {
+    /*
     VP.context.save();
     try {
         // blur image behind
         //stackBlurCanvasRGBA('canvas', x, y, canvas.width - x, canvas.height - y, 16);
-        /*
+        
         const x = VP.sortBySuitBounds[0].x - 4 * VP.pixelsPerCM;
         const y = VP.sortBySuitBounds[0].y;
         VP.context.fillStyle = '#00ffff77';
@@ -247,7 +251,7 @@ function renderButtons(time: number, gameState: Lib.GameState) {
 
         VP.context.font = '1.5cm Sugarlike';
         VP.context.fillText('RANK', VP.sortByRankBounds[0].x, VP.sortByRankBounds[1].y);
-        */
+        
         //context.fillStyle = '#ff000077';
         //context.fillRect(VP.sortBySuitBounds[0].x, VP.sortBySuitBounds[0].y,
             //sortBySuitBounds[1].x - sortBySuitBounds[0].x, sortBySuitBounds[1].y - sortBySuitBounds[0].y);
@@ -256,7 +260,7 @@ function renderButtons(time: number, gameState: Lib.GameState) {
         //context.fillRect(sortByRankBounds[0].x, sortByRankBounds[0].y,
             //sortByRankBounds[1].x - sortByRankBounds[0].x, sortByRankBounds[1].y - sortByRankBounds[0].y);
 
-        /*if (gameState.playerState === "Proceed" || gameState.playerState === "Wait") {
+        if (gameState.playerState === "Proceed" || gameState.playerState === "Wait") {
             VP.context.textBaseline = 'top';
 
             if (gameState.playerState === "Wait") {
@@ -296,12 +300,15 @@ function renderButtons(time: number, gameState: Lib.GameState) {
                     Math.floor(1 + (gameState.playerState.activeTime + Lib.activeCooldown - Date.now()) / 1000)
                 } seconds...`, VP.countdownBounds[0].x, VP.countdownBounds[0].y);
             }
-        }*/
+        }
     } finally {
         VP.context.restore();
     }
+    */
 }
 
+/*
 function boundsRect([topLeft, bottomRight]: [Vector, Vector]) {
     VP.context.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
 }
+*/

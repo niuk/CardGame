@@ -1,3 +1,4 @@
+import * as PIXI from 'pixi.js';
 import * as Lib from '../lib';
 import * as VP from './view-params';
 import Vector from './vector';
@@ -8,14 +9,36 @@ const colors = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
 const suits = ['Club', 'Diamond', 'Heart', 'Spade', 'Joker'];
 
 export default class Sprite {
-    image: HTMLImageElement;
     target: Vector;
     position: Vector;
+    pixiSprite: PIXI.Sprite;
 
-    public constructor(image: HTMLImageElement) {
-        this.image = image;
+    get texture() {
+        return this.pixiSprite.texture;
+    }
+
+    set texture(value: PIXI.Texture) {
+        this.pixiSprite.texture = value;
+    }
+
+    public constructor(texture: PIXI.Texture) {
         this.target = new Vector(0, 0);
         this.position = new Vector(0, 0);
+        this.pixiSprite = new PIXI.Sprite(texture);
+        this.pixiSprite.interactive = true;
+        this.pixiSprite.on("added", displayObject => {
+            displayObject.on("mousedown", event => {
+
+            });
+            
+            displayObject.on("mousemove", event => {
+
+            });
+
+            displayObject.on("mouseup", event => {
+
+            });
+        });
     }
 
     animate(deltaTime: number) {
@@ -23,16 +46,19 @@ export default class Sprite {
             1 - Math.pow(1 - decayPerSecond, deltaTime)
         ));
 
+        this.pixiSprite.position.set(this.position.x, this.position.y);
+/*
         VP.context.drawImage(
             this.image,
             397, 54, 1248, 1935,
             this.position.x, this.position.y, VP.spriteWidth, VP.spriteHeight
         );
+*/
     }
 
-    private static images = new Map<string, HTMLImageElement>();
+    private static images = new Map<string, PIXI.Texture>();
 
-    static getImage(stringForCard: string) {
+    static getTexture(stringForCard: string) {
         const image = this.images.get(stringForCard);
         if (image === undefined) {
             throw new Error(`couldn't get sprite '${stringForCard}'`);
@@ -42,13 +68,11 @@ export default class Sprite {
     }
 
     private static async loadImage(key: string, src: string) {
-        const image = new Image();
-        image.src = src;
         await new Promise(resolve => {
-            image.onload = resolve;
+            VP.app.loader.add(src).load(resolve);
         });
-        console.log(`loaded ${image.src}`);
-        this.images.set(key, image);
+
+        this.images.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src)));
     }
 
     static async load() {

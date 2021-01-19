@@ -113,14 +113,14 @@ interface HasMovement {
     movementX: number;
     movementY: number;
 }
-
 function getMousePosition(e: HasClientPosition) {
+    return new Vector(0, 0);/*
     return new Vector(
-        VP.canvas.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
-        VP.canvas.height * (e.clientY - VP.canvasRect.top) / VP.canvasRect.height
-    );
+        VP.app.view.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
+        VP.app.view.height * (e.clientY - VP.canvasRect.top) / VP.canvasRect.height
+    );*/
 }
-
+/*
 let previousTouch: Touch | undefined;
 VP.canvas.onmousedown = async event => {
     await onDown(event);
@@ -133,7 +133,7 @@ VP.canvas.ontouchstart = async event => {
         previousTouch = touch;
     }
 };
-
+*/
 async function onDown(event: HasClientPosition) {
     const unlock = await State.lock();
     try {
@@ -202,6 +202,7 @@ async function onDown(event: HasClientPosition) {
             for (let i = 0; i < 4; ++i) {
                 const otherPlayer = gameState.otherPlayers[i];
                 if (otherPlayer !== null && otherPlayer !== undefined) {
+                    /*
                     const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
                     transform.invertSelf();
                     const transformedPosition = transform.transformPoint(mouseDownPosition);
@@ -229,6 +230,7 @@ async function onDown(event: HasClientPosition) {
                             break;
                         }
                     }
+                    */
                 }
             }
 
@@ -240,7 +242,7 @@ async function onDown(event: HasClientPosition) {
         unlock();
     }
 }
-
+/*
 VP.canvas.onmousemove = async event => {
     await onMove(event, event);
 };
@@ -255,7 +257,7 @@ VP.canvas.ontouchmove = async event => {
         previousTouch = touch;
     }
 };
-
+*/
 async function onMove(event: HasClientPosition, movement: HasMovement) {
     const gameState = State.gameState;
     if (gameState === undefined) return;
@@ -358,7 +360,7 @@ async function onMove(event: HasClientPosition, movement: HasMovement) {
         unlock();
     }
 };
-
+/*
 VP.canvas.onmouseup = async event => {
     await onUp();
 };
@@ -366,7 +368,7 @@ VP.canvas.onmouseup = async event => {
 VP.canvas.ontouchend = async event => {
     await onUp();
 };
-
+*/
 async function onUp() {
     const gameState = State.gameState;
     if (gameState === undefined) return;
@@ -521,9 +523,9 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         throw new Error();
     }
 
-    const deckDistance = Math.abs(leftMovingSprite.target.y - (VP.canvas.height / 2 - VP.spriteHeight / 2));
-    const revealDistance = Math.abs(leftMovingSprite.target.y - (VP.canvas.height - 2 * VP.spriteHeight));
-    const hideDistance = Math.abs(leftMovingSprite.target.y - (VP.canvas.height - VP.spriteHeight));
+    const deckDistance = Math.abs(leftMovingSprite.target.y - (VP.app.view.height / 2 - VP.spriteHeight / 2));
+    const revealDistance = Math.abs(leftMovingSprite.target.y - (VP.app.view.height - 2 * VP.spriteHeight));
+    const hideDistance = Math.abs(leftMovingSprite.target.y - (VP.app.view.height - VP.spriteHeight));
 
     // set the action for onmouseup
     if (deckDistance < revealDistance && deckDistance < hideDistance) {
@@ -540,13 +542,13 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         let start: number;
         let end: number;
         if (splitRevealed) {
-            if (leftMovingSprite.target.x < VP.canvas.width / 2 &&
-                VP.canvas.width / 2 < rightMovingSprite.target.x + VP.spriteWidth
+            if (leftMovingSprite.target.x < VP.app.view.width / 2 &&
+                VP.app.view.width / 2 < rightMovingSprite.target.x + VP.spriteWidth
             ) {
                 splitIndex = shareCount;
             }
             
-            splitShared = (leftMovingSprite.target.x + rightMovingSprite.target.x + VP.spriteWidth) / 2 < VP.canvas.width / 2;
+            splitShared = (leftMovingSprite.target.x + rightMovingSprite.target.x + VP.spriteWidth) / 2 < VP.app.view.width / 2;
             if (splitShared) {
                 start = 0;
                 end = shareCount;
