@@ -45,18 +45,6 @@ export default class Game {
         this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Small]);
     }
 
-    public addPlayer(player: Player) {
-        if (!this.players.includes(player)) {
-            player.game = this;
-            player.index = this.players.length;
-            this.players.push(player);
-        }
-    }
-
-    public removePlayer(player: Player) {
-        this.players[this.players.indexOf(player)] = undefined;
-    }
-
     public broadcastState() {
         for (const player of this.players) {
             player.sendState();

@@ -6,7 +6,7 @@ import Game from './game.js';
 export default class Player {
     ws: WebSocket;
 
-    game: Game | null = null;
+    game: Game | undefined = undefined;
     name = '';
     index = -1;
     cards: Lib.Card[] = [];
@@ -41,7 +41,7 @@ export default class Player {
     }
 
     public sendState() {
-        if (this.game === null) {
+        if (!this.game) {
             throw new Error(`player '${this.name}' is not in a game`);
         }
 
@@ -78,24 +78,31 @@ export default class Player {
         if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
         } else if (method.methodName === 'NewGame') {
-            const game = new Game();
-            game.players.push(this);
+            this.game = new Game();
+            this.game.players.push(this);
             this.index = 0;
         } else if (method.methodName === 'JoinGame') {
-            const game = Game.get(method.gameId);
-            if (!game.players.includes(this)) {
-                this.game = game;
-                for (let i = 0; i < game.players.length; ++i) {
-                    if (game.players[i] === undefined) {
-                        game.players[i] = this;
-                        this.index = i;
-                    }
-                }
+            this.game = Game.get(method.gameId);
 
-                throw new Error(`Game '${game.gameId}' `);
+            for (let i = 0; i < this.game.players.length; ++i) {
+                const player = this.game.players[i];
+                if (player !== undefined && player.name === this.name) {
+                    this.game.players[i] = this;
+                    this.index = i;
+                }
             }
+
+            for (let i = 0; i < this.game.players.length; ++i) {
+                const player = this.game.players[i];
+                if (this.game.players[i] === undefined) {
+                    this.game.players[i] = this;
+                    this.index = i;
+                }
+            }
+
+            throw new Error(`could not join game '${this.game.gameId}'`);
         } else {
-            if (this.game === null) throw new Error('you are not in a game');
+            if (!this.game) throw new Error('you are not in a game');
 
             if (method.methodName === 'TakeCard') {
                 const otherPlayer = this.game.players[method.otherPlayerIndex];
@@ -208,6 +215,13 @@ export default class Player {
     }
 
     private leaveGame() {
-        this.game.removePlayer(this);
+        if (this.game) {
+            const index = this.game.players.indexOf(this);
+            if (index >= 0) {
+                this.game.players.splice(index, 1);
+                this.index = -1;
+                this.game = undefined;
+            }
+        }
     }
 }

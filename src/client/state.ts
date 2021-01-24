@@ -25,7 +25,10 @@ export let playerContainers = [
     Sprite.app.stage.addChild(new PIXI.Container())
 ];
 
+Sprite.app.stage.sortableChildren = true;
+deckContainer.zIndex = 0;
 for (const playerContainer of playerContainers) {
+    playerContainer.zIndex = 1;
     playerContainer.sortableChildren = true;
 }
 
