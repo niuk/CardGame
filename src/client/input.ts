@@ -1,12 +1,12 @@
 import * as Lib from '../lib';
 import * as State from './state';
-import * as VP from './view-params';
-import Vector from './vector';
+import * as Client from './client';
+import * as V from './vector';
 import Sprite from './sprite';
 
 interface TakeFromOtherPlayer {
     type: "TakeFromOtherPlayer";
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
     otherPlayerIndex: number;
     cardIndex: number;
     card: Lib.Card;
@@ -14,48 +14,48 @@ interface TakeFromOtherPlayer {
 
 interface DrawFromDeck {
     type: "DrawFromDeck";
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface WaitingForNewCard {
     type: "WaitingForNewCard";
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface ReturnToDeck {
     type: "ReturnToDeck";
     cardIndex: number;
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface Reorder {
     type: "Reorder";
     cardIndex: number;
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface ControlShiftClick {
     type: "ControlShiftClick";
     cardIndex: number;
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface ControlClick {
     type: "ControlClick";
     cardIndex: number;
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface ShiftClick {
     type: "ShiftClick";
     cardIndex: number;
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 interface Click {
     type: "Click";
     cardIndex: number;
-    mousePositionToSpritePosition: Vector;
+    mousePositionToSpritePosition: V.IVector2;
 }
 
 export type Action =
@@ -76,18 +76,19 @@ export type Action =
     Click;
 
 const doubleClickThreshold = 500; // milliseconds
-const moveThreshold = 0.5 * VP.pixelsPerCM;
+const moveThreshold = 0.5 * Sprite.pixelsPerCM;
 
 export let action: Action = "None";
 
 let previousClickTime = -1;
 let previousClickIndex = -1;
-let mouseDownPosition = <Vector>{ x: 0, y: 0 };
-let mouseMovePosition = <Vector>{ x: 0, y: 0 };
+let mouseDownPosition = { x: 0, y: 0 };
+let mouseMovePosition = { x: 0, y: 0 };
 let exceededDragThreshold = false;
 
 let holdingControl = false;
 let holdingShift = false;
+
 window.onkeydown = (e: KeyboardEvent) => {
     if (e.key === "Control") {
         holdingControl = true;
@@ -104,391 +105,266 @@ window.onkeyup = (e: KeyboardEvent) => {
     }
 };
 
-interface HasClientPosition {
-    clientX: number;
-    clientY: number;
-}
+Sprite.onDragStart = (position, sprite) => {
+    mouseDownPosition = position
+    mouseMovePosition = position;
+    exceededDragThreshold = false;
 
-interface HasMovement {
-    movementX: number;
-    movementY: number;
-}
-function getMousePosition(e: HasClientPosition) {
-    return new Vector(0, 0);/*
-    return new Vector(
-        VP.app.view.width * (e.clientX - VP.canvasRect.left) / VP.canvasRect.width,
-        VP.app.view.height * (e.clientY - VP.canvasRect.top) / VP.canvasRect.height
-    );*/
-}
-/*
-let previousTouch: Touch | undefined;
-VP.canvas.onmousedown = async event => {
-    await onDown(event);
-}
+    const gameState = Client.gameState;
+    if (gameState === undefined) return;
 
-VP.canvas.ontouchstart = async event => {
-    const touch = event.touches[0];
-    if (touch !== undefined) {
-        await onDown(touch);
-        previousTouch = touch;
-    }
-};
-*/
-async function onDown(event: HasClientPosition) {
-    const unlock = await State.lock();
-    try {
-        mouseDownPosition = getMousePosition(event);
-        mouseMovePosition = mouseDownPosition;
-        exceededDragThreshold = false;
+    const mySprites = State.faceSpritesForPlayer[gameState.playerIndex];
+    if (mySprites === undefined) throw new Error();
 
-        const deckPosition = State.deckSprites[State.deckSprites.length - 1]?.position;
+    if (State.deckSprites[State.deckSprites.length - 1] === sprite) {
+        action = {
+            mousePositionToSpritePosition: V.sub(sprite.position, position),
+            type: "DrawFromDeck"
+        };
+    } else {
+        action = 'Deselect';
 
-        if (VP.sortByRankBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.sortByRankBounds[1].x &&
-            VP.sortByRankBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortByRankBounds[1].y
-        ) {
-            action = "SortByRank";
-        } else if (
-            VP.sortBySuitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.sortBySuitBounds[1].x &&
-            VP.sortBySuitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.sortBySuitBounds[1].y
-        ) {
-            action = "SortBySuit";
-        } /*else if (
-            VP.waitBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.waitBounds[1].x &&
-            VP.waitBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.waitBounds[1].y
-        ) {
-            action = "Wait";
-        } else if (
-            VP.proceedBounds[0].x < mouseDownPosition.x && mouseDownPosition.x < VP.proceedBounds[1].x &&
-            VP.proceedBounds[0].y < mouseDownPosition.y && mouseDownPosition.y < VP.proceedBounds[1].y
-        ) {
-            action = "Proceed";
-        } */else if (deckPosition !== undefined &&
-            deckPosition.x < mouseDownPosition.x && mouseDownPosition.x < deckPosition.x + VP.spriteWidth &&
-            deckPosition.y < mouseDownPosition.y && mouseDownPosition.y < deckPosition.y + VP.spriteHeight
-        ) {
-            action = {
-                mousePositionToSpritePosition: deckPosition.sub(mouseDownPosition),
-                type: "DrawFromDeck"
-            };
-        } else {
-            const gameState = State.gameState;
-            if (gameState === undefined) return;
+        for (let i = 0; i < 4; ++i) {
+            const sprites = State.faceSpritesForPlayer[i];
+            if (!sprites) continue;
 
-            // because we render left to right, the rightmost card under the mouse position is what we should return
-            const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
-            if (sprites === undefined) return;
-
-            let deselect = true;
-            for (let i = sprites.length - 1; i >= 0; --i) {
-                const position = sprites[i]?.position;
-                if (position !== undefined &&
-                    position.x < mouseDownPosition.x && mouseDownPosition.x < position.x + VP.spriteWidth &&
-                    position.y < mouseDownPosition.y && mouseDownPosition.y < position.y + VP.spriteHeight
-                ) {
-                    deselect = false;
-
+            const cardIndex = sprites.indexOf(sprite);
+            if (cardIndex >= 0) {
+                if (i === gameState.playerIndex) {
                     action = {
-                        cardIndex: i,
-                        mousePositionToSpritePosition: position.sub(mouseDownPosition),
+                        cardIndex,
+                        mousePositionToSpritePosition: V.sub(sprite.position, position),
                         type: holdingControl && holdingShift ? "ControlShiftClick" :
                             holdingControl ? "ControlClick" :
                             holdingShift ? "ShiftClick" : "Click"
                     };
-                    
-                    break;
-                }
-            }
+                } else {
+                    const playerState = gameState.playerStates[i];
+                    if (!playerState) throw new Error();
 
-            for (let i = 0; i < 4; ++i) {
-                const otherPlayer = gameState.otherPlayers[i];
-                if (otherPlayer !== null && otherPlayer !== undefined) {
-                    /*
-                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                    transform.invertSelf();
-                    const transformedPosition = transform.transformPoint(mouseDownPosition);
+                    if (cardIndex < playerState.shareCount) {
+                        const card = playerState.cards[cardIndex];
+                        if (!card) throw new Error();
 
-                    for (let j = otherPlayer.shareCount - 1; j >= 0; --j) {
-                        const sprite = State.faceSpritesForPlayer[i]?.[j];
-                        if (sprite === undefined) throw new Error();
-                        if (sprite.position.x < transformedPosition.x && transformedPosition.x < sprite.position.x + VP.spriteWidth &&
-                            sprite.position.y < transformedPosition.y && transformedPosition.y < sprite.position.y + VP.spriteHeight
-                        ) {
-                            console.log(`mouse down on ${i}'s card ${j}`);
-
-                            const card = otherPlayer.revealedCards[j];
-                            if (card === undefined) throw new Error();
-                            action = {
-                                type: "TakeFromOtherPlayer",
-                                mousePositionToSpritePosition: new Vector(0, 0),
-                                otherPlayerIndex: i,
-                                cardIndex: j,
-                                card
-                            };
-
-                            deselect = false;
-
-                            break;
-                        }
+                        action = {
+                            type: "TakeFromOtherPlayer",
+                            mousePositionToSpritePosition: V.sub(sprite.position, position),
+                            otherPlayerIndex: i,
+                            cardIndex,
+                            card
+                        };
                     }
-                    */
                 }
-            }
-
-            if (deselect) {
-                action = "Deselect";
             }
         }
-    } finally {
-        unlock();
     }
 }
-/*
-VP.canvas.onmousemove = async event => {
-    await onMove(event, event);
-};
 
-VP.canvas.ontouchmove = async event => {
-    const touch = event.touches[0];
-    if (touch !== undefined) {
-        await onMove(touch, {
-            movementX: touch.clientX - (previousTouch?.clientX ?? touch.clientX),
-            movementY: touch.clientY - (previousTouch?.clientY ?? touch.clientY)
-        });
-        previousTouch = touch;
-    }
-};
-*/
-async function onMove(event: HasClientPosition, movement: HasMovement) {
-    const gameState = State.gameState;
+Sprite.onDragMove = (position, sprite) => {
+    const movement = V.sub(position, mouseMovePosition);
+    mouseMovePosition = position;
+    exceededDragThreshold = exceededDragThreshold ||
+        V.distance(mouseMovePosition, mouseDownPosition) > moveThreshold;
+
+    const gameState = Client.gameState;
     if (gameState === undefined) return;
 
-    const unlock = await State.lock();
-    try {
-        mouseMovePosition = getMousePosition(event);
-        exceededDragThreshold = exceededDragThreshold || mouseMovePosition.distance(mouseDownPosition) > moveThreshold;
+    if (action === "None") {
+        // do nothing
+    } else if (action === "SortBySuit") {
+        // TODO: check whether mouse position has left button bounds
+    } else if (action === "SortByRank") {
+        // TODO: check whether mouse position has left button bounds
+    } /*else if (action === "Wait") {
+        // TODO: check whether mouse position has left button bounds
+    } else if (action === "Proceed") {
+        // TODO: check whether mouse position has left button bounds
+    } */else if (action === "Deselect") {
+        // TODO: box selection?
+    } else if (
+        action.type === "TakeFromOtherPlayer" ||
+        action.type === "DrawFromDeck" ||
+        action.type === "WaitingForNewCard"
+    ) {
+        sprite.target = V.add(sprite.target, movement);
 
-        if (action === "None") {
-            // do nothing
-        } else if (action === "SortBySuit") {
-            // TODO: check whether mouse position has left button bounds
-        } else if (action === "SortByRank") {
-            // TODO: check whether mouse position has left button bounds
-        } /*else if (action === "Wait") {
-            // TODO: check whether mouse position has left button bounds
-        } else if (action === "Proceed") {
-            // TODO: check whether mouse position has left button bounds
-        } */else if (action === "Deselect") {
-            // TODO: box selection?
-        } else if (
-            action.type === "TakeFromOtherPlayer" ||
-            action.type === "DrawFromDeck" ||
-            action.type === "WaitingForNewCard"
-        ) {
-            if (exceededDragThreshold) {
-                let promise: Promise<void> | undefined;
-                let sprite: Sprite | undefined;
-                if (action.type === "TakeFromOtherPlayer") {
-                    promise = State.takeCard(
-                        action.otherPlayerIndex,
-                        action.cardIndex,
-                        action.card
-                    );
-
-                    sprite = State.faceSpritesForPlayer[action.otherPlayerIndex]?.[action.cardIndex];
-                } else if (action.type === "DrawFromDeck") {
-                    // card drawing will try to lock the state, so we must attach a callback instead of awaiting
-                    promise = State.drawCard();
-
-                    sprite = State.deckSprites[State.deckSprites.length - 1];
-                }
-
-                if (promise !== undefined) {
-                    if (sprite === undefined) throw new Error();
-                    sprite.target = mouseMovePosition.add(action.mousePositionToSpritePosition);
-
-                    action = { ...action, type: "WaitingForNewCard" };
-                    promise.then(onCardDrawn(sprite)).catch(_ => {
-                        if (action !== "None" &&
-                            action !== "Deselect" &&
-                            action !== "SortByRank" &&
-                            action !== "SortBySuit" &&
-                            //action !== "Wait" &&
-                            //action !== "Proceed" &&
-                            action.type === "WaitingForNewCard"
-                        ) {
-                            action = "None";
-                        }
-                    });
-                }
+        if (exceededDragThreshold) {
+            let promise: Promise<void> | undefined;
+            if (action.type === "TakeFromOtherPlayer") {
+                promise = Client.takeCard(
+                    action.otherPlayerIndex,
+                    action.cardIndex,
+                    action.card
+                );
+            } else if (action.type === "DrawFromDeck") {
+                promise = Client.drawCard();
             }
-        } else if (action.type === "ReturnToDeck" || action.type === "Reorder" ) {
-            drag(gameState, action.cardIndex, action.mousePositionToSpritePosition);
-        } else if (
-            action.type === "ControlShiftClick" ||
-            action.type === "ControlClick" ||
-            action.type === "ShiftClick" ||
-            action.type === "Click"
-        ) {
-            let i = Lib.binarySearchNumber(State.selectedIndices, action.cardIndex);
-            if (exceededDragThreshold) {
-                // dragging a non-selected card selects it and only it
-                if (i < 0) {
-                    State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
-                }
 
-                drag(gameState, action.cardIndex, action.mousePositionToSpritePosition);
-            } else {
-                const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
-                if (sprites === undefined) throw new Error();
-    
-                if (i < 0) {
-                    const sprite = sprites[action.cardIndex];
-                    if (sprite === undefined) throw new Error();
-                    sprite.target = sprite.target.add(new Vector(movement.movementX, movement.movementY));
-                } else {
-                    for (const j of State.selectedIndices) {
-                        const sprite = sprites[j];
-                        if (sprite === undefined) throw new Error();
-                        sprite.target = sprite.target.add(new Vector(movement.movementX, movement.movementY));
+            if (promise !== undefined) {
+                sprite.target = V.add(mouseMovePosition, action.mousePositionToSpritePosition);
+
+                action = { ...action, type: "WaitingForNewCard" };
+                promise.then(onCardDrawn(sprite)).catch(_ => {
+                    if (action !== "None" &&
+                        action !== "Deselect" &&
+                        action !== "SortByRank" &&
+                        action !== "SortBySuit" &&
+                        action.type === "WaitingForNewCard"
+                    ) {
+                        action = "None";
                     }
+                });
+            }
+        }
+    } else if (action.type === "ReturnToDeck" || action.type === "Reorder" ) {
+        drag(gameState, action.cardIndex, action.mousePositionToSpritePosition);
+    } else if (
+        action.type === "ControlShiftClick" ||
+        action.type === "ControlClick" ||
+        action.type === "ShiftClick" ||
+        action.type === "Click"
+    ) {
+        let i = Lib.binarySearchNumber(State.selectedIndices, action.cardIndex);
+        if (exceededDragThreshold) {
+            // dragging a non-selected card selects it and only it
+            if (i < 0) {
+                State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
+            }
+
+            drag(gameState, action.cardIndex, action.mousePositionToSpritePosition);
+        } else {
+            if (i < 0) {
+                sprite.target = V.add(sprite.target, movement);
+            } else {
+                for (const j of State.selectedIndices) {
+                    const sprite = State.faceSpritesForPlayer[gameState.playerIndex]?.[j];
+                    if (sprite === undefined) throw new Error();
+                    sprite.target = V.add(sprite.target, movement);
                 }
             }
-        } else {
-            const _: never = action;
         }
-    } finally {
-        unlock();
+    } else {
+        const _: never = action;
     }
-};
-/*
-VP.canvas.onmouseup = async event => {
-    await onUp();
-};
+}
 
-VP.canvas.ontouchend = async event => {
-    await onUp();
-};
-*/
-async function onUp() {
-    const gameState = State.gameState;
+Sprite.onDragEnd = async () => {
+    const gameState = Client.gameState;
     if (gameState === undefined) return;
 
-    const unlock = await State.lock();
-    try {
-        if (action === "None") {
-            // do nothing
-        } else if (action === "SortByRank") {
-            await State.sortByRank(gameState);
-        } else if (action === "SortBySuit") {
-            await State.sortBySuit(gameState);
-        } /*else if (action === "Wait") {
-            console.log('waiting');
-            await State.wait();
-        } else if (action === "Proceed") {
-            console.log('proceeding');
-            await State.proceed();
-        } */else if (action === "Deselect") {
-            State.selectedIndices.splice(0, State.selectedIndices.length);
-        } else if (action.type === "DrawFromDeck" || action.type === "WaitingForNewCard") {
-            // do nothing
-        } else if (action.type === "Reorder") {
+    if (action === "None") {
+        // do nothing
+    } else if (action === "SortByRank") {
+        Client.sortByRank(gameState);
+    } else if (action === "SortBySuit") {
+        Client.sortBySuit(gameState);
+    } /*else if (action === "Wait") {
+        console.log('waiting');
+        await State.wait();
+    } else if (action === "Proceed") {
+        console.log('proceeding');
+        await State.proceed();
+    } */else if (action === "Deselect") {
+        State.selectedIndices.splice(0, State.selectedIndices.length);
+    } else if (action.type === "DrawFromDeck" || action.type === "WaitingForNewCard") {
+        // do nothing
+    } else if (action.type === "Reorder") {
+        previousClickIndex = action.cardIndex;
+        await Client.reorderCards(gameState);
+    } else if (action.type === "ReturnToDeck") {
+        previousClickIndex = -1;
+        console.log('PRE returnCardsToDeck', gameState.playerStates[gameState.playerIndex]?.cards.length);
+        await Client.returnCardsToDeck(gameState);
+        console.log('POST returnCardsToDeck', gameState.playerStates[gameState.playerIndex]?.cards.length);
+    } else if (action.type === "ControlShiftClick") {
+        if (previousClickIndex === -1) {
             previousClickIndex = action.cardIndex;
-            await State.reorderCards(gameState);
-        } else if (action.type === "ReturnToDeck") {
-            previousClickIndex = -1;
-            await State.returnCardsToDeck(gameState);
-        } else if (action.type === "ControlShiftClick") {
-            if (previousClickIndex === -1) {
-                previousClickIndex = action.cardIndex;
-            }
-
-            const start = Math.min(action.cardIndex, previousClickIndex);
-            const end = Math.max(action.cardIndex, previousClickIndex);
-            for (let i = start; i <= end; ++i) {
-                let j = Lib.binarySearchNumber(State.selectedIndices, i);
-                if (j < 0) {
-                    State.selectedIndices.splice(~j, 0, i);
-                }
-            }
-        } else if (action.type === "ControlClick") {
-            previousClickIndex = action.cardIndex;
-            let i = Lib.binarySearchNumber(State.selectedIndices, action.cardIndex);
-            if (i < 0) {
-                State.selectedIndices.splice(~i, 0, action.cardIndex);
-            } else {
-                State.selectedIndices.splice(i, 1);
-            }
-        } else if (action.type === "ShiftClick") {
-            if (previousClickIndex === -1) {
-                previousClickIndex = action.cardIndex;
-            }
-
-            const start = Math.min(action.cardIndex, previousClickIndex);
-            const end = Math.max(action.cardIndex, previousClickIndex);
-            State.selectedIndices.splice(0, State.selectedIndices.length);
-            for (let i = start; i <= end; ++i) {
-                State.selectedIndices.push(i);
-            }
-        } else if (action.type === "Click") {
-            previousClickIndex = action.cardIndex;
-            State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
         }
 
-        State.setSpriteTargets(gameState);
+        const start = Math.min(action.cardIndex, previousClickIndex);
+        const end = Math.max(action.cardIndex, previousClickIndex);
+        for (let i = start; i <= end; ++i) {
+            let j = Lib.binarySearchNumber(State.selectedIndices, i);
+            if (j < 0) {
+                State.selectedIndices.splice(~j, 0, i);
+            }
+        }
+    } else if (action.type === "ControlClick") {
+        previousClickIndex = action.cardIndex;
+        let i = Lib.binarySearchNumber(State.selectedIndices, action.cardIndex);
+        if (i < 0) {
+            State.selectedIndices.splice(~i, 0, action.cardIndex);
+        } else {
+            State.selectedIndices.splice(i, 1);
+        }
+    } else if (action.type === "ShiftClick") {
+        if (previousClickIndex === -1) {
+            previousClickIndex = action.cardIndex;
+        }
 
-        action = "None";
-    } finally {
-        unlock();
+        const start = Math.min(action.cardIndex, previousClickIndex);
+        const end = Math.max(action.cardIndex, previousClickIndex);
+        State.selectedIndices.splice(0, State.selectedIndices.length);
+        for (let i = start; i <= end; ++i) {
+            State.selectedIndices.push(i);
+        }
+    } else if (action.type === "Click") {
+        previousClickIndex = action.cardIndex;
+        State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
     }
-};
+
+    State.setSpriteTargets(gameState);
+
+    action = "None";
+}
 
 function onCardDrawn(deckSprite: Sprite) {
-    return async () => {
-        const gameState = State.gameState;
-        if (gameState === undefined) throw new Error();
+    return () => {
+        if (action !== "None" &&
+            action !== "SortBySuit" &&
+            action !== "SortByRank" &&
+            //action !== "Wait" &&
+            //action !== "Proceed" &&
+            action !== "Deselect" &&
+            action.type === "WaitingForNewCard"
+        ) {
+            const gameState = Client.gameState;
+            if (gameState === undefined) throw new Error();
 
-        const unlock = await State.lock();
-        try {
-            if (action !== "None" &&
-                action !== "SortBySuit" &&
-                action !== "SortByRank" &&
-                //action !== "Wait" &&
-                //action !== "Proceed" &&
-                action !== "Deselect" &&
-                action.type === "WaitingForNewCard"
-            ) {
-                // immediately select newly acquired card
-                const cardIndex = gameState.playerCards.length - 1;
-                State.selectedIndices.splice(0, State.selectedIndices.length);
-                State.selectedIndices.push(cardIndex);
+            const player = gameState.playerStates[gameState.playerIndex];
+            if (player === undefined || player === null) throw new Error();        
 
-                // new card should appear in place of dragged card from deck without animation
-                const faceSpriteAtMouseDown = State.faceSpritesForPlayer[gameState.playerIndex]?.[cardIndex];
-                if (faceSpriteAtMouseDown === undefined) throw new Error();
-                faceSpriteAtMouseDown.target = deckSprite.position;
-                faceSpriteAtMouseDown.position = deckSprite.position;
-                //faceSpriteAtMouseDown.velocity = deckSprite.velocity;
-                
-                drag(gameState, cardIndex, action.mousePositionToSpritePosition);
-            }
-        } finally {
-            unlock();
+            // immediately select newly acquired card
+            const cardIndex = player.cards.length - 1;
+            State.selectedIndices.splice(0, State.selectedIndices.length);
+            State.selectedIndices.push(cardIndex);
+
+            // new card should appear in place of dragged card from deck without animation
+            const faceSpriteAtMouseDown = State.faceSpritesForPlayer[gameState.playerIndex]?.[cardIndex];
+            if (faceSpriteAtMouseDown === undefined) throw new Error();
+            faceSpriteAtMouseDown.target = deckSprite.position;
+            faceSpriteAtMouseDown.position = deckSprite.position;
+            //faceSpriteAtMouseDown.velocity = deckSprite.velocity;
+            
+            drag(gameState, cardIndex, action.mousePositionToSpritePosition);
         }
     };
 }
 
-function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSpritePosition: Vector) {
+function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSpritePosition: V.IVector2) {
     const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
 
-    const cards = gameState.playerCards;
+    const player = gameState.playerStates[gameState.playerIndex];
+    if (player === undefined || player === null) throw new Error();
+    const cards = player.cards;
 
     const movingSpritesAndCards: [Sprite, Lib.Card][] = [];
     const reservedSpritesAndCards: [Sprite, Lib.Card][] = [];
 
     let splitIndex: number | undefined = undefined;
-    let shareCount = gameState.playerShareCount;
-    let revealCount = gameState.playerRevealCount;
+    let shareCount = player.shareCount;
+    let revealCount = player.revealCount;
 
     // extract moving sprites
     for (const i of State.selectedIndices) {
@@ -497,11 +373,11 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         if (sprite === undefined || card === undefined) throw new Error();
         movingSpritesAndCards.push([sprite, card]);
 
-        if (i < gameState.playerShareCount) {
+        if (i < player.shareCount) {
             --shareCount;
         }
 
-        if (i < gameState.playerRevealCount) {
+        if (i < player.revealCount) {
             --revealCount;
         }
     }
@@ -523,9 +399,9 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         throw new Error();
     }
 
-    const deckDistance = Math.abs(leftMovingSprite.target.y - (VP.app.view.height / 2 - VP.spriteHeight / 2));
-    const revealDistance = Math.abs(leftMovingSprite.target.y - (VP.app.view.height - 2 * VP.spriteHeight));
-    const hideDistance = Math.abs(leftMovingSprite.target.y - (VP.app.view.height - VP.spriteHeight));
+    const deckDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height / 2 - Sprite.height / 2));
+    const revealDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - 2 * Sprite.height));
+    const hideDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - Sprite.height));
 
     // set the action for onmouseup
     if (deckDistance < revealDistance && deckDistance < hideDistance) {
@@ -542,13 +418,15 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         let start: number;
         let end: number;
         if (splitRevealed) {
-            if (leftMovingSprite.target.x < VP.app.view.width / 2 &&
-                VP.app.view.width / 2 < rightMovingSprite.target.x + VP.spriteWidth
+            if (leftMovingSprite.target.x < Sprite.app.view.width / 2 &&
+                Sprite.app.view.width / 2 < rightMovingSprite.target.x + Sprite.width
             ) {
                 splitIndex = shareCount;
             }
             
-            splitShared = (leftMovingSprite.target.x + rightMovingSprite.target.x + VP.spriteWidth) / 2 < VP.app.view.width / 2;
+            splitShared =
+                (leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width) / 2 <
+                Sprite.app.view.width / 2;
             if (splitShared) {
                 start = 0;
                 end = shareCount;
@@ -608,13 +486,11 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         // adjust share count
         if (splitIndex < shareCount || splitIndex === shareCount && splitShared) {
             shareCount += movingSpritesAndCards.length;
-            console.log(`set shareCount to ${shareCount}`);
         }
     
         // adjust reveal count
         if (splitIndex < revealCount || splitIndex === revealCount && splitRevealed) {
             revealCount += movingSpritesAndCards.length;
-            console.log(`set revealCount to ${revealCount}`);
         }
     }
 
@@ -637,10 +513,9 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         const movingSpriteAndCard = movingSpritesAndCards[selectedIndex - splitIndex];
         if (movingSpriteAndCard === undefined) throw new Error();
         const [movingSprite, movingCard] = movingSpriteAndCard;
-        movingSprite.target = mouseMovePosition
-            .add(mousePositionToSpritePosition)
-            .add(new Vector((selectedIndex - action.cardIndex) * VP.spriteGap, 0));
-        console.log(`rearranged sprite ${selectedIndex}`);
+        movingSprite.target = V.add(
+            V.add(mouseMovePosition, mousePositionToSpritePosition),
+            { x: (selectedIndex - action.cardIndex) * Sprite.gap, y: 0 });
     }
 
     State.setSpriteTargets(

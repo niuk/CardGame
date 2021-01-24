@@ -10,7 +10,7 @@ const app = express();
 app.use(express.static('static'));
 
 app.get('/', async (_, response) => {
-    response.contentType('text/html').send(await fs.readFile('static/game.html'));
+    response.contentType('text/html').send(await fs.readFile('static/client.html'));
 });
 
 (async () => {

@@ -1,34 +1,7 @@
-import { Mutex } from 'await-semaphore';
+import * as PIXI from 'pixi.js';
 
 import * as Lib from '../lib';
-import * as VP from './view-params';
 import Sprite from './sprite';
-import Vector from './vector';
-
-const playerNameFromCookie = Lib.getCookie('playerName');
-if (playerNameFromCookie === undefined) throw new Error('No player name!');
-export const playerName = decodeURI(playerNameFromCookie);
-
-const gameIdFromCookie = Lib.getCookie('gameId');
-if (gameIdFromCookie === undefined) throw new Error('No game id!');
-export const gameId = gameIdFromCookie;
-
-// some state-manipulating operations are asynchronous, so we need to guard against races
-const stateMutex = new Mutex();
-export async function lock(): Promise<() => void> {
-    //console.log(`acquiring state lock...\n${new Error().stack}`);
-    const release = await stateMutex.acquire();
-    //console.log(`acquired state lock\n${new Error().stack}`);
-    return () => {
-        release();
-        //console.log(`released state lock`);
-    };
-}
-
-// we need to keep a copy of the previous game state around for bookkeeping purposes
-export let previousGameState: Lib.GameState | undefined;
-// the most recently received game state, if any
-export let gameState: Lib.GameState | undefined;
 
 // indices of cards for drag & drop
 // IMPORTANT: this array must always be sorted!
@@ -39,334 +12,360 @@ export const selectedIndices: number[] = [];
 export let deckSprites: Sprite[] = [];
 
 // associative arrays, one for each player at their player index
-// each element corresponds to a face-down card by index
+// each element corresponds to a back card by index
 export let backSpritesForPlayer: Sprite[][] = [];
-// each element corresponds to a face-up card by index
+// each element corresponds to a face card by index
 export let faceSpritesForPlayer: Sprite[][] = [];
 
-// open websocket connection to get game state updates
-let ws = new WebSocket(`wss://${window.location.hostname}/`);
+export let deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
+export let playerContainers = [
+    Sprite.app.stage.addChild(new PIXI.Container()),
+    Sprite.app.stage.addChild(new PIXI.Container()),
+    Sprite.app.stage.addChild(new PIXI.Container()),
+    Sprite.app.stage.addChild(new PIXI.Container())
+];
 
-const callbacksForMethodType = new Map<Lib.MethodName, ((result: Lib.Result) => void)[]>();
-function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: any) => void) {
-    console.log(`adding callback for method '${methodName}'`);
+for (const playerContainer of playerContainers) {
+    playerContainer.sortableChildren = true;
+}
 
-    let callbacks = callbacksForMethodType.get(methodName);
-    if (callbacks === undefined) {
-        callbacks = [];
-        callbacksForMethodType.set(methodName, callbacks);
-    }
+let onSpritesLinkedWithCards = () => {};
 
-    callbacks.push(result => {
-        console.log(`invoking callback for method '${methodName}'`);
-        if ('errorDescription' in result) {
-            reject(result.errorDescription);
-        } else {
+export function getSpritesLinkedWithCardsPromise(): Promise<void> {
+    return new Promise<void>(resolve => {
+        onSpritesLinkedWithCards = () => {
+            onSpritesLinkedWithCards = () => {};
             resolve();
-        }
+        };
     });
 }
 
-ws.onmessage = async e => {
-    const obj = JSON.parse(e.data);
-    if ('methodName' in obj) {
-        const result = <Lib.Result>obj;
-
-        const callbacks = callbacksForMethodType.get(result.methodName);
-        if (callbacks === undefined || callbacks.length === 0) {
-            throw new Error(`no callbacks found for method: ${result.methodName}`);
-        }
-
-        const callback = callbacks.shift();
-        if (callback === undefined) {
-            throw new Error(`callback is undefined for method: ${result.methodName}`);
-        }
-        
-        callback(result);
-    } else if (
-        'deckCount' in obj &&
-        'playerIndex' in obj &&
-        'playerStates' in obj
-    ) {
-        const unlock = await lock();
-        try {
-            previousGameState = gameState;
-            gameState = <Lib.GameState>obj;
-
-            // selected indices might have shifted
-            const cards = gameState.playerStates[gameState.playerIndex]?.cards;
-            const previousCards = previousGameState?.playerStates[previousGameState.playerIndex]?.cards;
-            if (cards !== undefined && previousCards !== undefined) {
-                const newSelectedIndices = [];
-                
-                for (const selectedIndex of selectedIndices) {
-                    for (let i = 0; i < cards.length; ++i) {
-                        if (JSON.stringify(previousCards[selectedIndex]) === JSON.stringify(cards[i])) {
-                            newSelectedIndices.push(i);
-                            break;
-                        }
-                    }
-                }
-
-                selectedIndices.splice(0, selectedIndices.length, ...newSelectedIndices);
-            }
-
-            // binary search still needs to work
-            selectedIndices.sort((a, b) => a - b);
-
-            // initialize animation states
-            associateAnimationsWithCards(previousGameState, gameState);
-        } finally {
-            unlock();
-        }
-    } else {
-        throw new Error(JSON.stringify(e.data));
-    }
-};
-
-let onAnimationsAssociated = () => {};
-
-function associateAnimationsWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
+export function linkSpritesWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
     const previousDeckSprites = deckSprites;
-    const previousBackSpritesForPlayer = backSpritesForPlayer;
-    const previousFaceSpritesForPlayer = faceSpritesForPlayer;
-
-    backSpritesForPlayer = [];
-    faceSpritesForPlayer = [];
-    for (let i = 0; i < 4; ++i) {
-        const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
-        previousBackSpritesForPlayer[i] = previousBackSprites;
-
-        const previousFaceSprites = previousFaceSpritesForPlayer[i] ?? [];
-        previousFaceSpritesForPlayer[i] = previousFaceSprites;
-
-        let previousFaceCards: Lib.Card[];
-        let faceCards: Lib.Card[];
-        if (i === gameState.playerIndex) {
-            previousFaceCards = previousGameState?.playerCards ?? [];
-            faceCards = gameState.playerCards;
-        } else {
-            previousFaceCards = previousGameState?.otherPlayers[i]?.revealedCards ?? [];
-            faceCards = gameState.otherPlayers[i]?.revealedCards ?? [];
-        }
-
-        let faceSprites: Sprite[] = [];
-        faceSpritesForPlayer[i] = faceSprites;
-        for (const faceCard of faceCards) {
-            let faceSprite: Sprite | undefined = undefined;
-            if (faceSprite === undefined) {
-                for (let j = 0; j < previousFaceCards.length; ++j) {
-                    const previousFaceCard = previousFaceCards[j];
-                    if (previousFaceCard === undefined) throw new Error();
-                    if (JSON.stringify(faceCard) === JSON.stringify(previousFaceCard)) {
-                        previousFaceCards.splice(j, 1);
-                        faceSprite = previousFaceSprites.splice(j, 1)[0];
-                        if (faceSprite === undefined) throw new Error();
-                        break;
-                    }
-                }
-            }
-
-            if (faceSprite === undefined) {
-                for (let j = 0; j < 4; ++j) {
-                    const previousOtherPlayer = previousGameState?.otherPlayers[j];
-                    const otherPlayer = gameState.otherPlayers[j];
-                    if (previousOtherPlayer === undefined || previousOtherPlayer === null ||
-                        otherPlayer === undefined || otherPlayer === null
-                    ) {
-                        continue;
-                    }
-/*
-                    if (previousOtherPlayer.shareCount > otherPlayer.shareCount) {
-                        for (let k = 0; k < previousOtherPlayer.shareCount; ++k) {
-                            if (JSON.stringify(faceCard) === JSON.stringify(previousOtherPlayer.revealedCards[k])) {
-                                --previousOtherPlayer.shareCount;
-                                previousOtherPlayer.revealedCards.splice(k, 1);
-
-                                faceSprite = previousFaceSpritesForPlayer[j]?.splice(k, 1)[0];
-                                if (faceSprite === undefined) throw new Error();
-                                
-                                const sourceTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(j, gameState.playerIndex));
-                                const destinationTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                                destinationTransform.invertSelf();
-
-                                let p = sourceTransform.transformPoint(faceSprite.position);
-                                p = destinationTransform.transformPoint(p);
-                                faceSprite.position = new Vector(p.x, p.y);
-                                break;
-                            }
-                        }
-                    }
-*/
-                    if (faceSprite !== undefined) {
-                        break;
-                    }
-                }
-            }
-
-            if (faceSprite === undefined && previousBackSprites.length > 0) {
-                // make it look like this card was revealed among previously hidden cards
-                // which, of course, requires that the player had previously hidden cards
-                faceSprite = previousBackSprites.splice(0, 1)[0];
-                if (faceSprite === undefined) throw new Error();
-                faceSprite.texture = Sprite.getTexture(JSON.stringify(faceCard));
-            }
-/*
-            if (faceSprite === undefined && previousDeckSprites.length > 0) {
-                // make it look like this card came from the deck;
-                const faceSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
-                if (faceSprite === undefined) throw new Error();
-                faceSprite.image = Sprite.getImage(JSON.stringify(faceCard));
-
-                // this sprite is rendered in the player's transformed canvas context
-                const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                transform.invertSelf();
-                const point = transform.transformPoint(faceSprite.position);
-                faceSprite.position = new Vector(point.x, point.y);
-            }
-*/
-            if (faceSprite === undefined) {
-                faceSprite = new Sprite(Sprite.getTexture(JSON.stringify(faceCard)));
-            }
-
-            faceSprites.push(faceSprite);
-        }
-    }
-
-    for (let i = 0; i < 4; ++i) {
-        const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
-        previousBackSpritesForPlayer[i] = previousBackSprites;
-
-        const previousFaceSprites = previousFaceSpritesForPlayer[i] ?? [];
-        previousFaceSpritesForPlayer[i] = previousFaceSprites;
-
-        let backSprites: Sprite[] = [];
-        backSpritesForPlayer[i] = backSprites;
-        const otherPlayer = gameState.otherPlayers[i];
-        if (i !== gameState.playerIndex && otherPlayer !== null && otherPlayer !== undefined) {
-            // only other players have any hidden cards
-            while (backSprites.length < otherPlayer.cardCount - otherPlayer.revealedCards.length) {
-                let backSprite: Sprite | undefined = undefined;
-                if (backSprite === undefined) {
-                    for (let j = 0; j < 4; ++j) {
-                        const previousOtherPlayer = previousGameState?.otherPlayers[j];
-                        const otherPlayer = gameState.otherPlayers[j];
-                        if (previousOtherPlayer === undefined || previousOtherPlayer === null ||
-                            otherPlayer === undefined || otherPlayer === null
-                        ) {
-                            continue;
-                        }
-/*
-                        if (previousOtherPlayer.shareCount > otherPlayer.shareCount) {
-                            previousOtherPlayer.shareCount--;
-                            previousOtherPlayer.revealedCards.splice(0, 1);
-
-                            backSprite = previousFaceSpritesForPlayer[j]?.splice(0, 1)[0];
-                            if (backSprite === undefined) throw new Error();
-                            backSprite.image = Sprite.getImage(`Back${i + 1}`);
-
-                            const sourceTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(j, gameState.playerIndex));
-                            const destinationTransform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                            
-                            let p = sourceTransform.transformPoint(backSprite.position);
-                            p = destinationTransform.transformPoint(p);
-                            backSprite.position = new Vector(p.x, p.y);
-                            break;
-                        }
-*/
-                    }
-                }
-
-                if (backSprite === undefined && previousBackSprites.length > 0) {
-                    backSprite = previousBackSprites.splice(0, 1)[0];
-                    if (backSprite === undefined) throw new Error();
-                }
-                
-                if (backSprite === undefined && previousFaceSprites.length > 0) {
-                    backSprite = previousFaceSprites.splice(0, 1)[0];
-                    if (backSprite === undefined) throw new Error();
-                    backSprite.texture = Sprite.getTexture(`Back${i + 1}`);
-                }
-/*
-                if (backSprite === undefined && previousDeckSprites.length > 0) {
-                    backSprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
-                    if (backSprite === undefined) throw new Error();
-                    backSprite.image = Sprite.getImage(`Back${i + 1}`);
-
-                    // this sprite comes from the deck, which is rendered in the client player's transform
-                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                    transform.invertSelf();
-                    const point = transform.transformPoint(backSprite.position);
-                    backSprite.position = new Vector(point.x, point.y);
-                }
-*/
-                if (backSprite === undefined) {
-                    backSprite = new Sprite(Sprite.getTexture(`Back${i + 1}`));
-                }
-
-                backSprites.push(backSprite);
-            }
-        }
-    }
-
     deckSprites = [];
-    while (deckSprites.length < gameState.deckCount) {
-        let deckSprite: Sprite | undefined = undefined;
-        if (deckSprite == undefined && previousDeckSprites.length > 0) {
-            deckSprite = previousDeckSprites.splice(0, 1)[0];
-            if (deckSprite === undefined) throw new Error();
-        }
-/*
-        if (deckSprite === undefined) {
-            let i = 0;
-            for (const previousBackSprites of previousBackSpritesForPlayer) {
-                if (previousBackSprites.length > 0) {
-                    deckSprite = previousBackSprites.splice(0, 1)[0];
-                    if (deckSprite === undefined) throw new Error();
-                    deckSprite.image = Sprite.getImage('Back0');
 
-                    // the sprite came from the player's transformed canvas context
-                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                    const point = transform.transformPoint(deckSprite.position);
-                    deckSprite.position = new Vector(point.x, point.y);
+    for (let i = 0; i < gameState.deckCount; ++i) {
+        if (previousGameState &&
+            previousGameState.deckCount > 0
+        ) {
+            previousGameState.deckCount--;
+            deckSprites.push(...previousDeckSprites.splice(0, 1));
+        }
+    }
+
+    const previousBackSpritesForPlayer = backSpritesForPlayer;
+    backSpritesForPlayer = [];
+
+    const previousFaceSpritesForPlayer = faceSpritesForPlayer;
+    faceSpritesForPlayer = [];
+
+    // convenience function for iterating through players, which we will be doing a lot
+    function forEachPlayer(
+        callback: (
+            playerIndex: number,
+            playerState: Lib.PlayerState,
+            previousPlayerState: Lib.PlayerState,
+            faceSprites: Sprite[],
+            previousFaceSprites: Sprite[],
+            backSprites: Sprite[],
+            previousBackSprites: Sprite[],
+        ) => 'break' | 'continue'
+    ) {
+        for (let i = 0; i < 4; ++i) {
+            const playerState = gameState.playerStates[i];
+            if (!playerState) continue;
+
+            let previousPlayerState = previousGameState?.playerStates[i];
+            if (!previousPlayerState) {
+                previousPlayerState = {
+                    name: playerState.name,
+                    shareCount: 0,
+                    revealCount: 0,
+                    totalCount: 0,
+                    cards: []
+                };
+            }
+
+            const faceSprites = faceSpritesForPlayer[i] ?? [];
+            faceSpritesForPlayer[i] = faceSprites;
+            const previousFaceSprites = previousFaceSpritesForPlayer[i] ?? [];
+            previousFaceSpritesForPlayer[i] = previousFaceSprites;
+
+            const backSprites = backSpritesForPlayer[i] ?? [];
+            backSpritesForPlayer[i] = backSprites;
+            const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
+            previousBackSpritesForPlayer[i] = previousBackSprites;
+
+            const control = callback(
+                i,
+                playerState,
+                previousPlayerState,
+                faceSprites,
+                previousFaceSprites,
+                backSprites,
+                previousBackSprites,
+            );
+
+            if (control === 'break') {
+                break;
+            } else if (control === 'continue') {
+                continue;
+            } else {
+                const _: never = control;
+            }
+        }
+    }
+
+    // try to link the player's face cards with those he had previously
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites
+    ) => {
+        // iterate backwards to reserve as many cards as possible for sharing with other players
+        // the outer loop must also loop backwards so that our links are 'stable' w.r.t. duplicate cards
+        for (let i = playerState.cards.length - 1; i >= 0; --i) {
+            if (faceSprites[i]) continue;
+
+            for (let j = previousPlayerState.cards.length - 1; j >= 0; --j) {
+                if (JSON.stringify(playerState.cards[i]) === JSON.stringify(previousPlayerState.cards[j])) {
+                    previousPlayerState.cards.splice(j, 1);
+
+                    if (j < previousPlayerState.shareCount) {
+                        --previousPlayerState.shareCount;
+                    }
+
+                    if (j < previousPlayerState.revealCount) {
+                        --previousPlayerState.revealCount;
+                    }
+
+                    --previousPlayerState.totalCount;
+
+                    const faceSprite = previousFaceSprites.splice(j, 1)[0];
+                    if (faceSprite === undefined) throw new Error();
+                    faceSprites[i] = faceSprite;
 
                     break;
                 }
-
-                ++i;
             }
         }
 
-        if (deckSprite === undefined) {
-            let i = 0;
-            for (const previousFaceSprites of previousFaceSpritesForPlayer) {
-                if (previousFaceSprites.length > 0) {
-                    deckSprite = previousFaceSprites.splice(0, 1)[0];
-                    if (deckSprite === undefined) throw new Error();
-                    deckSprite.image = Sprite.getImage('Back0');
-                    
-                    // the sprite came from the player's transformed canvas context
-                    const transform = VP.getTransformForPlayer(VP.getRelativePlayerIndex(i, gameState.playerIndex));
-                    const point = transform.transformPoint(deckSprite.position);
-                    deckSprite.position = new Vector(point.x, point.y);
+        return 'continue';
+    });
 
-                    break;
+    // try to link each face card with the previously shared cards of other players
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites
+    ) => {
+        for (let i = 0; i < playerState.cards.length; ++i) {
+            if (faceSprites[i]) continue;
+
+            forEachPlayer((
+                otherPlayerIndex,
+                otherPlayerState,
+                otherPreviousPlayerState,
+                otherFaceSprites,
+                otherPreviousFaceSprites,
+                otherBackSprites,
+                otherPreviousBackSprites
+            ) => {
+                if (playerIndex === otherPlayerIndex) {
+                    return 'continue';
                 }
 
-                ++i;
-            }
-        }
-*/
-        if (deckSprite === undefined) {
-            deckSprite = new Sprite(Sprite.getTexture('Back0'));
+                for (let k = 0; k < otherPreviousPlayerState.shareCount; ++k) {
+                    if (JSON.stringify(playerState.cards[i]) === JSON.stringify(otherPreviousPlayerState.cards[k])) {
+                        otherPreviousPlayerState.shareCount--;
+                        otherPreviousPlayerState.revealCount--;
+                        otherPreviousPlayerState.totalCount--;
+                        otherPreviousPlayerState.cards.splice(k, 1);
+    
+                        const faceSprite = otherPreviousFaceSprites.splice(k, 1)[0];
+                        if (faceSprite === undefined) throw new Error();
+                        faceSprites[i] = faceSprite;
+
+                        return 'break';
+                    }
+                }
+
+                return 'continue';
+            });    
         }
 
-        deckSprites.push(deckSprite);
+        return 'continue';
+    });
+
+    // link each of the player's back cards with...
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites
+    ) => {
+        for (let i = playerState.cards.length; i < playerState.totalCount; ++i) {
+            if (previousPlayerState.totalCount > previousPlayerState.cards.length) {
+                // ... his previous back cards
+                previousPlayerState.totalCount--;
+                backSprites.push(...previousBackSprites.splice(0, 1));
+            } else if (
+                previousGameState &&
+                previousGameState.deckCount > 0
+            ) {
+                // ... any cards previously in the deck
+                previousGameState.deckCount--;
+                backSprites.push(...previousDeckSprites.splice(0, 1));
+            } else {
+                // ... previously shared cards of other players
+                forEachPlayer((
+                    otherPlayerIndex,
+                    otherPlayerState,
+                    otherPreviousPlayerState,
+                    otherFaceSprites,
+                    otherPreviousFaceSprites,
+                    otherBackSprites,
+                    otherPreviousBackSprites
+                ) => {
+                    if (otherPreviousPlayerState.shareCount > 0) {
+                        otherPreviousPlayerState.shareCount--;
+                        backSprites.push(...otherPreviousFaceSprites.splice(0, 1));
+                        return 'break';
+                    }
+
+                    return 'continue';
+                });
+            }
+        }
+
+        return 'continue';
+    });
+
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites
+    ) => {
+        const container = playerContainers[playerIndex];
+        if (container === undefined) throw new Error();
+
+        // link the player's remaining face cards with...
+        for (let i = 0; i < playerState.cards.length; ++i) {
+            const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
+    
+            if (faceSprites[i]) continue;
+
+            if (previousPlayerState.totalCount > previousPlayerState.cards.length) {
+                // ... his previous back cards
+                previousPlayerState.totalCount--;
+
+                const sprite = previousBackSprites.splice(0, 1)[0];
+                if (sprite === undefined) throw new Error();
+                sprite.transfer(container, texture);
+
+                faceSprites[i] = sprite;
+            } else {
+                // ... or nothing
+                faceSprites[i] = new Sprite(container, texture);
+            }
+        }
+
+        // link the player's remaining back cards with...
+        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
+            const texture = Sprite.getTexture(`Back${playerIndex}`);
+
+            if (previousPlayerState.cards.length > 0) {
+                // ... his previous face cards
+                previousPlayerState.cards.splice(0, 1);
+                previousPlayerState.shareCount = Math.max(0, previousPlayerState.shareCount - 1);
+                previousPlayerState.revealCount = Math.max(0, previousPlayerState.revealCount - 1);
+                previousPlayerState.totalCount--;
+
+                const sprite = previousFaceSprites.splice(0, 1)[0];
+                if (sprite === undefined) throw new Error();
+                sprite.transfer(container, texture);
+
+                backSprites.push(sprite);
+            } else {
+                /// ... or nothing
+                backSprites.push(new Sprite(container, texture));
+            }
+        }
+
+        return 'continue';
+    });
+
+    // link cards in the deck with...
+    for (let i = deckSprites.length; i < gameState.deckCount; ++i) {
+        const texture = Sprite.getTexture('Back0');
+
+        forEachPlayer((
+            playerIndex,
+            playerState,
+            previousPlayerState,
+            faceSprites,
+            previousFaceSprites,
+            backSprites,
+            previousBackSprites
+        ) => {
+            if (previousPlayerState.cards.length > 0) {
+                // ... a player's face card
+                previousPlayerState.cards.splice(0, 1);
+                previousPlayerState.shareCount = Math.max(0, previousPlayerState.shareCount - 1);
+                previousPlayerState.revealCount = Math.max(0, previousPlayerState.revealCount - 1);
+                previousPlayerState.totalCount--;
+
+                const sprite = previousFaceSprites.splice(0, 1)[0];
+                if (sprite === undefined) throw new Error();
+                sprite.transfer(deckContainer, texture);
+
+                deckSprites.push(sprite);
+
+                return 'break';
+            } else if (previousPlayerState.totalCount > 0) {
+                // ... a player's back card
+                --previousPlayerState.totalCount;
+
+                const sprite = previousBackSprites.splice(0, 1)[0];
+                if (sprite === undefined) throw new Error();
+                sprite.transfer(deckContainer, texture);
+
+                deckSprites.push(sprite);
+
+                return 'break';
+            } else {
+                return 'continue';
+            }
+        });
+
+        if (deckSprites.length === i) {
+            // ... or nothing
+            deckSprites.push(new Sprite(deckContainer, texture));
+        }
+    }
+
+    for (const previousDeckSprite of previousDeckSprites) {
+        previousDeckSprite.destroy();
     }
 
     setSpriteTargets(gameState);
 
-    onAnimationsAssociated();
+    onSpritesLinkedWithCards();
 }
 
 export function setSpriteTargets(
@@ -381,200 +380,66 @@ export function setSpriteTargets(
     const sprites = faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
 
-    const cards = gameState.playerCards;
+    const player = gameState.playerStates[gameState.playerIndex];
+    if (player === undefined || player === null) throw new Error();
 
-    reservedSpritesAndCards = reservedSpritesAndCards ?? cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
+    reservedSpritesAndCards = reservedSpritesAndCards ?? player.cards.map((card, index) => <[Sprite, Lib.Card]>[sprites[index], card]);
     movingSpritesAndCards = movingSpritesAndCards ?? [];
-    shareCount = shareCount ?? gameState.playerShareCount;
-    revealCount = revealCount ?? gameState.playerRevealCount;
-    splitIndex = splitIndex ?? cards.length;
+    shareCount = shareCount ?? player.shareCount;
+    revealCount = revealCount ?? player.revealCount;
+    splitIndex = splitIndex ?? player.cards.length;
     returnToDeck = returnToDeck ?? false;
 
     // clear for reinsertion
     sprites.splice(0, sprites.length);
-    cards.splice(0, cards.length);
+    player.cards.splice(0, player.cards.length);
 
     for (const [reservedSprite, reservedCard] of reservedSpritesAndCards) {
-        if (cards.length === splitIndex) {
+        if (player.cards.length === splitIndex) {
             for (const [movingSprite, movingCard] of movingSpritesAndCards) {
                 sprites.push(movingSprite);
-                cards.push(movingCard);
+                player.cards.push(movingCard);
             }
         }
 
-        if (cards.length < shareCount) {
-            reservedSprite.target = new Vector(
-                VP.app.view.width / 2 - VP.spriteWidth - shareCount * VP.spriteGap + cards.length * VP.spriteGap,
-                VP.app.view.height - 2 * VP.spriteHeight - VP.spriteGap
-            );
-        } else if (cards.length < revealCount) {
-            reservedSprite.target = new Vector(
-                VP.app.view.width / 2 + (cards.length - shareCount) * VP.spriteGap,
-                VP.app.view.height - 2 * VP.spriteHeight
-            );
+        if (player.cards.length < shareCount) {
+            reservedSprite.target = {
+                x: Sprite.app.view.width / 2 - Sprite.width - shareCount * Sprite.gap + player.cards.length * Sprite.gap,
+                y: Sprite.app.view.height - 2 * Sprite.height - Sprite.gap
+            };
+        } else if (player.cards.length < revealCount) {
+            reservedSprite.target = {
+                x: Sprite.app.view.width / 2 + (player.cards.length - shareCount) * Sprite.gap,
+                y: Sprite.app.view.height - 2 * Sprite.height
+            };
         } else {
             let count = reservedSpritesAndCards.length - revealCount;
             if (!returnToDeck) {
                 count += movingSpritesAndCards.length;
             }
 
-            reservedSprite.target = new Vector(
-                VP.app.view.width / 2 - VP.spriteWidth / 2 + (cards.length - revealCount - (count - 1) / 2) * VP.spriteGap,
-                VP.app.view.height - VP.spriteHeight
-            );
+            reservedSprite.target = {
+                x: Sprite.app.view.width / 2 - Sprite.width / 2 + (player.cards.length - revealCount - (count - 1) / 2) * Sprite.gap,
+                y: Sprite.app.view.height - Sprite.height
+            };
         }
         
         sprites.push(reservedSprite);
-        cards.push(reservedCard);
+        player.cards.push(reservedCard);
     }
 
-    if (cards.length === splitIndex) {
+    if (player.cards.length === splitIndex) {
         for (const [movingSprite, movingCard] of movingSpritesAndCards) {
             sprites.push(movingSprite);
-            cards.push(movingCard);
+            player.cards.push(movingCard);
         }
     }
 
-    gameState.playerShareCount = shareCount;
-    gameState.playerRevealCount = revealCount;
+    player.shareCount = shareCount;
+    player.revealCount = revealCount;
+
+    let index = 0;
+    for (const sprite of sprites) {
+        sprite.index = index++;
+    }
 }
-
-export async function joinGame(gameId: string, playerName: string) {
-    // wait for connection
-    do {
-        await Lib.delay(1000);
-        console.log(`ws.readyState: ${ws.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
-    } while (ws.readyState != WebSocket.OPEN);
-
-    // try to join the game
-    await new Promise<void>((resolve, reject) => {
-        addCallback('joinGame', resolve, reject);
-        ws.send(JSON.stringify(<Lib.JoinGameMessage>{ gameId, playerName }));
-    });
-}
-
-export async function takeCard(otherPlayerIndex: number, cardIndex: number, card: Lib.Card) {
-    const animationsAssociated = new Promise<void>(resolve => {
-        onAnimationsAssociated = () => {
-            console.log(`associated animations`);
-            onAnimationsAssociated = () => {};
-            resolve();
-        };
-    });
-
-    await new Promise<void>((resolve, reject) => {
-        addCallback('takeCard', resolve, reject);
-        ws.send(JSON.stringify(<Lib.TakeCardMessage>{
-            otherPlayerIndex,
-            cardIndex,
-            card
-        }));
-    });
-
-    await animationsAssociated;
-}
-
-export async function drawCard(): Promise<void> {
-    const animationsAssociated = new Promise<void>(resolve => {
-        onAnimationsAssociated = () => {
-            onAnimationsAssociated = () => {};
-            resolve();
-        };
-    });
-
-    await new Promise<void>((resolve, reject) => {
-        addCallback('drawCard', resolve, reject);
-        ws.send(JSON.stringify(<Lib.DrawCardMessage>{
-            drawCard: null
-        }));
-    });
-
-    await animationsAssociated;
-}
-
-export async function returnCardsToDeck(gameState: Lib.GameState) {
-    await new Promise<void>((resolve, reject) => {
-        addCallback('returnCardsToDeck', resolve, reject);
-        ws.send(JSON.stringify(<Lib.ReturnCardsToDeckMessage>{
-            cardsToReturnToDeck: selectedIndices.map(i => gameState.playerCards[i])
-        }));
-    });
-    
-    // make the selected cards disappear
-    selectedIndices.splice(0, selectedIndices.length);
-}
-
-export function reorderCards(gameState: Lib.GameState) {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('reorderCards', resolve, reject);
-        ws.send(JSON.stringify(<Lib.ReorderCardsMessage>{
-            reorderedCards: gameState.playerCards,
-            newShareCount: gameState.playerShareCount,
-            newRevealCount: gameState.playerRevealCount
-        }));
-    });
-}
-
-export function sortBySuit(gameState: Lib.GameState) {
-    let compareFn = ([aSuit, aRank]: Lib.Card, [bSuit, bRank]: Lib.Card) => {
-        if (aSuit !== bSuit) {
-            return aSuit - bSuit;
-        } else {
-            return aRank - bRank;
-        }
-    };
-
-    previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
-    associateAnimationsWithCards(gameState, previousGameState);
-    return reorderCards(gameState);
-}
-
-export function sortByRank(gameState: Lib.GameState) {
-    let compareFn = ([aSuit, aRank]: Lib.Card, [bSuit, bRank]: Lib.Card) => {
-        if (aRank !== bRank) {
-            return aRank - bRank;
-        } else {
-            return aSuit - bSuit;
-        }
-    };
-
-    previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(gameState.playerCards, 0, gameState.playerShareCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerShareCount, gameState.playerRevealCount, compareFn);
-    sortCards(gameState.playerCards, gameState.playerRevealCount, gameState.playerCards.length, compareFn);
-    associateAnimationsWithCards(gameState, previousGameState);
-    return reorderCards(gameState);
-}
-
-function sortCards(
-    cards: Lib.Card[],
-    start: number,
-    end: number,
-    compareFn: (a: Lib.Card, b: Lib.Card) => number
-) {
-    const section = cards.slice(start, end);
-    section.sort(compareFn);
-    cards.splice(start, end - start, ...section);
-}
-/*
-export function wait() {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('wait', resolve, reject);
-        ws.send(JSON.stringify(<Lib.WaitMessage>{
-            wait: null
-        }));
-    });
-}
-
-export function proceed() {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('proceed', resolve, reject);
-        ws.send(JSON.stringify(<Lib.ProceedMessage>{
-            proceed: null
-        }));
-    });
-}
-*/

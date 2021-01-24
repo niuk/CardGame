@@ -43,27 +43,33 @@ export default class Player {
         for (const otherPlayer of this.game.players) {
             if (this === otherPlayer) {
                 playerStates.push({
-                    ...this,
-                    totalCount: this.cards.length
+                    name: this.name,
+                    shareCount: this.shareCount,
+                    revealCount: this.revealCount,
+                    totalCount: this.cards.length,
+                    cards: this.cards
                 });
             } else {
                 playerStates.push({
-                    ...otherPlayer,
+                    name: otherPlayer.name,
+                    shareCount: otherPlayer.shareCount,
+                    revealCount: otherPlayer.revealCount,
                     totalCount: otherPlayer.cards.length,
                     cards: otherPlayer.cards.slice(0, otherPlayer.revealCount)
                 });
             }
         }
 
-        this.ws.send({
+        this.ws.send(JSON.stringify(<Lib.GameState>{
+            gameId: this.game.gameId,
             deckCount: this.game.cardsInDeck.length,
             playerIndex: this.index,
             playerStates
-        });
+        }));
     }
 
     private async invoke(method: Lib.Method) {
-        if (method.methodName === 'SetName') {
+        if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
         } else if (method.methodName === 'NewGame') {
             new Game().addPlayer(this);
@@ -106,7 +112,9 @@ export default class Player {
 
                 this.cards.push(card);
                 
-                console.log(`player '${this.name}' in slot ${this.index} drew card ${JSON.stringify(card)}`);
+                console.log(`player '${this.name}' in slot ${this.index} drew card ${
+                    JSON.stringify(card)
+                }, cards: ${JSON.stringify(this.cards)}`);
             } else if (method.methodName === 'ReturnCardsToDeck') {
                 const newCards = this.cards.slice();
                 let newShareCount = this.shareCount;
@@ -131,18 +139,19 @@ export default class Player {
 
                 if (this.cards.length - newCards.length != method.cardsToReturnToDeck.length) {
                     throw new Error(`could not find all cards to return: ${
-                        JSON.stringify(method.cardsToReturnToDeck.map(card => JSON.stringify(card)))
-                    }`);
+                        JSON.stringify(method.cardsToReturnToDeck)
+                    }, cards.length: ${this.cards.length}, newCards.length: ${newCards.length}`);
                 }
 
                 this.cards = newCards;
                 this.shareCount = newShareCount;
                 this.revealCount = newRevealCount;
                 this.game.cardsInDeck.push(...method.cardsToReturnToDeck);
-                this.game.broadcastState();
 
                 console.log(`'${this.name}' in slot ${this.index} returned cards: ${
-                    JSON.stringify(method.cardsToReturnToDeck.map(card => JSON.stringify(card)))
+                    JSON.stringify(method.cardsToReturnToDeck)
+                }, cards: ${
+                    JSON.stringify(this.cards)
                 }`);        
             } else if (method.methodName === 'ReorderCards') {
                 let oldCards = this.cards.slice();

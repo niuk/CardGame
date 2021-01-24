@@ -4,14 +4,13 @@ import watchify from 'watchify';
 import tsify from 'tsify';
 
 const b = browserify({ cache: {}, packageCache: {}, debug: true })
-    .add('src/client/lobby.ts')
-    .add('src/client/game.ts')
+    .add('src/client/main.ts')
     .plugin(tsify, { project: 'tsconfig.client.json' })
     .plugin(watchify);
 
-const path = 'static/client.js';
+const bundle = 'static/client.js';
 
-function bundle() {
+function onUpdate() {
     let error = null;
     b.bundle()
         .on('end', () => {
@@ -22,16 +21,16 @@ function bundle() {
                 console.log(`success:`);
                 console.log({
                     timestamp: new Date(),
-                    bundle: path
+                    bundle: bundle
                 });
             }
         })
         .on('error', e => {
             error = e;
         })
-        .pipe(fs.createWriteStream(path));
+        .pipe(fs.createWriteStream(bundle));
 }
 
-b.on('update', bundle);
+b.on('update', onUpdate);
 
-bundle();
+onUpdate();
