@@ -84,6 +84,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                     name: playerState.name,
                     shareCount: 0,
                     revealCount: 0,
+                    groupCount: 0,
                     totalCount: 0,
                     cards: []
                 };
@@ -146,6 +147,10 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                         --previousPlayerState.revealCount;
                     }
 
+                    if (j < previousPlayerState.groupCount) {
+                        --previousPlayerState.groupCount;
+                    }
+
                     --previousPlayerState.totalCount;
 
                     const faceSprite = previousFaceSprites.splice(j, 1)[0];
@@ -160,7 +165,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         return 'continue';
     });
 
-    // try to link each face card with the previously shared cards of other players
+    // try to link each face card with...
     forEachPlayer((
         playerIndex,
         playerState,
@@ -173,6 +178,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         for (let i = 0; i < playerState.cards.length; ++i) {
             if (faceSprites[i]) continue;
 
+            // ... the previously shared cards of other players
             forEachPlayer((
                 otherPlayerIndex,
                 otherPlayerState,
@@ -190,19 +196,36 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                     if (JSON.stringify(playerState.cards[i]) === JSON.stringify(otherPreviousPlayerState.cards[k])) {
                         otherPreviousPlayerState.shareCount--;
                         otherPreviousPlayerState.revealCount--;
+                        otherPreviousPlayerState.groupCount--;
                         otherPreviousPlayerState.totalCount--;
                         otherPreviousPlayerState.cards.splice(k, 1);
     
-                        const faceSprite = otherPreviousFaceSprites.splice(k, 1)[0];
-                        if (faceSprite === undefined) throw new Error();
-                        faceSprites[i] = faceSprite;
+                        const sprite = otherPreviousFaceSprites.splice(k, 1)[0];
+                        if (!sprite) throw new Error();
+                        faceSprites[i] = sprite;
 
                         return 'break';
                     }
                 }
 
                 return 'continue';
-            });    
+            });
+
+            // ... a card drawn from the deck
+            if (!faceSprites[i] &&
+                previousGameState &&
+                previousGameState.deckCount > 0
+            ) {
+                previousGameState.deckCount--;
+                const sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
+                if (!sprite) throw new Error();
+                
+                const container = playerContainers[playerIndex];
+                if (container === undefined) throw new Error();
+                sprite.transfer(container, Sprite.getTexture(JSON.stringify(playerState.cards[i])));
+
+                faceSprites[i] = sprite;
+            }
         }
 
         return 'continue';
@@ -218,18 +241,33 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         backSprites,
         previousBackSprites
     ) => {
+        const container = playerContainers[playerIndex];
+        if (container === undefined) throw new Error();
+
+        const texture = Sprite.getTexture(`Back${playerIndex + 1}`);
+
         for (let i = playerState.cards.length; i < playerState.totalCount; ++i) {
             if (previousPlayerState.totalCount > previousPlayerState.cards.length) {
                 // ... his previous back cards
                 previousPlayerState.totalCount--;
-                backSprites.push(...previousBackSprites.splice(0, 1));
+
+                const sprite = previousBackSprites.splice(0, 1)[0];
+                if (!sprite) throw new Error();
+                sprite.transfer(container, texture);
+
+                backSprites.push(sprite);
             } else if (
                 previousGameState &&
                 previousGameState.deckCount > 0
             ) {
                 // ... any cards previously in the deck
                 previousGameState.deckCount--;
-                backSprites.push(...previousDeckSprites.splice(0, 1));
+
+                const sprite = previousDeckSprites.splice(0, 1)[0];
+                if (!sprite) throw new Error();
+                sprite.transfer(container, texture);
+
+                backSprites.push(sprite);
             } else {
                 // ... previously shared cards of other players
                 forEachPlayer((
@@ -243,7 +281,17 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 ) => {
                     if (otherPreviousPlayerState.shareCount > 0) {
                         otherPreviousPlayerState.shareCount--;
-                        backSprites.push(...otherPreviousFaceSprites.splice(0, 1));
+                        otherPreviousPlayerState.revealCount--;
+                        otherPreviousPlayerState.groupCount--;
+                        otherPreviousPlayerState.totalCount--;
+                        otherPreviousPlayerState.cards.splice(0, 1);
+
+                        const sprite = otherPreviousFaceSprites.splice(0, 1)[0];
+                        if (!sprite) throw new Error();
+                        sprite.transfer(container, texture);
+
+                        backSprites.push(sprite);
+
                         return 'break';
                     }
 
@@ -278,7 +326,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 previousPlayerState.totalCount--;
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
-                if (sprite === undefined) throw new Error();
+                if (!sprite) throw new Error();
                 sprite.transfer(container, texture);
 
                 faceSprites[i] = sprite;
@@ -290,22 +338,23 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
         // link the player's remaining back cards with...
         for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
-            const texture = Sprite.getTexture(`Back${playerIndex}`);
+            const texture = Sprite.getTexture(`Back${playerIndex + 1}`);
 
             if (previousPlayerState.cards.length > 0) {
                 // ... his previous face cards
-                previousPlayerState.cards.splice(0, 1);
                 previousPlayerState.shareCount = Math.max(0, previousPlayerState.shareCount - 1);
                 previousPlayerState.revealCount = Math.max(0, previousPlayerState.revealCount - 1);
+                previousPlayerState.groupCount = Math.max(0, previousPlayerState.groupCount - 1);
                 previousPlayerState.totalCount--;
+                previousPlayerState.cards.splice(0, 1);
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
-                if (sprite === undefined) throw new Error();
+                if (!sprite) throw new Error();
                 sprite.transfer(container, texture);
 
                 backSprites.push(sprite);
             } else {
-                /// ... or nothing
+                // ... or nothing
                 backSprites.push(new Sprite(container, texture));
             }
         }
@@ -328,10 +377,11 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         ) => {
             if (previousPlayerState.cards.length > 0) {
                 // ... a player's face card
-                previousPlayerState.cards.splice(0, 1);
                 previousPlayerState.shareCount = Math.max(0, previousPlayerState.shareCount - 1);
                 previousPlayerState.revealCount = Math.max(0, previousPlayerState.revealCount - 1);
+                previousPlayerState.groupCount = Math.max(0, previousPlayerState.groupCount - 1);
                 previousPlayerState.totalCount--;
+                previousPlayerState.cards.splice(0, 1);
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
                 if (sprite === undefined) throw new Error();
@@ -366,17 +416,16 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         previousDeckSprite.destroy();
     }
 
-    setSpriteTargets(gameState);
-
     onSpritesLinkedWithCards();
 }
 
-export function setSpriteTargets(
+export function setPlayerSpriteTargets(
     gameState: Lib.GameState,
     reservedSpritesAndCards?: [Sprite, Lib.Card][],
     movingSpritesAndCards?: [Sprite, Lib.Card][],
     shareCount?: number,
     revealCount?: number,
+    groupCount?: number,
     splitIndex?: number,
     returnToDeck?: boolean
 ) {
@@ -390,6 +439,7 @@ export function setSpriteTargets(
     movingSpritesAndCards = movingSpritesAndCards ?? [];
     shareCount = shareCount ?? player.shareCount;
     revealCount = revealCount ?? player.revealCount;
+    groupCount = groupCount ?? player.groupCount;
     splitIndex = splitIndex ?? player.cards.length;
     returnToDeck = returnToDeck ?? false;
 
@@ -407,24 +457,26 @@ export function setSpriteTargets(
 
         if (player.cards.length < shareCount) {
             reservedSprite.target = {
-                x: Sprite.app.view.width / 2 - Sprite.width - shareCount * Sprite.gap + player.cards.length * Sprite.gap,
-                y: Sprite.app.view.height - 2 * Sprite.height - Sprite.gap
+                x: Sprite.app.view.width / 2 - Sprite.width + (player.cards.length - shareCount) * Sprite.gap,
+                y: Sprite.app.view.height - 2 * Sprite.height - 2 * Sprite.gap
             };
         } else if (player.cards.length < revealCount) {
             reservedSprite.target = {
-                x: Sprite.app.view.width / 2 + (player.cards.length - shareCount) * Sprite.gap,
-                y: Sprite.app.view.height - 2 * Sprite.height
+                x: Sprite.app.view.width / 2 + (1 + player.cards.length - shareCount) * Sprite.gap,
+                y: Sprite.app.view.height - 2 * Sprite.height - 2 * Sprite.gap
             };
         } else {
-            let count = reservedSpritesAndCards.length - revealCount;
-            if (!returnToDeck) {
-                count += movingSpritesAndCards.length;
+            if (player.cards.length < groupCount) {
+                reservedSprite.target = {
+                    x: Sprite.app.view.width / 2 - Sprite.width + (player.cards.length - revealCount - (groupCount - revealCount)) * Sprite.gap,
+                    y: Sprite.app.view.height - Sprite.height
+                };
+            } else {
+                reservedSprite.target = {
+                    x: Sprite.app.view.width / 2 + (1 + player.cards.length - groupCount) * Sprite.gap,
+                    y: Sprite.app.view.height - Sprite.height
+                };
             }
-
-            reservedSprite.target = {
-                x: Sprite.app.view.width / 2 - Sprite.width / 2 + (player.cards.length - revealCount - (count - 1) / 2) * Sprite.gap,
-                y: Sprite.app.view.height - Sprite.height
-            };
         }
         
         sprites.push(reservedSprite);
@@ -440,9 +492,18 @@ export function setSpriteTargets(
 
     player.shareCount = shareCount;
     player.revealCount = revealCount;
+    player.groupCount = groupCount;
+}
 
-    let index = 0;
-    for (const sprite of sprites) {
-        sprite.index = index++;
-    }
+export function transformPlayerContainers(gameState: Lib.GameState) {
+    let container: PIXI.Container;
+
+    container = <PIXI.Container>playerContainers[(gameState.playerIndex + 1) % 4];
+    container.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
+    container.rotation = -Math.PI / 2;
+
+    container = <PIXI.Container>playerContainers[(gameState.playerIndex + 3) % 4];
+    container.position.x = Sprite.app.view.width;
+    container.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
+    container.rotation = Math.PI / 2;
 }

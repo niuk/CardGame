@@ -175,11 +175,7 @@ Sprite.onDragMove = (position, sprite) => {
         // TODO: check whether mouse position has left button bounds
     } else if (action === 'SortByRank') {
         // TODO: check whether mouse position has left button bounds
-    } /*else if (action === 'Wait') {
-        // TODO: check whether mouse position has left button bounds
-    } else if (action === 'Proceed') {
-        // TODO: check whether mouse position has left button bounds
-    } */else if (action === 'Deselect') {
+    } else if (action === 'Deselect') {
         // TODO: box selection?
     } else if (
         action.type === 'TakeFromOtherPlayer' ||
@@ -204,7 +200,7 @@ Sprite.onDragMove = (position, sprite) => {
                 sprite.target = V.add(mouseMovePosition, action.mousePositionToSpritePosition);
 
                 action = { ...action, type: 'WaitingForNewCard' };
-                promise.then(onCardDrawn(sprite)).catch(_ => {
+                promise.then(onCardDrawn).catch(_ => {
                     if (action !== 'None' &&
                         action !== 'Deselect' &&
                         action !== 'SortByRank' &&
@@ -258,13 +254,7 @@ Sprite.onDragEnd = async () => {
         Client.sortByRank(gameState);
     } else if (action === 'SortBySuit') {
         Client.sortBySuit(gameState);
-    } /*else if (action === 'Wait') {
-        console.log('waiting');
-        await State.wait();
-    } else if (action === 'Proceed') {
-        console.log('proceeding');
-        await State.proceed();
-    } */else if (action === 'Deselect') {
+    } else if (action === 'Deselect') {
         State.selectedIndices.splice(0, State.selectedIndices.length);
     } else if (action.type === 'DrawFromDeck' || action.type === 'WaitingForNewCard') {
         // do nothing
@@ -313,42 +303,29 @@ Sprite.onDragEnd = async () => {
         State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
     }
 
-    State.setSpriteTargets(gameState);
+    State.setPlayerSpriteTargets(gameState);
 
     action = 'None';
 }
 
-function onCardDrawn(deckSprite: Sprite) {
-    return () => {
-        if (action !== 'None' &&
-            action !== 'SortBySuit' &&
-            action !== 'SortByRank' &&
-            //action !== 'Wait' &&
-            //action !== 'Proceed' &&
-            action !== 'Deselect' &&
-            action.type === 'WaitingForNewCard'
-        ) {
-            const gameState = Client.gameState;
-            if (gameState === undefined) throw new Error();
+function onCardDrawn() {
+    if (action !== 'None' &&
+        action !== 'SortBySuit' &&
+        action !== 'SortByRank' &&
+        action !== 'Deselect' &&
+        action.type === 'WaitingForNewCard'
+    ) {
+        const gameState = Client.gameState;
+        if (gameState === undefined) throw new Error();
 
-            const player = gameState.playerStates[gameState.playerIndex];
-            if (player === undefined || player === null) throw new Error();        
+        const player = gameState.playerStates[gameState.playerIndex];
+        if (player === undefined || player === null) throw new Error();        
 
-            // immediately select newly acquired card
-            const cardIndex = player.cards.length - 1;
-            State.selectedIndices.splice(0, State.selectedIndices.length);
-            State.selectedIndices.push(cardIndex);
-
-            // new card should appear in place of dragged card from deck without animation
-            const faceSpriteAtMouseDown = State.faceSpritesForPlayer[gameState.playerIndex]?.[cardIndex];
-            if (faceSpriteAtMouseDown === undefined) throw new Error();
-            faceSpriteAtMouseDown.target = deckSprite.position;
-            faceSpriteAtMouseDown.position = deckSprite.position;
-            //faceSpriteAtMouseDown.velocity = deckSprite.velocity;
-            
-            drag(gameState, cardIndex, action.mousePositionToSpritePosition);
-        }
-    };
+        // immediately select newly acquired card
+        const cardIndex = player.cards.length - 1;
+        State.selectedIndices.splice(0, State.selectedIndices.length, cardIndex);
+        drag(gameState, cardIndex, action.mousePositionToSpritePosition);
+    }
 }
 
 function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSpritePosition: V.IVector2) {
@@ -365,6 +342,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
     let splitIndex: number | undefined = undefined;
     let shareCount = player.shareCount;
     let revealCount = player.revealCount;
+    let groupCount = player.groupCount;
 
     // extract moving sprites
     for (const i of State.selectedIndices) {
@@ -379,6 +357,10 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
 
         if (i < player.revealCount) {
             --revealCount;
+        }
+
+        if (i < player.groupCount) {
+            --groupCount;
         }
     }
 
@@ -413,8 +395,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
 
         // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
         const splitRevealed = revealDistance < hideDistance;
-        let splitShared: boolean;
-        let specialSplit: boolean;
+        let splitLeft = leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width < Sprite.app.view.width;
         let start: number;
         let end: number;
         if (splitRevealed) {
@@ -424,10 +405,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
                 splitIndex = shareCount;
             }
             
-            splitShared =
-                (leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width) / 2 <
-                Sprite.app.view.width / 2;
-            if (splitShared) {
+            if (splitLeft) {
                 start = 0;
                 end = shareCount;
             } else {
@@ -435,10 +413,19 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
                 end = revealCount;
             }
         } else {
-            splitShared = false;
-            specialSplit = false;
-            start = revealCount;
-            end = reservedSpritesAndCards.length;
+            if (leftMovingSprite.target.x < Sprite.app.view.width / 2 &&
+                Sprite.app.view.width / 2 < rightMovingSprite.target.x + Sprite.width
+            ) {
+                splitIndex = groupCount;
+            }
+
+            if (splitLeft) {
+                start = revealCount;
+                end = groupCount;
+            } else {
+                start = groupCount;
+                end = reservedSpritesAndCards.length;
+            }
         }
 
         if (splitIndex === undefined) {
@@ -483,15 +470,21 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
             }
         }
 
-        // adjust share count
-        if (splitIndex < shareCount || splitIndex === shareCount && splitShared) {
+        console.log(`BEFORE: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
+
+        if (splitIndex < shareCount || splitIndex === shareCount && splitRevealed && splitLeft) {
             shareCount += movingSpritesAndCards.length;
         }
-    
-        // adjust reveal count
+
         if (splitIndex < revealCount || splitIndex === revealCount && splitRevealed) {
             revealCount += movingSpritesAndCards.length;
         }
+
+        if (splitIndex < groupCount || splitIndex === groupCount && (splitRevealed || splitLeft)) {
+            groupCount += movingSpritesAndCards.length;
+        }
+        
+        console.log(`AFTER: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
     }
 
     // adjust selected indices
@@ -518,12 +511,13 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
             { x: (selectedIndex - action.cardIndex) * Sprite.gap, y: 0 });
     }
 
-    State.setSpriteTargets(
+    State.setPlayerSpriteTargets(
         gameState,
         reservedSpritesAndCards,
         movingSpritesAndCards,
         shareCount,
         revealCount,
+        groupCount,
         splitIndex,
         action.type === 'ReturnToDeck'
     );

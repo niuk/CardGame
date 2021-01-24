@@ -57,6 +57,7 @@ export interface PlayerState {
     name: string;
     shareCount: number;
     revealCount: number;
+    groupCount: number;
     totalCount: number;
     cards: Card[];
 }
@@ -123,7 +124,8 @@ export interface ReturnCardsToDeck {
 
 export interface ReorderCards {
     methodName: 'ReorderCards';
-    reorderedCards: Card[];
     newShareCount: number;
     newRevealCount: number;
+    newGroupCount: number;
+    reorderedCards: Card[];
 }

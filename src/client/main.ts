@@ -50,7 +50,7 @@ window.onresize = () => {
 
     const gameState = Client.gameState;
     if (gameState) {
-        State.setSpriteTargets(gameState);
+        State.setPlayerSpriteTargets(gameState);
     }
 };
 
@@ -66,6 +66,7 @@ window.onload = async () => {
     });
     Sprite.app.ticker.add(renderDeck);
     Sprite.app.ticker.add(renderPlayer);
+    Sprite.app.ticker.add(renderOtherPlayer);
 }
 
 const deckDealDuration = 1000;
@@ -115,7 +116,69 @@ function renderPlayer(deltaTime: number) {
 
     let i = 0;
     for (const sprite of sprites) {
-        sprite.selected = Lib.binarySearchNumber(State.selectedIndices, i++) >= 0;
+        sprite.selected = Lib.binarySearchNumber(State.selectedIndices, i) >= 0;
+        sprite.index = i;
         sprite.animate(deltaTime);
+
+        ++i;
+    }
+}
+
+function renderOtherPlayer(deltaTime: number) {
+    const gameState = Client.gameState;
+    if (gameState === undefined) return;
+
+    for (let i = 1; i < 4; ++i) {
+        const playerIndex = (gameState.playerIndex + i) % 4;
+
+        const playerState = gameState.playerStates[playerIndex];
+        if (!playerState) continue;
+
+        const faceSprites = State.faceSpritesForPlayer[playerIndex];
+        if (!faceSprites) throw new Error();
+
+        let j = 0;
+        for (const faceSprite of faceSprites) {
+            if (j < playerState.shareCount) {
+                faceSprite.target = {
+                    x: Sprite.app.view.width / 2 + (playerState.shareCount - j) * Sprite.gap,
+                    y: Sprite.height
+                };
+            } else {
+                faceSprite.target = {
+                    x: Sprite.app.view.width / 2 - Sprite.width - (j - playerState.shareCount) * Sprite.gap,
+                    y: Sprite.height
+                };
+            }
+
+            faceSprite.index = j;
+            faceSprite.animate(deltaTime);
+
+            ++j;
+        }
+
+        const backSprites = State.backSpritesForPlayer[playerIndex];
+        if (!backSprites) throw new Error();
+
+        j = 0;
+        for (const backSprite of backSprites) {
+            const localGroupCount = playerState.groupCount - playerState.revealCount;
+            if (j < localGroupCount) {
+                backSprite.target = {
+                    x: Sprite.app.view.width / 2 + (localGroupCount - j) * Sprite.gap,
+                    y: 0
+                };
+            } else {
+                backSprite.target = {
+                    x: Sprite.app.view.width / 2 - Sprite.width - (j - localGroupCount) * Sprite.gap,
+                    y: 0
+                };
+            }
+
+            backSprite.index = j;
+            backSprite.animate(deltaTime);
+
+            ++j;
+        }
     }
 }

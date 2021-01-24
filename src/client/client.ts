@@ -62,9 +62,9 @@ ws.onmessage = e => {
                     }
                 }
 
-                if (closest === undefined) throw new Error();
-
-                newSelectedIndices.push(closest);
+                if (closest !== undefined) {
+                    newSelectedIndices.push(closest);
+                }
             }
 
             State.selectedIndices.splice(0, State.selectedIndices.length, ...newSelectedIndices);
@@ -73,8 +73,9 @@ ws.onmessage = e => {
         // binary search still needs to work
         State.selectedIndices.sort((a, b) => a - b);
 
-        // initialize animation states
         State.linkSpritesWithCards(previousGameState, gameState);
+        State.setPlayerSpriteTargets(gameState);
+        State.transformPlayerContainers(gameState);
     } else {
         throw new Error(JSON.stringify(e.data));
     }
@@ -191,7 +192,8 @@ export function reorderCards(gameState: Lib.GameState) {
             methodName: 'ReorderCards',
             reorderedCards: player.cards,
             newShareCount: player.shareCount,
-            newRevealCount: player.revealCount
+            newRevealCount: player.revealCount,
+            newGroupCount: player.groupCount
         }));
     });
 }
@@ -205,15 +207,15 @@ export function sortBySuit(gameState: Lib.GameState) {
         }
     };
 
-    const previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-
     const player = gameState.playerStates[gameState.playerIndex];
     if (player === undefined || player === null) throw new Error();
 
+    const previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
     sortCards(player.cards, 0, player.shareCount, compareFn);
     sortCards(player.cards, player.shareCount, player.revealCount, compareFn);
-    sortCards(player.cards, player.revealCount, player.cards.length, compareFn);
-    State.linkSpritesWithCards(gameState, previousGameState);
+    sortCards(player.cards, player.revealCount, player.groupCount, compareFn);
+    sortCards(player.cards, player.groupCount, player.totalCount, compareFn);
+    State.linkSpritesWithCards(previousGameState, gameState);
     return reorderCards(gameState);
 }
 
@@ -226,15 +228,15 @@ export function sortByRank(gameState: Lib.GameState) {
         }
     };
 
-    previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    
     const player = gameState.playerStates[gameState.playerIndex];
     if (player === undefined || player === null) throw new Error();
 
+    previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
     sortCards(player.cards, 0, player.shareCount, compareFn);
     sortCards(player.cards, player.shareCount, player.revealCount, compareFn);
-    sortCards(player.cards, player.revealCount, player.cards.length, compareFn);
-    State.linkSpritesWithCards(gameState, previousGameState);
+    sortCards(player.cards, player.revealCount, player.groupCount, compareFn);
+    sortCards(player.cards, player.groupCount, player.totalCount, compareFn);
+    State.linkSpritesWithCards(previousGameState, gameState);
     return reorderCards(gameState);
 }
 

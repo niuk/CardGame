@@ -3,7 +3,7 @@ import * as PIXI from 'pixi.js';
 import * as Lib from '../lib';
 import * as V from './vector';
 
-const decayPerSecond = 1 / 3;
+const decayPerSecond = 1 / 5;
 
 const colors = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
 const suits = ['Club', 'Diamond', 'Heart', 'Spade', 'Joker'];
@@ -104,11 +104,6 @@ export default class Sprite {
         this._sprite.position.set(value.x, value.y);
     }
 
-    public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
-        parent.addChild(this._sprite);
-        this._sprite.texture = texture;
-    }
-
     public destroy() {
         this._sprite.destroy();
     }
@@ -169,6 +164,11 @@ export default class Sprite {
         this._sprite.on('pointerupoutside', onPointerUp);
 
         parent.addChild(this._sprite);
+    }
+
+    public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
+        parent.addChild(this._sprite);
+        this._sprite.texture = texture;
     }
 
     animate(deltaTime: number) {

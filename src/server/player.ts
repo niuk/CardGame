@@ -12,6 +12,7 @@ export default class Player {
     cards: Lib.Card[] = [];
     shareCount: number = 0;
     revealCount: number = 0;
+    groupCount: number = 0;
 
     constructor(ws: WebSocket) {
         this.ws = ws;
@@ -22,6 +23,8 @@ export default class Player {
             try {
                 await this.invoke(method);
             } catch (e) {
+                console.error(e);
+                
                 errorDescription = JSON.stringify(e);
             }
             
@@ -36,7 +39,14 @@ export default class Player {
         ws.onclose = async event => {
             console.log('closed websocket connection');
 
-            this.leaveGame();
+            if (this.game) {
+                const index = this.game.players.indexOf(this);
+                if (index >= 0) {
+                    this.game.players.splice(index, 1);
+                    this.index = -1;
+                    this.game = undefined;
+                }
+            }
         };
     }
 
@@ -52,6 +62,7 @@ export default class Player {
                     name: this.name,
                     shareCount: this.shareCount,
                     revealCount: this.revealCount,
+                    groupCount: this.groupCount,
                     totalCount: this.cards.length,
                     cards: this.cards
                 });
@@ -60,6 +71,7 @@ export default class Player {
                     name: otherPlayer.name,
                     shareCount: otherPlayer.shareCount,
                     revealCount: otherPlayer.revealCount,
+                    groupCount: otherPlayer.groupCount,
                     totalCount: otherPlayer.cards.length,
                     cards: otherPlayer.cards.slice(0, otherPlayer.revealCount)
                 });
@@ -79,28 +91,30 @@ export default class Player {
             this.name = method.playerName;
         } else if (method.methodName === 'NewGame') {
             this.game = new Game();
-            this.game.players.push(this);
+            this.game.players[0] = this;
             this.index = 0;
+            
+            console.log(`player '${this.name}' created and joined game '${this.game.gameId}'`);
         } else if (method.methodName === 'JoinGame') {
             this.game = Game.get(method.gameId);
 
-            for (let i = 0; i < this.game.players.length; ++i) {
-                const player = this.game.players[i];
-                if (player !== undefined && player.name === this.name) {
-                    this.game.players[i] = this;
-                    this.index = i;
-                }
-            }
+            console.log(`player '${this.name}' trying to join game '${this.game.gameId}'...`);
 
-            for (let i = 0; i < this.game.players.length; ++i) {
-                const player = this.game.players[i];
+            let joined = false;
+            for (let i = 0; i < 4; ++i) {
                 if (this.game.players[i] === undefined) {
                     this.game.players[i] = this;
                     this.index = i;
+                    joined = true;
+                    break;
                 }
             }
 
-            throw new Error(`could not join game '${this.game.gameId}'`);
+            if (!joined) {
+                throw new Error(`could not join game '${this.game.gameId}'`);
+            }
+            
+            console.log(`player '${this.name}' joined game '${this.game.gameId}'`);
         } else {
             if (!this.game) throw new Error('you are not in a game');
 
@@ -126,6 +140,10 @@ export default class Player {
                     --otherPlayer.revealCount;
                 }
 
+                if (method.cardIndex < otherPlayer.groupCount) {
+                    --otherPlayer.groupCount;
+                }
+
                 otherPlayer.cards.splice(method.cardIndex, 1);
                 this.cards.push(method.card);
 
@@ -145,6 +163,8 @@ export default class Player {
                 const newCards = this.cards.slice();
                 let newShareCount = this.shareCount;
                 let newRevealCount = this.revealCount;
+                let newGroupCount = this.groupCount;
+                
                 for (let i = 0; i < method.cardsToReturnToDeck.length; ++i) {
                     for (let j = 0; j < newCards.length; ++j) {
                         if (JSON.stringify(method.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {
@@ -156,6 +176,10 @@ export default class Player {
 
                             if (j < newRevealCount) {
                                 --newRevealCount;
+                            }
+
+                            if (j < newGroupCount) {
+                                --newGroupCount;
                             }
 
                             break;
@@ -172,6 +196,7 @@ export default class Player {
                 this.cards = newCards;
                 this.shareCount = newShareCount;
                 this.revealCount = newRevealCount;
+                this.groupCount = newGroupCount;
                 this.game.cardsInDeck.push(...method.cardsToReturnToDeck);
 
                 console.log(`'${this.name}' in slot ${this.index} returned cards: ${
@@ -204,23 +229,13 @@ export default class Player {
                 this.cards = newCards;
                 this.shareCount = method.newShareCount;
                 this.revealCount = method.newRevealCount;
+                this.groupCount = method.newGroupCount;
                 
-                console.log(`player '${this.name}' in slot ${this.index} reordered cards:\r\n${
-                    JSON.stringify(this.cards.map(card => JSON.stringify(card)))
-                }\r\nshareCount: ${this.shareCount}, revealCount: ${this.revealCount}`);
+                console.log(`player '${this.name}' in slot ${this.index} reordered cards: ${
+                    JSON.stringify(this.cards)
+                }\r\nshareCount: ${this.shareCount}, revealCount: ${this.revealCount}, groupCount: ${this.groupCount}`);
             } else {
                 const _: never = method;
-            }
-        }
-    }
-
-    private leaveGame() {
-        if (this.game) {
-            const index = this.game.players.indexOf(this);
-            if (index >= 0) {
-                this.game.players.splice(index, 1);
-                this.index = -1;
-                this.game = undefined;
             }
         }
     }
