@@ -13,6 +13,10 @@ export function getCookie(name: string): string | undefined {
     }
 }
 
+export function setCookie(name: string, value: string) {
+    document.cookie = `${name}=${value}`;
+}
+
 export function getParam(name: string): string | undefined {
     return window.location.search.split(`${name}=`)[1]?.split("&")[0];
 }
@@ -58,13 +62,14 @@ export interface PlayerState {
 }
 
 export interface GameState {
+    gameId: string;
     deckCount: number;
     playerIndex: number;
     playerStates: (PlayerState | null)[];
 }
 
 export type Method =
-    SetName |
+    SetPlayerName |
     NewGame |
     JoinGame |
     TakeCard |
@@ -73,7 +78,7 @@ export type Method =
     ReorderCards;
 
 export type MethodName =
-    'SetName' |
+    'SetPlayerName' |
     'NewGame' |
     'JoinGame' |
     'TakeCard' |
@@ -86,8 +91,8 @@ export interface Result {
     errorDescription?: string;
 }
 
-export interface SetName {
-    methodName: 'SetName';
+export interface SetPlayerName {
+    methodName: 'SetPlayerName';
     playerName: string;
 }
 
