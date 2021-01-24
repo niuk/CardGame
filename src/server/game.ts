@@ -46,9 +46,15 @@ export default class Game {
     }
 
     public addPlayer(player: Player) {
-        player.game = this;
-        player.index = this.players.length;
-        this.players.push(player);
+        if (!this.players.includes(player)) {
+            player.game = this;
+            player.index = this.players.length;
+            this.players.push(player);
+        }
+    }
+
+    public removePlayer(player: Player) {
+        this.players[this.players.indexOf(player)] = undefined;
     }
 
     public broadcastState() {

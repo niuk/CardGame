@@ -16,11 +16,11 @@ export default class Player {
     constructor(ws: WebSocket) {
         this.ws = ws;
 
-        ws.onmessage = message => {
+        ws.onmessage = async message => {
             const method = <Lib.Method>JSON.parse(message.data.toString());
             let errorDescription: string | undefined = undefined
             try {
-                this.invoke(method);
+                await this.invoke(method);
             } catch (e) {
                 errorDescription = JSON.stringify(e);
             }
@@ -31,6 +31,12 @@ export default class Player {
             }));
 
             this.game?.broadcastState();
+        };
+        
+        ws.onclose = async event => {
+            console.log('closed websocket connection');
+
+            this.leaveGame();
         };
     }
 
@@ -72,9 +78,22 @@ export default class Player {
         if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
         } else if (method.methodName === 'NewGame') {
-            new Game().addPlayer(this);
+            const game = new Game();
+            game.players.push(this);
+            this.index = 0;
         } else if (method.methodName === 'JoinGame') {
-            Game.get(method.gameId).addPlayer(this);
+            const game = Game.get(method.gameId);
+            if (!game.players.includes(this)) {
+                this.game = game;
+                for (let i = 0; i < game.players.length; ++i) {
+                    if (game.players[i] === undefined) {
+                        game.players[i] = this;
+                        this.index = i;
+                    }
+                }
+
+                throw new Error(`Game '${game.gameId}' `);
+            }
         } else {
             if (this.game === null) throw new Error('you are not in a game');
 
@@ -186,5 +205,9 @@ export default class Player {
                 const _: never = method;
             }
         }
+    }
+
+    private leaveGame() {
+        this.game.removePlayer(this);
     }
 }

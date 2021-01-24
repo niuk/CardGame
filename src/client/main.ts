@@ -19,11 +19,16 @@ gameIdElement.value = gameIdFromCookie;
 
     Lib.setCookie('playerName', playerNameElement.value);
 
-    await Client.setPlayerName(playerNameElement.value);
-    await Client.joinGame(gameIdElement.value);
+    try {
+        await Client.setPlayerName(playerNameElement.value);
+        await Client.joinGame(gameIdElement.value);
+    } catch (e) {
+        (<HTMLDivElement>document.getElementById('errorDescription')).innerHTML = JSON.stringify(e);
+        throw e;
+    }
 
     document.body.removeChild(<HTMLDivElement>document.getElementById('form'));
-
+    document.body.removeChild(<HTMLDivElement>document.getElementById('errorDescription'));
     document.body.appendChild(Sprite.app.view);
 };
 
@@ -36,7 +41,7 @@ gameIdElement.value = gameIdFromCookie;
     await Client.newGame();
 
     document.body.removeChild(<HTMLDivElement>document.getElementById('form'));
-
+    document.body.removeChild(<HTMLDivElement>document.getElementById('errorDescription'));
     document.body.appendChild(Sprite.app.view);
 };
 

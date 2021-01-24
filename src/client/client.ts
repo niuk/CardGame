@@ -116,9 +116,9 @@ export async function setPlayerName(playerName: string) {
     })
 }
 
-export async function joinGame(gameId: string) {
+export function joinGame(gameId: string) {
     // try to join the game
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
         addCallback('JoinGame', resolve, reject);
         ws.send(JSON.stringify(<Lib.JoinGame>{
             methodName: 'JoinGame',
@@ -127,8 +127,8 @@ export async function joinGame(gameId: string) {
     });
 }
 
-export async function newGame() {
-    await new Promise<void>((resolve, reject) => {
+export function newGame() {
+    return new Promise<void>((resolve, reject) => {
         addCallback('NewGame', resolve, reject);
         ws.send(JSON.stringify(<Lib.NewGame>{
             methodName: 'NewGame'
