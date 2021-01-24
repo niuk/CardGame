@@ -31,6 +31,10 @@ export default class Sprite {
     public static height: number;
     public static gap: number;
     
+    private static textures = new Map<string, PIXI.Texture>();
+
+    private static sprites = new Set<Sprite>();
+
     public static recalculatePixels() {
         this.pixelsPerPercentWidth = this.app.view.width / 100;
         this.pixelsPerPercentHeight = this.app.view.height / 100;
@@ -39,9 +43,12 @@ export default class Sprite {
         this.width = 10 * this.pixelsPerPercentHeight;
         this.height = 16 * this.pixelsPerPercentHeight;
         this.gap = 1.8 * this.pixelsPerPercentHeight;
-    }
 
-    private static textures = new Map<string, PIXI.Texture>();
+        for (const sprite of Sprite.sprites) {
+            sprite._sprite.width = Sprite.width;
+            sprite._sprite.height = Sprite.height;
+        }
+    }
 
     public static getTexture(stringForCard: string) {
         const image = this.textures.get(stringForCard);
@@ -138,6 +145,8 @@ export default class Sprite {
         this._sprite.width = Sprite.width;
         this._sprite.height = Sprite.height;
         this._sprite.interactive = true;
+
+        Sprite.sprites.add(this);
 
         // wrapper functions are needed because, initially, the static callbacks are undefined
         // also, we only want to fire onDragMove when this sprite is the one the pointer was down on
