@@ -9,10 +9,10 @@ export default class Player {
     game: Game | undefined = undefined;
     name = '';
     index = -1;
-    cards: Lib.Card[] = [];
     shareCount: number = 0;
     revealCount: number = 0;
     groupCount: number = 0;
+    cards: Lib.Card[] = [];
 
     constructor(ws: WebSocket) {
         this.ws = ws;
@@ -103,7 +103,12 @@ export default class Player {
             // try to join at index of a disconnected player with the same name
             let joined = false;
             for (const i of available) {
-                if (this.game.players[i]?.name === this.name) {
+                const player = this.game.players[i];
+                if (player && player.name === this.name) {
+                    this.shareCount = player.shareCount;
+                    this.revealCount = player.revealCount;
+                    this.groupCount = player.groupCount;
+                    this.cards = player.cards;
                     this.game.players[i] = this;
                     this.index = i;
                     joined = true;
@@ -115,6 +120,14 @@ export default class Player {
             if (!joined) {
                 const i = available[0];
                 if (i) {
+                    const player = this.game.players[i];
+                    if (player) {
+                        this.shareCount = player.shareCount;
+                        this.revealCount = player.revealCount;
+                        this.groupCount = player.groupCount;
+                        this.cards = player.cards;
+                    }
+
                     this.game.players[i] = this;
                     this.index = i;
                     joined = true;

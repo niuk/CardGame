@@ -470,7 +470,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
             }
         }
 
-        console.log(`BEFORE: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
+        //console.log(`BEFORE: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
 
         if (splitIndex < shareCount || splitIndex === shareCount && splitRevealed && splitLeft) {
             shareCount += movingSpritesAndCards.length;
@@ -484,7 +484,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
             groupCount += movingSpritesAndCards.length;
         }
         
-        console.log(`AFTER: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
+        //console.log(`AFTER: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
     }
 
     // adjust selected indices

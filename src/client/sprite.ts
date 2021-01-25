@@ -175,8 +175,17 @@ export default class Sprite {
     }
 
     public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
+        console.log(`old parent: ${this._sprite.parent.parent.getChildIndex(this._sprite.parent)}`)
+        console.log('old transform', this._sprite.transform);
+        
+        const localTransform = this._sprite.localTransform.clone();
+        this._sprite.parent.removeChild(this._sprite);
         parent.addChild(this._sprite);
+        this._sprite.localTransform.copyFrom(localTransform);
         this._sprite.texture = texture;
+
+        console.log('new transform', this._sprite.transform);
+        console.log(`new parent: ${this._sprite.parent.parent.getChildIndex(this._sprite.parent)}`)
     }
 
     animate(deltaTime: number) {
