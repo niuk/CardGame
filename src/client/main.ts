@@ -71,7 +71,14 @@ window.onload = async () => {
     statusElement.innerHTML = 'Connecting...';
     await Client.connect();
     statusElement.innerHTML = `Connected. Loading textures...`;
-    await Sprite.load();
+
+    const bar = <HTMLProgressElement>document.getElementById('loading-bar');
+    await Sprite.load(progress => {
+        bar.value = progress * 100;
+        bar.max = 100;
+    });
+    document.body.removeChild(bar);
+    
     statusElement.innerHTML = 'Connected. Textures loaded.';
 
     formElement.style.visibility = 'visible';

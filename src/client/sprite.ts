@@ -74,7 +74,10 @@ export default class Sprite {
         ));
     }
 
-    static async load() {
+    static async load(onTextureLoaded: (progress: number) => void) {
+        let loadedCount = 0;
+        let totalCount = 4 * 13 + 2 + colors.length;
+
         for (let suit = 0; suit <= 4; ++suit) {
             for (let rank = 0; rank <= 14; ++rank) {
                 if (suit === Lib.Suit.Joker) {
@@ -91,12 +94,14 @@ export default class Sprite {
                     JSON.stringify([suit, rank]),
                     `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`
                 );
+                onTextureLoaded(++loadedCount / totalCount);
             }
         }
 
         let i = 0;
         for (const color of colors) {
             await this.loadTexture(`Back${i++}`, `PlayingCards/BackColor_${color}.png`);
+            onTextureLoaded(++loadedCount / totalCount);
         }
 
         console.log('all card images loaded');

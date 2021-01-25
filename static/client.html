@@ -14,11 +14,14 @@
             <label>Or, create a new game:</label>
             <button id='newGame'>New Game</button>
         </div>
+        <progress id='loading-bar' style='position: absolute; top: 50%; left: 50%;'></progress>
         <div id='status' style='position: absolute; right: 0px;'></div>
         <a onclick="showCredits()" style='cursor: help; position: absolute; bottom: 0px; right: 0px;'>©</a>
         <div id='credits' style='position: absolute; bottom: 0px; right: 0px; visibility: hidden; background-color: white; color: black;'>
-            <a onclick="hideCredits()" style='cursor: pointer; position: absolute; right: 0px; top: 0px;'>&times;</a>
+            <a onclick="hideCredits()" style='cursor: pointer; color: white; background-color: red; position: absolute; right: 0px; top: 0px;'>&times;</a>
             <a href='https://github.com/niuk/CardGame'>Code by Karl Niu</a>
+            <br>
+            <span><a href='https://assetstore.unity.com/packages/3d/props/playing-cards-pack-21876'>Playing Cards Pack</a> by <a href='http://www.gamespring.co.kr'>GameSpring</a></span>
             <br>
             <a href="https://www.freepik.com/photos/background">Background photo created by rawpixel.com - www.freepik.com</a>
             <br>

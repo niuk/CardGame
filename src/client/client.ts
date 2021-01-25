@@ -39,9 +39,9 @@ webSocket.onmessage = e => {
         'playerStates' in obj
     ) {
         if (JSON.stringify(gameState) === JSON.stringify(obj)) {
-            return;
+            return; // TODO: figure out why receiving duplicate game states corrupts our sprite arrays
         }
-        
+
         const previousGameState = gameState;
         gameState = <Lib.GameState>obj;
 
