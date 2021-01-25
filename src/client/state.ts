@@ -44,6 +44,10 @@ export function getSpritesLinkedWithCardsPromise(): Promise<void> {
 }
 
 export function linkSpritesWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
+    const container = playerContainers[gameState.playerIndex];
+    if (!container) throw new Error();
+    container.zIndex = 2;
+
     const previousDeckSprites = deckSprites;
     deckSprites = [];
 
@@ -178,6 +182,11 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         for (let i = 0; i < playerState.cards.length; ++i) {
             if (faceSprites[i]) continue;
 
+            const container = playerContainers[playerIndex];
+            if (!container) throw new Error();
+
+            const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
+
             // ... the previously shared cards of other players
             forEachPlayer((
                 otherPlayerIndex,
@@ -202,6 +211,9 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
     
                         const sprite = otherPreviousFaceSprites.splice(k, 1)[0];
                         if (!sprite) throw new Error();
+
+                        sprite.transfer(container, texture);
+
                         faceSprites[i] = sprite;
 
                         return 'break';
@@ -219,10 +231,8 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 previousGameState.deckCount--;
                 const sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                 if (!sprite) throw new Error();
-                
-                const container = playerContainers[playerIndex];
-                if (container === undefined) throw new Error();
-                sprite.transfer(container, Sprite.getTexture(JSON.stringify(playerState.cards[i])));
+
+                sprite.transfer(container, texture);
 
                 faceSprites[i] = sprite;
             }
@@ -384,7 +394,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 previousPlayerState.cards.splice(0, 1);
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
-                if (sprite === undefined) throw new Error();
+                if (!sprite) throw new Error();
                 sprite.transfer(deckContainer, texture);
 
                 deckSprites.push(sprite);
@@ -395,7 +405,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 --previousPlayerState.totalCount;
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
-                if (sprite === undefined) throw new Error();
+                if (!sprite) throw new Error();
                 sprite.transfer(deckContainer, texture);
 
                 deckSprites.push(sprite);

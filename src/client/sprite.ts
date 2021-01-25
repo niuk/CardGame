@@ -102,12 +102,24 @@ export default class Sprite {
 
     private _sprite: PIXI.Sprite;
 
+    public getOffsetInParentTransform(point: V.IVector2): V.IVector2 {
+        return V.sub(this.position, this._sprite.parent.localTransform.applyInverse(point));
+    }
+
     public get position(): V.IVector2 {
         return this._sprite.position;
     }
 
     public set position(value) {
         this._sprite.position.set(value.x, value.y);
+    }
+
+    public get rotation() {
+        return this._sprite.rotation;
+    }
+
+    public set rotation(value) {
+        this._sprite.rotation = value;
     }
 
     public destroy() {
@@ -175,24 +187,23 @@ export default class Sprite {
     }
 
     public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
-        console.log(`old parent: ${this._sprite.parent.parent.getChildIndex(this._sprite.parent)}`)
-        console.log('old transform', this._sprite.transform);
-        
-        const localTransform = this._sprite.localTransform.clone();
-        this._sprite.parent.removeChild(this._sprite);
-        parent.addChild(this._sprite);
-        this._sprite.localTransform.copyFrom(localTransform);
-        this._sprite.texture = texture;
+        // save this sprite's world transform position and rotation
+        const position = this._sprite.parent.worldTransform.apply(this.position);
+        const rotation = this._sprite.parent.rotation;
 
-        console.log('new transform', this._sprite.transform);
-        console.log(`new parent: ${this._sprite.parent.parent.getChildIndex(this._sprite.parent)}`)
+        parent.addChild(this._sprite);
+        this._sprite.texture = texture;
+        this._sprite.tint = 0xffffff;
+
+        // reapply saved world transform position and rotation
+        this.position = parent.transform.localTransform.applyInverse(position);
+        this.rotation = rotation - parent.transform.rotation;
     }
 
     animate(deltaTime: number) {
-        this.position = V.add(
-            this.position,
-            V.scale(1 - Math.pow(1 - decayPerSecond, deltaTime), V.sub(this.target, this.position))
-        );
+        const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
+        this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
+        this.rotation = this.rotation + scale * (0 - this.rotation);
     }
 }
 

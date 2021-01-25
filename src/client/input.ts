@@ -131,6 +131,7 @@ Sprite.onDragStart = (position, sprite) => {
             const cardIndex = sprites.indexOf(sprite);
             if (cardIndex >= 0) {
                 if (i === gameState.playerIndex) {
+                    // this player's own card
                     action = {
                         cardIndex,
                         mousePositionToSpritePosition: V.sub(sprite.position, position),
@@ -139,6 +140,7 @@ Sprite.onDragStart = (position, sprite) => {
                             holdingShift ? 'ShiftClick' : 'Click'
                     };
                 } else {
+                    // another player's shared card
                     const playerState = gameState.playerStates[i];
                     if (!playerState) throw new Error();
 
@@ -148,7 +150,7 @@ Sprite.onDragStart = (position, sprite) => {
 
                         action = {
                             type: 'TakeFromOtherPlayer',
-                            mousePositionToSpritePosition: V.sub(sprite.position, position),
+                            mousePositionToSpritePosition: sprite.getOffsetInParentTransform(position),
                             otherPlayerIndex: i,
                             cardIndex,
                             card
@@ -182,7 +184,7 @@ Sprite.onDragMove = (position, sprite) => {
         action.type === 'DrawFromDeck' ||
         action.type === 'WaitingForNewCard'
     ) {
-        sprite.target = V.add(sprite.target, movement);
+        sprite.target = V.add(mouseMovePosition, action.mousePositionToSpritePosition);
 
         if (exceededDragThreshold) {
             let promise: Promise<void> | undefined;
@@ -197,8 +199,6 @@ Sprite.onDragMove = (position, sprite) => {
             }
 
             if (promise !== undefined) {
-                sprite.target = V.add(mouseMovePosition, action.mousePositionToSpritePosition);
-
                 action = { ...action, type: 'WaitingForNewCard' };
                 promise.then(onCardDrawn).catch(_ => {
                     if (action !== 'None' &&
