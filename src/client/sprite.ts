@@ -13,6 +13,27 @@ const testElement = document.createElement('div');
 testElement.style.width = '1cm';
 document.body.appendChild(testElement);
 
+const textures = new Map<string, PIXI.Texture>();
+const sprites = new Set<Sprite>();
+
+async function loadTexture(key: string, src: string) {
+    await new Promise(resolve => {
+        Sprite.app.loader.add(src).load(resolve);
+    });
+
+    textures.set(key, new PIXI.Texture(
+        PIXI.BaseTexture.from(src),
+        new PIXI.Rectangle(
+            397, 54,
+            1248, 1935
+        )
+    ));
+}
+
+const springConstant = 0.05;
+const mass = 1;
+const drag = Math.sqrt(4 * mass * springConstant);
+
 export default class Sprite {
     public static pixelsPerCM = testElement.offsetWidth;
 
@@ -31,9 +52,6 @@ export default class Sprite {
     public static gap: number;
     public static width: number;
     public static height: number;
-    
-    private static textures = new Map<string, PIXI.Texture>();
-    private static sprites = new Set<Sprite>();
 
     public static recalculatePixels() {
         this.pixelsPerPercentWidth = this.app.view.width / 100;
@@ -45,33 +63,19 @@ export default class Sprite {
         this.width = 10 * this.pixelsPerPercentHeight;
         this.height = 16 * this.pixelsPerPercentHeight;
 
-        for (const sprite of Sprite.sprites) {
+        for (const sprite of sprites) {
             sprite._sprite.width = Sprite.width;
             sprite._sprite.height = Sprite.height;
         }
     }
 
     public static getTexture(stringForCard: string) {
-        const image = this.textures.get(stringForCard);
+        const image = textures.get(stringForCard);
         if (image === undefined) {
             throw new Error(`couldn't get sprite '${stringForCard}'`);
         }
 
         return image;
-    }
-
-    private static async loadTexture(key: string, src: string) {
-        await new Promise(resolve => {
-            Sprite.app.loader.add(src).load(resolve);
-        });
-
-        this.textures.set(key, new PIXI.Texture(
-            PIXI.BaseTexture.from(src),
-            new PIXI.Rectangle(
-                397, 54,
-                1248, 1935
-            )
-        ));
     }
 
     static async load(onTextureLoaded: (progress: number) => void) {
@@ -90,7 +94,7 @@ export default class Sprite {
                     }
                 }
 
-                await this.loadTexture(
+                await loadTexture(
                     JSON.stringify([suit, rank]),
                     `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`
                 );
@@ -100,7 +104,7 @@ export default class Sprite {
 
         let i = 0;
         for (const color of colors) {
-            await this.loadTexture(`Back${i++}`, `PlayingCards/BackColor_${color}.png`);
+            await loadTexture(`Back${i++}`, `PlayingCards/BackColor_${color}.png`);
             onTextureLoaded(++loadedCount / totalCount);
         }
 
@@ -170,20 +174,23 @@ export default class Sprite {
         this._sprite.interactive = true;
         this._sprite.cursor = 'pointer';
 
-        Sprite.sprites.add(this);
+        sprites.add(this);
 
         // wrapper functions are needed because, initially, the static callbacks are undefined
         // also, we only want to fire onDragMove when this sprite is the one the pointer was down on
         let dragging = false;
+
         let onPointerDown = (event: PIXI.InteractionEvent) => {
             dragging = true;
             Sprite.onDragStart?.(event.data.global.clone(), this);
         };
+
         let onPointerMove = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 Sprite.onDragMove?.(event.data.global.clone(), this);
             }
         };
+
         let onPointerUp = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 dragging = false;
@@ -199,10 +206,19 @@ export default class Sprite {
         parent.addChild(this._sprite);
     }
 
+    // target <- 0 <- 1 <- ... <- position
+    // each link, and the actual position, acts as a mass on a damped spring pulled to its predecessor
+    private velocitiesAndPositions: [V.IVector2, V.IVector2, PIXI.Graphics][] = [];
+
     public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
+        const oldParent = this._sprite.parent;
+
         // save this sprite's world transform position and rotation
-        const position = this._sprite.parent.worldTransform.apply(this.position);
-        const rotation = this._sprite.parent.rotation;
+        const position = oldParent.localTransform.apply(this.position);
+        const rotation = oldParent.rotation;
+        const velocitiesAndPositions = this.velocitiesAndPositions.map(([velocity, position, point]) => [
+            { x: 0, y: 0 }, oldParent.localTransform.apply(position), point
+        ] as [V.IVector2, V.IVector2, PIXI.Graphics]);
 
         parent.addChild(this._sprite);
         this._sprite.texture = texture;
@@ -211,11 +227,55 @@ export default class Sprite {
         // reapply saved world transform position and rotation
         this.position = parent.transform.localTransform.applyInverse(position);
         this.rotation = rotation - parent.transform.rotation;
+        for (let i = 0; i < velocitiesAndPositions.length; ++i) {
+            const [velocity, position, point] = <[V.IVector2, V.IVector2, PIXI.Graphics]>velocitiesAndPositions[i];
+            this.velocitiesAndPositions[i] = [
+                { x: 0, y: 0 },
+                parent.transform.localTransform.applyInverse(position),
+                point
+            ];
+        }
     }
 
     animate(deltaTime: number) {
+        if (this.velocitiesAndPositions.length === 0) {
+            this.velocitiesAndPositions.push(
+                [{ x: 0, y: 0 }, this._sprite.position.clone(), new PIXI.Graphics()],
+                [{ x: 0, y: 0 }, this._sprite.position.clone(), new PIXI.Graphics()],
+                [{ x: 0, y: 0 }, this._sprite.position.clone(), new PIXI.Graphics()],
+            );
+
+            for (const [_, __, point] of this.velocitiesAndPositions) {
+                this._sprite.parent.addChild(point);
+            }
+        }
+
+        let target = this.target;
+        for (const velocityAndPosition of this.velocitiesAndPositions) {
+            let [velocity, position, point] = velocityAndPosition;
+
+            const springForce = V.scale(springConstant, V.sub(target, position));
+            const dragForce = V.scale(-drag, velocity);
+            const acceleration = V.scale(1 / mass, V.add(springForce, dragForce));
+
+            velocity = V.add(velocity, V.scale(deltaTime, acceleration));
+            position = V.add(position, V.scale(deltaTime, velocity));
+
+            velocityAndPosition[0] = velocity;
+            velocityAndPosition[1] = position;
+
+            point.clear();
+            point.beginFill(0xffffff, 0xff);
+            point.drawCircle(position.x, position.y, 5);
+            point.endFill();
+
+            target = position;
+        }
+
+        this.position = <V.IVector2>this.velocitiesAndPositions[this.velocitiesAndPositions.length - 1]?.[1];
+
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
-        this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
+        //this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);
     }
 }
