@@ -26,10 +26,11 @@ export default class Sprite {
     public static pixelsPerPercentWidth = 0;
     public static pixelsPerPercentHeight = 0;
 
+    public static fixedGap: number;
     public static deckGap: number;
+    public static gap: number;
     public static width: number;
     public static height: number;
-    public static gap: number;
     
     private static textures = new Map<string, PIXI.Texture>();
     private static sprites = new Set<Sprite>();
@@ -38,10 +39,11 @@ export default class Sprite {
         this.pixelsPerPercentWidth = this.app.view.width / 100;
         this.pixelsPerPercentHeight = this.app.view.height / 100;
         
-        this.deckGap = 0.15 * this.pixelsPerCM;
+        this.fixedGap = 0.15 * this.pixelsPerCM;
+        this.deckGap = 0.1 * this.pixelsPerPercentHeight;
+        this.gap = 1.8 * this.pixelsPerPercentHeight;
         this.width = 10 * this.pixelsPerPercentHeight;
         this.height = 16 * this.pixelsPerPercentHeight;
-        this.gap = 1.8 * this.pixelsPerPercentHeight;
 
         for (const sprite of Sprite.sprites) {
             sprite._sprite.width = Sprite.width;

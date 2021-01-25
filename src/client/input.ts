@@ -328,6 +328,8 @@ function onCardDrawn() {
     }
 }
 
+const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
 function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSpritePosition: V.IVector2) {
     const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
@@ -394,13 +396,13 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         action = { cardIndex, mousePositionToSpritePosition, type: 'Reorder' };
 
         // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
-        const splitRevealed = revealDistance < hideDistance;
-        let splitLeft = leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width < Sprite.app.view.width;
+        const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
+        let splitLeft = (leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width) / 2 < goldenX;
         let start: number;
         let end: number;
+        const splitRevealed = revealDistance < hideDistance;
         if (splitRevealed) {
-            if (leftMovingSprite.target.x < Sprite.app.view.width / 2 &&
-                Sprite.app.view.width / 2 < rightMovingSprite.target.x + Sprite.width
+            if (leftMovingSprite.target.x < goldenX && goldenX < rightMovingSprite.target.x + Sprite.width
             ) {
                 splitIndex = shareCount;
             }
@@ -413,8 +415,7 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
                 end = revealCount;
             }
         } else {
-            if (leftMovingSprite.target.x < Sprite.app.view.width / 2 &&
-                Sprite.app.view.width / 2 < rightMovingSprite.target.x + Sprite.width
+            if (leftMovingSprite.target.x < goldenX && goldenX < rightMovingSprite.target.x + Sprite.width
             ) {
                 splitIndex = groupCount;
             }

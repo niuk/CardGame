@@ -137,6 +137,8 @@ function renderDeck(deltaTime: number) {
     }
 }
 
+const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
 let playerLines: (PIXI.Graphics | undefined)[] = [];
 let playerLabels: (PIXI.Text | undefined)[] = [];
 
@@ -159,14 +161,11 @@ function renderPlayer(deltaTime: number) {
     const container = State.playerContainers[gameState.playerIndex];
     if (!container) throw new Error();
 
-    const centerX = Sprite.app.view.width / 2;
-    const centerY = Sprite.app.view.height - Sprite.height - Sprite.gap;
-
     const playerState = gameState.playerStates[gameState.playerIndex];
     if (!playerState) throw new Error();
 
-    addAllLines(playerLines, container, centerX, centerY);
-    addAllLabels(playerLabels, container, centerX, centerY, playerState, true);
+    addAllLines(playerLines, container, true);
+    addAllLabels(playerLabels, container, playerState, true);
 }
 
 function addLine(
@@ -185,22 +184,24 @@ function addLine(
     line.clear();
     line.lineStyle(0.05 * Sprite.pixelsPerCM, 0xffffff, 0xff);
     line.moveTo(moveX, moveY);
-    line.lineTo(moveX + lineX, moveY + lineY);
+    line.lineTo(lineX, lineY);
 }
 
 function addAllLines(
     lines: (PIXI.Graphics | undefined)[],
     container: PIXI.Container,
-    centerX: number,
-    centerY: number
+    playerIsYou: boolean
 ) {
-    const horizontal = container.transform.rotation === 0 ?
-        Sprite.app.view.width / 2 - Sprite.height - Sprite.gap :
-        Sprite.app.view.height / 2 - Sprite.height - Sprite.gap;
-    addLine(lines, container, 0, centerX, centerY, horizontal, 0);
-    addLine(lines, container, 1, centerX, centerY, -horizontal, 0);
-    addLine(lines, container, 2, centerX, centerY, 0, Sprite.height + Sprite.gap);
-    addLine(lines, container, 3, centerX, centerY, 0, -Sprite.height - Sprite.gap);
+    const left = (container.transform.rotation === 0 ? 0 : Sprite.app.view.width / 2 - Sprite.app.view.height / 2) + Sprite.height + Sprite.gap;
+    const right = (container.transform.rotation === 0 ? Sprite.app.view.width : Sprite.app.view.width / 2 + Sprite.app.view.height / 2) - Sprite.height - Sprite.gap;
+    const centerY = playerIsYou ? Sprite.app.view.height - Sprite.height - Sprite.gap : Sprite.height + Sprite.gap;
+    addLine(lines, container, 0, left, centerY, right, centerY);
+    const centerX = playerIsYou ? (1 - 1 / goldenRatio) * Sprite.app.view.width :
+        container.transform.rotation === 0 ? Sprite.app.view.width / goldenRatio :
+            (Sprite.app.view.width - Sprite.app.view.height) / 2 + Sprite.app.view.height / goldenRatio;
+    const top = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
+    const bottom = playerIsYou ? Sprite.app.view.height : 2 * (Sprite.height + Sprite.gap);
+    addLine(lines, container, 1, centerX, top, centerX, bottom);
 }
 
 function addLabel(
@@ -233,8 +234,6 @@ function addLabel(
 function addAllLabels(
     labels: (PIXI.Text | undefined)[],
     container: PIXI.Container,
-    centerX: number,
-    centerY: number,
     playerState: Lib.PlayerState,
     playerIsYou: boolean
 ) {
@@ -266,9 +265,12 @@ function addAllLabels(
         }
     }
 
-    const topY = centerY - Sprite.height - Sprite.gap - 0.075 * Sprite.pixelsPerCM;
+    const topY = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
+    const goldenX = playerIsYou ? (1 - 1 / goldenRatio) * Sprite.app.view.width :
+        container.transform.rotation === 0 ? Sprite.app.view.width / goldenRatio :
+            (Sprite.app.view.width - Sprite.app.view.height) / 2 + Sprite.app.view.height / goldenRatio;
     const topLeftCount = playerIsYou ? shareCount : totalCount - groupCount;
-    const topLeftX = centerX - (topLeftCount > 0 ? Sprite.width + topLeftCount * Sprite.gap + Sprite.deckGap : Sprite.gap) - 0.75 * Sprite.pixelsPerCM;
+    const topLeftX = goldenX - (topLeftCount > 0 ? Sprite.width + topLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.75 * Sprite.pixelsPerCM;
     let i = 0, y;
     [i, y] = 上下(labels, container, i, topLeftX, topY, playerIsYou ? '得分' : '持牌', 26);
     
@@ -279,17 +281,17 @@ function addAllLabels(
     [i, y] = 上下(labels, container, i, topLeftX - 0.375 * Sprite.pixelsPerCM, topY, topLeftRight數, 13);
 
     const topRightCount = playerIsYou ? revealCount - shareCount : groupCount - revealCount;
-    const topRightX = centerX + (topRightCount > 0 ? Sprite.width + topRightCount * Sprite.gap + Sprite.deckGap : Sprite.gap);
+    const topRightX = goldenX + (topRightCount > 0 ? Sprite.width + topRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
     [i, y] = 上下(labels, container, i, topRightX, topY, playerIsYou ? '出牌' : '底牌', 26);
 
-    const bottomY = centerY + Sprite.gap - 0.125 * Sprite.pixelsPerCM;
+    const bottomY = playerIsYou ? Sprite.app.view.height - Sprite.height : Sprite.height + 2 * Sprite.gap;
 
     const bottomLeftCount = playerIsYou ? groupCount - revealCount : revealCount - shareCount;
-    const bottomLeftX = centerX - (bottomLeftCount > 0 ? Sprite.width + bottomLeftCount * Sprite.gap + Sprite.deckGap : Sprite.gap) - 0.75 * Sprite.pixelsPerCM;
+    const bottomLeftX = goldenX - (bottomLeftCount > 0 ? Sprite.width + bottomLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.75 * Sprite.pixelsPerCM;
     [i, y] = 上下(labels, container, i, bottomLeftX, bottomY, playerIsYou ? '底牌' : '出牌', 26);
     
     const bottomRightCount = playerIsYou ? totalCount - groupCount : shareCount;
-    const bottomRightX = centerX + (bottomRightCount > 0 ? Sprite.width + bottomRightCount * Sprite.gap + Sprite.deckGap : Sprite.gap);
+    const bottomRightX = goldenX + (bottomRightCount > 0 ? Sprite.width + bottomRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
     [i, y] = 上下(labels, container, i, bottomRightX, bottomY, playerIsYou ? '持牌' : '得分', 26);
 
     const bottomRight數 = `︵${数(playerIsYou ?
@@ -360,22 +362,26 @@ function renderOtherPlayer(deltaTime: number) {
         const playerState = gameState.playerStates[playerIndex];
         if (!playerState) continue;
 
+        const container = State.playerContainers[playerIndex];
+        if (!container) throw new Error();
+
+        const goldenX = container.transform.rotation === 0 ? Sprite.app.view.width / goldenRatio :
+            (Sprite.app.view.width - Sprite.app.view.height) / 2 + Sprite.app.view.height / goldenRatio;
+        const centerY = Sprite.height + Sprite.gap;
+
         const faceSprites = State.faceSpritesForPlayer[playerIndex];
         if (!faceSprites) throw new Error();
-
-        const centerX = Sprite.app.view.width / 2;
-        const centerY = Sprite.height + Sprite.gap;
 
         let j = 0;
         for (const faceSprite of faceSprites) {
             if (j < playerState.shareCount) {
                 faceSprite.target = {
-                    x: centerX + (playerState.shareCount - j) * Sprite.gap,
+                    x: goldenX + (playerState.shareCount - j) * Sprite.gap,
                     y: centerY + Sprite.gap
                 };
             } else {
                 faceSprite.target = {
-                    x: centerX - Sprite.width - (1 + j - playerState.shareCount) * Sprite.gap,
+                    x: goldenX - Sprite.width - (1 + j - playerState.shareCount) * Sprite.gap,
                     y: centerY + Sprite.gap
                 };
             }
@@ -394,12 +400,12 @@ function renderOtherPlayer(deltaTime: number) {
             const localGroupCount = playerState.groupCount - playerState.revealCount;
             if (j < localGroupCount) {
                 backSprite.target = {
-                    x: centerX + (localGroupCount - j) * Sprite.gap,
+                    x: goldenX + (localGroupCount - j) * Sprite.gap,
                     y: 0
                 };
             } else {
                 backSprite.target = {
-                    x: centerX - Sprite.width - (1 + j - localGroupCount) * Sprite.gap,
+                    x: goldenX - Sprite.width - (1 + j - localGroupCount) * Sprite.gap,
                     y: 0
                 };
             }
@@ -410,16 +416,13 @@ function renderOtherPlayer(deltaTime: number) {
             ++j;
         }
 
-        const container = State.playerContainers[playerIndex];
-        if (!container) throw new Error();
-
         let lines = otherPlayerLines[playerIndex];
         if (!lines) {
             lines = [];
             otherPlayerLines[playerIndex] = lines;
         }
 
-        addAllLines(lines, container, centerX, centerY);
+        addAllLines(lines, container, false);
 
         let labels = otherPlayerLabels[playerIndex];
         if (!labels) {
@@ -427,6 +430,6 @@ function renderOtherPlayer(deltaTime: number) {
             otherPlayerLabels[playerIndex] = labels;
         }
 
-        addAllLabels(labels, container, centerX, centerY, playerState, false);
+        addAllLabels(labels, container, playerState, false);
     }
 }

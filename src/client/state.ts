@@ -429,6 +429,8 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
     onSpritesLinkedWithCards();
 }
 
+const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
 export function setPlayerSpriteTargets(
     gameState: Lib.GameState,
     reservedSpritesAndCards?: [Sprite, Lib.Card][],
@@ -465,25 +467,26 @@ export function setPlayerSpriteTargets(
             }
         }
 
+        const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
         if (player.cards.length < shareCount) {
             reservedSprite.target = {
-                x: Sprite.app.view.width / 2 - Sprite.width + (player.cards.length - shareCount) * Sprite.gap,
+                x: goldenX - Sprite.width + (player.cards.length - shareCount) * Sprite.gap,
                 y: Sprite.app.view.height - 2 * Sprite.height - 2 * Sprite.gap
             };
         } else if (player.cards.length < revealCount) {
             reservedSprite.target = {
-                x: Sprite.app.view.width / 2 + (1 + player.cards.length - shareCount) * Sprite.gap,
+                x: goldenX + (1 + player.cards.length - shareCount) * Sprite.gap,
                 y: Sprite.app.view.height - 2 * Sprite.height - 2 * Sprite.gap
             };
         } else {
             if (player.cards.length < groupCount) {
                 reservedSprite.target = {
-                    x: Sprite.app.view.width / 2 - Sprite.width + (player.cards.length - revealCount - (groupCount - revealCount)) * Sprite.gap,
+                    x: goldenX - Sprite.width + (player.cards.length - revealCount - (groupCount - revealCount)) * Sprite.gap,
                     y: Sprite.app.view.height - Sprite.height
                 };
             } else {
                 reservedSprite.target = {
-                    x: Sprite.app.view.width / 2 + (1 + player.cards.length - groupCount) * Sprite.gap,
+                    x: goldenX + (1 + player.cards.length - groupCount) * Sprite.gap,
                     y: Sprite.app.view.height - Sprite.height
                 };
             }
