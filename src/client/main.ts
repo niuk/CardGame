@@ -165,7 +165,22 @@ function renderPlayer(deltaTime: number) {
     if (!playerState) throw new Error();
 
     addAllLines(playerLines, container, true);
-    addAllLabels(playerLabels, container, playerState, true);
+
+    const j = addAllLabels(playerLabels, container, playerState, true);
+    addLabel(playerLabels, container, j + 1, 0, Sprite.app.view.height - 1.5 * Sprite.pixelsPerCM, '分类(号)');
+    addLabel(playerLabels, container, j + 2, 0, Sprite.app.view.height - 0.75 * Sprite.pixelsPerCM, '分类(种)');
+
+    const sortByRankLabel = playerLabels[j + 1];
+    if (!sortByRankLabel) throw new Error();
+    sortByRankLabel.interactive = true;
+    sortByRankLabel.cursor = 'pointer';
+    sortByRankLabel.on('pointerup', () => Client.sortByRank(gameState));
+
+    const sortBySuitLabel = playerLabels[j + 2];
+    if (!sortBySuitLabel) throw new Error();
+    sortBySuitLabel.interactive = true;
+    sortBySuitLabel.cursor = 'pointer';
+    sortBySuitLabel.on('pointerup', () => Client.sortBySuit(gameState));
 }
 
 function addLine(
@@ -182,9 +197,10 @@ function addLine(
     }
 
     line.clear();
-    line.lineStyle(0.05 * Sprite.pixelsPerCM, 0xffffff, 0xff);
+    line.lineStyle(0.05 * Sprite.pixelsPerCM, 0xFFD700, 0x01);
     line.moveTo(moveX, moveY);
     line.lineTo(lineX, lineY);
+    line.zIndex = -2;
 }
 
 function addAllLines(
@@ -220,9 +236,12 @@ function addLabel(
     }
     
     label.text = s;
+    label.zIndex = -1;
     // workaround for bug
     if (label.transform) label.position.set(positionX, positionY);
     if (label.style) {
+        label.style.dropShadow = true;
+        label.style.dropShadowDistance = 1;
         if (fontSize) {
             label.style.fontSize = fontSize;
         } else {
@@ -304,6 +323,8 @@ function addAllLabels(
         // workaround for bug
         if (labels[i]?.texture) labels[i]?.destroy();
     }
+
+    return i;
 }
 
 function 上下(

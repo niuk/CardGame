@@ -105,7 +105,12 @@ export default class Sprite {
     private _sprite: PIXI.Sprite;
 
     public getOffsetInParentTransform(point: V.IVector2): V.IVector2 {
-        return V.sub(this.position, this._sprite.parent.localTransform.applyInverse(point));
+        const offset = V.sub(this.position, this._sprite.parent.localTransform.applyInverse(point));
+        this._sprite.pivot.set(
+            (offset.x - this.position.x) / Sprite.width,
+            (offset.y - this.position.y) / Sprite.height
+        );
+        return offset;
     }
 
     public get position(): V.IVector2 {
@@ -158,6 +163,7 @@ export default class Sprite {
         this._sprite.width = Sprite.width;
         this._sprite.height = Sprite.height;
         this._sprite.interactive = true;
+        this._sprite.cursor = 'pointer';
 
         Sprite.sprites.add(this);
 

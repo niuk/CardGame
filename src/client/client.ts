@@ -38,6 +38,10 @@ webSocket.onmessage = e => {
         'playerIndex' in obj &&
         'playerStates' in obj
     ) {
+        if (JSON.stringify(gameState) === JSON.stringify(obj)) {
+            return;
+        }
+        
         const previousGameState = gameState;
         gameState = <Lib.GameState>obj;
 

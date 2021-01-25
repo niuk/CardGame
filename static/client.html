@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html style='height: calc(100% - 0.5cm);'>
+<html style='height: calc(100% - 0.2cm);'>
     <body style='background-color: black; color: white; height: inherit;'>
         <div id='form' style='position: absolute; left: 0px; visibility: hidden;'>
             <label>Enter your name:</label>
@@ -15,6 +15,26 @@
             <button id='newGame'>New Game</button>
         </div>
         <div id='status' style='position: absolute; right: 0px;'></div>
+        <a onclick="showCredits()" style='cursor: help; position: absolute; bottom: 0px; right: 0px;'>©</a>
+        <div id='credits' style='position: absolute; bottom: 0px; right: 0px; visibility: hidden; background-color: white; color: black;'>
+            <a onclick="hideCredits()" style='cursor: pointer; position: absolute; right: 0px; top: 0px;'>&times;</a>
+            <a href='https://github.com/niuk/CardGame'>Code by Karl Niu</a>
+            <br>
+            <a href="https://www.freepik.com/photos/background">Background photo created by rawpixel.com - www.freepik.com</a>
+            <br>
+            <span>Photo by <a href="https://unsplash.com/@custodiancontent?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText">Kalle Kortelainen</a> on <a href="https://unsplash.com/backgrounds/desktop?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText">Unsplash</a></span>
+            <br>
+            <span>Photo by <a href="https://unsplash.com/@scottwebb?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText">Scott Webb</a> on <a href="https://unsplash.com/backgrounds/desktop?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText">Unsplash</a></span>
+        </div>
     </body>
     <script src='client.js'></script>
+    <script>
+        function showCredits() {
+            document.getElementById('credits').style.visibility = 'visible';
+        }
+
+        function hideCredits() {
+            document.getElementById('credits').style.visibility = 'hidden';
+        }
+    </script>
 </html>

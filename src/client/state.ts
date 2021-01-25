@@ -17,7 +17,47 @@ export let backSpritesForPlayer: Sprite[][] = [];
 // each element corresponds to a face card by index
 export let faceSpritesForPlayer: Sprite[][] = [];
 
+Sprite.app.stage.sortableChildren = true;
+
+let backgroundIndex = 0;
+const backgroundTextures = [
+    PIXI.Texture.from('wood-364693.jpg'),
+    PIXI.Texture.from('wooden-plank-textured-background-material.jpg'),
+    PIXI.Texture.from('marble-black.jpg'),
+    PIXI.Texture.from('marble-black-gold.jpg'),
+    PIXI.Texture.from('kalle-kortelainen-7JtgUEYVOu0-unsplash.jpg'),
+    PIXI.Texture.from('scott-webb-S_eu4NqJt5Y-unsplash.jpg')
+];
+
+const dummySprite = new Sprite(Sprite.app.stage, new PIXI.Texture(new PIXI.BaseTexture()));
+dummySprite.position = { x: -Sprite.width, y: -Sprite.height };
+
+export const background = Sprite.app.stage.addChild(PIXI.Sprite.from(<PIXI.Texture>backgroundTextures[backgroundIndex]));
+background.zIndex = 0;
+background.position.set(0, 0);
+background.width = Sprite.app.view.width;
+background.height = Sprite.app.view.height;
+background.interactive = true;
+background.on('pointerdown', (event: PIXI.InteractionEvent) => Sprite.onDragStart(event.data.global, dummySprite));
+background.on('pointerup', (event: PIXI.InteractionEvent) => Sprite.onDragEnd(event.data.global, dummySprite));
+
+export function backgroundBackward() {
+    backgroundIndex = (backgroundIndex + 1) % backgroundTextures.length;
+    background.texture = <PIXI.Texture>backgroundTextures[backgroundIndex];
+}
+
+export function backgroundForward() {
+    --backgroundIndex;
+    if (backgroundIndex < 0) {
+        backgroundIndex = backgroundTextures.length - 1;
+    }
+
+    background.texture = <PIXI.Texture>backgroundTextures[backgroundIndex];
+}
+
 export let deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
+deckContainer.zIndex = 1;
+
 export let playerContainers = [
     Sprite.app.stage.addChild(new PIXI.Container()),
     Sprite.app.stage.addChild(new PIXI.Container()),
@@ -25,10 +65,8 @@ export let playerContainers = [
     Sprite.app.stage.addChild(new PIXI.Container())
 ];
 
-Sprite.app.stage.sortableChildren = true;
-deckContainer.zIndex = 0;
 for (const playerContainer of playerContainers) {
-    playerContainer.zIndex = 1;
+    playerContainer.zIndex = 2;
     playerContainer.sortableChildren = true;
 }
 
