@@ -206,6 +206,7 @@ function addLabel(
     fontSize?: number
 ) {
     let label = labels[i];
+    // check for transform and texture to work around bug
     if (!label || !label.transform || !label.texture) {
         label = container.addChild(new PIXI.Text(s, { fill: 'white' }));
         labels[i] = label;
