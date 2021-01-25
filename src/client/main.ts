@@ -6,15 +6,21 @@ import * as State from './state';
 import * as Input from './input';
 import Sprite from './sprite';
 
-const playerNameFromCookie = Lib.getCookie('playerName');
-if (playerNameFromCookie === undefined) throw new Error('No player name!');
-const playerNameElement = (<HTMLInputElement>document.getElementById('playerName'));
-playerNameElement.value = decodeURI(playerNameFromCookie);
+let playerName = Lib.getCookie('playerName');
+if (!playerName) {
+    playerName = '';
+}
 
-const gameIdFromCookie = Lib.getCookie('gameId');
-if (gameIdFromCookie === undefined) throw new Error('No game id!');
+let gameId = Lib.getCookie('gameId');
+if (!gameId) {
+    gameId = '';
+}
+
+const playerNameElement = (<HTMLInputElement>document.getElementById('playerName'));
+playerNameElement.value = decodeURI(playerName);
+
 const gameIdElement = (<HTMLInputElement>document.getElementById('gameId'));
-gameIdElement.value = gameIdFromCookie;
+gameIdElement.value = gameId;
 
 const formElement = <HTMLDivElement>document.getElementById('form');
 const statusElement = <HTMLDivElement>document.getElementById('status');
