@@ -38,15 +38,6 @@ export default class Player {
         
         ws.onclose = async event => {
             console.log('closed websocket connection');
-
-            if (this.game) {
-                const index = this.game.players.indexOf(this);
-                if (index >= 0) {
-                    this.game.players.splice(index, 1);
-                    this.index = -1;
-                    this.game = undefined;
-                }
-            }
         };
     }
 
@@ -98,15 +89,35 @@ export default class Player {
         } else if (method.methodName === 'JoinGame') {
             this.game = Game.get(method.gameId);
 
-            console.log(`player '${this.name}' trying to join game '${this.game.gameId}'...`);
+            console.log(`player '${this.name}' is trying to join game '${this.game.gameId}'...`);
 
-            let joined = false;
+            // get unoccupied indices and indices of disconnected players
+            const available = [];
             for (let i = 0; i < 4; ++i) {
-                if (this.game.players[i] === undefined) {
+                const player = this.game.players[i];
+                if (!player || player.ws.readyState !== WebSocket.OPEN) {
+                    available.push(i);
+                }
+            }
+
+            // try to join at index of a disconnected player with the same name
+            let joined = false;
+            for (const i of available) {
+                if (this.game.players[i]?.name === this.name) {
                     this.game.players[i] = this;
                     this.index = i;
                     joined = true;
                     break;
+                }
+            }
+
+            // just try to join at any available index
+            if (!joined) {
+                const i = available[0];
+                if (i) {
+                    this.game.players[i] = this;
+                    this.index = i;
+                    joined = true;
                 }
             }
 
@@ -164,7 +175,7 @@ export default class Player {
                 let newShareCount = this.shareCount;
                 let newRevealCount = this.revealCount;
                 let newGroupCount = this.groupCount;
-                
+
                 for (let i = 0; i < method.cardsToReturnToDeck.length; ++i) {
                     for (let j = 0; j < newCards.length; ++j) {
                         if (JSON.stringify(method.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {

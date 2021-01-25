@@ -22,7 +22,7 @@ app.get('/', async (_, response) => {
     const webSocketServer = new WebSocket.Server({ server: httpsServer });
     webSocketServer.on('connection', ws => {
         console.log(`new websocket connection`);
-        const player = new Player(ws);
+        new Player(ws);
     });
 
     const port = 443;

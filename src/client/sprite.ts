@@ -32,7 +32,6 @@ export default class Sprite {
     public static gap: number;
     
     private static textures = new Map<string, PIXI.Texture>();
-
     private static sprites = new Set<Sprite>();
 
     public static recalculatePixels() {
@@ -127,11 +126,11 @@ export default class Sprite {
         }
     }
 
-    public get index() {
+    public get zIndex() {
         return this._sprite.zIndex;
     }
 
-    public set index(value) {
+    public set zIndex(value) {
         this._sprite.zIndex = value;
     }
 

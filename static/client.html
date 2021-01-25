@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html style='height: calc(100% - 0.2cm);'>
     <body style='background-color: black; color: white; height: inherit;'>
-        <div id='form'>
+        <div id='form' style='float: left; visibility: hidden;'>
             <label>Enter your name:</label>
             <input type='text' name='playerName' id='playerName'>
             <br>
@@ -14,7 +14,7 @@
             <label>Or, create a new game:</label>
             <button id='newGame'>New Game</button>
         </div>
-        <div id='errorDescription'></div>
+        <div id='status' style='float: right'></div>
     </body>
     <script src='client.js'></script>
 </html>

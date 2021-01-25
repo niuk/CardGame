@@ -16,6 +16,9 @@ if (gameIdFromCookie === undefined) throw new Error('No game id!');
 const gameIdElement = (<HTMLInputElement>document.getElementById('gameId'));
 gameIdElement.value = gameIdFromCookie;
 
+const formElement = <HTMLDivElement>document.getElementById('form');
+const statusElement = <HTMLDivElement>document.getElementById('status');
+
 (<HTMLButtonElement>document.getElementById('joinGame')).onclick = async e => {
     console.log(`joining game '${gameIdElement.value}'...`);
 
@@ -25,12 +28,12 @@ gameIdElement.value = gameIdFromCookie;
         await Client.setPlayerName(playerNameElement.value);
         await Client.joinGame(gameIdElement.value);
     } catch (e) {
-        (<HTMLDivElement>document.getElementById('errorDescription')).innerHTML = JSON.stringify(e);
+        statusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
         throw e;
     }
 
-    document.body.removeChild(<HTMLDivElement>document.getElementById('form'));
-    document.body.removeChild(<HTMLDivElement>document.getElementById('errorDescription'));
+    statusElement.innerHTML = `Game: ${Client.gameState?.gameId}`;
+    document.body.removeChild(formElement);
     document.body.appendChild(Sprite.app.view);
 };
 
@@ -42,8 +45,8 @@ gameIdElement.value = gameIdFromCookie;
     await Client.setPlayerName(playerNameElement.value);
     await Client.newGame();
 
-    document.body.removeChild(<HTMLDivElement>document.getElementById('form'));
-    document.body.removeChild(<HTMLDivElement>document.getElementById('errorDescription'));
+    statusElement.innerHTML = `Game: ${Client.gameState?.gameId}`;
+    document.body.removeChild(formElement);
     document.body.appendChild(Sprite.app.view);
 };
 
@@ -59,9 +62,15 @@ window.onresize = () => {
 let currentTime: number = performance.now();
 
 window.onload = async () => {
-    Sprite.recalculatePixels();
-
+    statusElement.innerHTML = 'Connecting...';
+    await Client.connect();
+    statusElement.innerHTML = `Connected. Loading textures...`;
     await Sprite.load();
+    statusElement.innerHTML = 'Connected. Textures loaded.';
+
+    formElement.style.visibility = 'visible';
+
+    Sprite.recalculatePixels();
 
     Sprite.app.ticker.add(() => {
         currentTime = performance.now();
@@ -123,7 +132,7 @@ function renderPlayer(deltaTime: number) {
     let i = 0;
     for (const sprite of sprites) {
         sprite.selected = Lib.binarySearchNumber(State.selectedIndices, i) >= 0;
-        sprite.index = i;
+        sprite.zIndex = i;
         sprite.animate(deltaTime);
 
         ++i;
@@ -150,7 +159,6 @@ function renderPlayer(deltaTime: number) {
         let label = playerLabels[i];
         if (!label) {
             label = container.addChild(new PIXI.Text(s, { fill: 'white' }));
-            label.zIndex = 100;
             playerLabels[i] = label;
         }
         
@@ -283,7 +291,7 @@ function renderOtherPlayer(deltaTime: number) {
                 };
             }
 
-            faceSprite.index = j;
+            faceSprite.zIndex = j;
             faceSprite.animate(deltaTime);
 
             ++j;
@@ -307,7 +315,7 @@ function renderOtherPlayer(deltaTime: number) {
                 };
             }
 
-            backSprite.index = j;
+            backSprite.zIndex = j;
             backSprite.animate(deltaTime);
 
             ++j;

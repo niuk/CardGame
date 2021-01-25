@@ -1,15 +1,22 @@
 import * as Lib from '../lib';
 import * as State from './state';
 
-// we need to keep a copy of the previous game state around for bookkeeping purposes
-export let previousGameState: Lib.GameState | undefined;
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
 
 // open websocket connection to get game state updates
-let ws = new WebSocket(`wss://${window.location.hostname}/`);
+let webSocket = new WebSocket(`wss://${window.location.hostname}/`);
 
-ws.onmessage = e => {
+export async function connect() {
+    // wait for connection
+    while (webSocket.readyState != WebSocket.OPEN) {
+        console.log(`webSocket.readyState: ${webSocket.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
+
+        await Lib.delay(100);
+    }
+}
+
+webSocket.onmessage = e => {
     const obj = JSON.parse(e.data);
     if ('methodName' in obj) {
         const result = <Lib.Result>obj;
@@ -31,7 +38,7 @@ ws.onmessage = e => {
         'playerIndex' in obj &&
         'playerStates' in obj
     ) {
-        previousGameState = gameState;
+        const previousGameState = gameState;
         gameState = <Lib.GameState>obj;
 
         console.log(`received gameState: ${JSON.stringify(gameState)}`);
@@ -102,39 +109,41 @@ function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (r
 }
 
 export async function setPlayerName(playerName: string) {
-    // wait for connection
-    do {
-        await Lib.delay(1000);
-        console.log(`ws.readyState: ${ws.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
-    } while (ws.readyState != WebSocket.OPEN);
-
     await new Promise<void>((resolve, reject) => {
         addCallback('SetPlayerName', resolve, reject);
-        ws.send(JSON.stringify(<Lib.SetPlayerName>{
+        webSocket.send(JSON.stringify(<Lib.SetPlayerName>{
             methodName: 'SetPlayerName',
             playerName
         }))
     })
 }
 
-export function joinGame(gameId: string) {
+export async function joinGame(gameId: string) {
     // try to join the game
-    return new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
         addCallback('JoinGame', resolve, reject);
-        ws.send(JSON.stringify(<Lib.JoinGame>{
+        webSocket.send(JSON.stringify(<Lib.JoinGame>{
             methodName: 'JoinGame',
             gameId
         }));
     });
+
+    while (!gameState) {
+        await Lib.delay(100);
+    }
 }
 
-export function newGame() {
-    return new Promise<void>((resolve, reject) => {
+export async function newGame() {
+    await new Promise<void>((resolve, reject) => {
         addCallback('NewGame', resolve, reject);
-        ws.send(JSON.stringify(<Lib.NewGame>{
+        webSocket.send(JSON.stringify(<Lib.NewGame>{
             methodName: 'NewGame'
         }));
     });
+
+    while (!gameState) {
+        await Lib.delay(100);
+    }
 }
 
 export async function takeCard(otherPlayerIndex: number, cardIndex: number, card: Lib.Card) {
@@ -142,7 +151,7 @@ export async function takeCard(otherPlayerIndex: number, cardIndex: number, card
 
     await new Promise<void>((resolve, reject) => {
         addCallback('TakeCard', resolve, reject);
-        ws.send(JSON.stringify(<Lib.TakeCard>{
+        webSocket.send(JSON.stringify(<Lib.TakeCard>{
             methodName: 'TakeCard',
             otherPlayerIndex,
             cardIndex,
@@ -158,7 +167,7 @@ export async function drawCard(): Promise<void> {
 
     await new Promise<void>((resolve, reject) => {
         addCallback('DrawCard', resolve, reject);
-        ws.send(JSON.stringify(<Lib.DrawCard>{
+        webSocket.send(JSON.stringify(<Lib.DrawCard>{
             methodName: 'DrawCard'
         } as Lib.DrawCard));
     });
@@ -172,7 +181,7 @@ export async function returnCardsToDeck(gameState: Lib.GameState) {
 
     await new Promise<void>((resolve, reject) => {
         addCallback('ReturnCardsToDeck', resolve, reject);
-        ws.send(JSON.stringify(<Lib.ReturnCardsToDeck>{
+        webSocket.send(JSON.stringify(<Lib.ReturnCardsToDeck>{
             methodName: 'ReturnCardsToDeck',
             cardsToReturnToDeck: State.selectedIndices.map(i => player.cards[i])
         }));
@@ -188,7 +197,7 @@ export function reorderCards(gameState: Lib.GameState) {
 
     return new Promise<void>((resolve, reject) => {
         addCallback('ReorderCards', resolve, reject);
-        ws.send(JSON.stringify(<Lib.ReorderCards>{
+        webSocket.send(JSON.stringify(<Lib.ReorderCards>{
             methodName: 'ReorderCards',
             reorderedCards: player.cards,
             newShareCount: player.shareCount,
@@ -231,7 +240,7 @@ export function sortByRank(gameState: Lib.GameState) {
     const player = gameState.playerStates[gameState.playerIndex];
     if (player === undefined || player === null) throw new Error();
 
-    previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
+    const previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
     sortCards(player.cards, 0, player.shareCount, compareFn);
     sortCards(player.cards, player.shareCount, player.revealCount, compareFn);
     sortCards(player.cards, player.revealCount, player.groupCount, compareFn);
