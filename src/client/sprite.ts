@@ -206,19 +206,12 @@ export default class Sprite {
         parent.addChild(this._sprite);
     }
 
-    // target <- 0 <- 1 <- ... <- position
-    // each link, and the actual position, acts as a mass on a damped spring pulled to its predecessor
-    private velocitiesAndPositions: [V.IVector2, V.IVector2, PIXI.Graphics][] = [];
-
     public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
         const oldParent = this._sprite.parent;
 
         // save this sprite's world transform position and rotation
         const position = oldParent.localTransform.apply(this.position);
         const rotation = oldParent.rotation;
-        const velocitiesAndPositions = this.velocitiesAndPositions.map(([velocity, position, point]) => [
-            { x: 0, y: 0 }, oldParent.localTransform.apply(position), point
-        ] as [V.IVector2, V.IVector2, PIXI.Graphics]);
 
         parent.addChild(this._sprite);
         this._sprite.texture = texture;
@@ -227,55 +220,11 @@ export default class Sprite {
         // reapply saved world transform position and rotation
         this.position = parent.transform.localTransform.applyInverse(position);
         this.rotation = rotation - parent.transform.rotation;
-        for (let i = 0; i < velocitiesAndPositions.length; ++i) {
-            const [velocity, position, point] = <[V.IVector2, V.IVector2, PIXI.Graphics]>velocitiesAndPositions[i];
-            this.velocitiesAndPositions[i] = [
-                { x: 0, y: 0 },
-                parent.transform.localTransform.applyInverse(position),
-                point
-            ];
-        }
     }
 
     animate(deltaTime: number) {
-        if (this.velocitiesAndPositions.length === 0) {
-            this.velocitiesAndPositions.push(
-                [{ x: 0, y: 0 }, this._sprite.position.clone(), new PIXI.Graphics()],
-                [{ x: 0, y: 0 }, this._sprite.position.clone(), new PIXI.Graphics()],
-                [{ x: 0, y: 0 }, this._sprite.position.clone(), new PIXI.Graphics()],
-            );
-
-            for (const [_, __, point] of this.velocitiesAndPositions) {
-                this._sprite.parent.addChild(point);
-            }
-        }
-
-        let target = this.target;
-        for (const velocityAndPosition of this.velocitiesAndPositions) {
-            let [velocity, position, point] = velocityAndPosition;
-
-            const springForce = V.scale(springConstant, V.sub(target, position));
-            const dragForce = V.scale(-drag, velocity);
-            const acceleration = V.scale(1 / mass, V.add(springForce, dragForce));
-
-            velocity = V.add(velocity, V.scale(deltaTime, acceleration));
-            position = V.add(position, V.scale(deltaTime, velocity));
-
-            velocityAndPosition[0] = velocity;
-            velocityAndPosition[1] = position;
-
-            point.clear();
-            point.beginFill(0xffffff, 0xff);
-            point.drawCircle(position.x, position.y, 5);
-            point.endFill();
-
-            target = position;
-        }
-
-        this.position = <V.IVector2>this.velocitiesAndPositions[this.velocitiesAndPositions.length - 1]?.[1];
-
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
-        //this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
+        this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);
     }
 }
