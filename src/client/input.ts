@@ -22,6 +22,12 @@ interface WaitingForNewCard {
     mousePositionToSpritePosition: V.IVector2;
 }
 
+interface GiveToOtherPlayer {
+    type: 'GiveToOtherPlayer';
+    cardIndex: number;
+    mousePositionToSpritePosition: V.IVector2;
+}
+
 interface ReturnToDeck {
     type: 'ReturnToDeck';
     cardIndex: number;
@@ -68,12 +74,15 @@ export type Action =
     TakeFromOtherPlayer |
     DrawFromDeck |
     WaitingForNewCard |
+    GiveToOtherPlayer |
     ReturnToDeck |
     Reorder |
     ControlShiftClick |
     ControlClick |
     ShiftClick |
     Click;
+
+const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
 const doubleClickThreshold = 500; // milliseconds
 const moveThreshold = 0.5 * Sprite.pixelsPerCM;
@@ -216,7 +225,7 @@ Sprite.onDragMove = (position, sprite) => {
                 });
             }
         }
-    } else if (action.type === 'ReturnToDeck' || action.type === 'Reorder' ) {
+    } else if (action.type === 'GiveToOtherPlayer' || action.type === 'ReturnToDeck' || action.type === 'Reorder' ) {
         drag(gameState, action.cardIndex, action.mousePositionToSpritePosition);
     } else if (
         action.type === 'ControlShiftClick' ||
@@ -332,8 +341,6 @@ function onCardDrawn() {
     }
 }
 
-const goldenRatio = (1 + Math.sqrt(5)) / 2;
-
 function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSpritePosition: V.IVector2) {
     const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
@@ -385,6 +392,37 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
     const rightMovingSprite = movingSpritesAndCards[movingSpritesAndCards.length - 1]?.[0];
     if (leftMovingSprite === undefined || rightMovingSprite === undefined) {
         throw new Error();
+    }
+
+    // construct a box with which to intersect other action boxes
+    // these include the deck and each player's cards (or where they would be if they have no cards)
+    const cardSize = { x: Sprite.width, y: Sprite.height };
+    const drag0 = leftMovingSprite.target;
+    const drag1 = V.add(rightMovingSprite.target, cardSize);
+
+    let deck0: V.IVector2;
+    let deck1: V.IVector2;
+    if (State.deckSprites.length > 0) {
+        const top = State.deckSprites[State.deckSprites.length - 1];
+        if (!top) throw new Error();
+        deck0 = top.target;
+        
+        const bottom = State.deckSprites[0];
+        if (!bottom) throw new Error();
+        deck1 = V.add(bottom.target, cardSize);
+    } else {
+        const center = { x: Sprite.app.view.width / 2, y: Sprite.app.view.height / 2 };
+        const halfCardSize = V.scale(0.5, cardSize);
+        deck0 = V.sub(center, halfCardSize);
+        deck1 = V.add(center, halfCardSize);
+    }
+
+    if (intersectBox(drag0, drag1, deck0, deck1)) {
+        action = { cardIndex, mousePositionToSpritePosition, type: 'ReturnToDeck' };
+
+        splitIndex = reservedSpritesAndCards.length;
+    } else {
+        
     }
 
     const deckDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height / 2 - Sprite.height / 2));
@@ -526,4 +564,31 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         splitIndex,
         action.type === 'ReturnToDeck'
     );
+}
+
+function intersectBox(u0: V.IVector2, u1: V.IVector2, v0: V.IVector2, v1: V.IVector2) {
+    const xs: [string, number][] = [['u', u0.x], ['u', u1.x], ['v', v0.x], ['v', v1.x]];
+    const ys: [string, number][] = [['u', u0.y], ['u', u1.y], ['v', v0.y], ['v', v1.y]];
+    xs.sort(([s, a], [t, b]) => a - b);
+    ys.sort(([s, a], [t, b]) => a - b);
+
+    let s = undefined;
+    let xSwitches = 0;
+    for (const [t, _] of xs) {
+        if (s !== t) {
+            s = t;
+            ++xSwitches;
+        }
+    }
+
+    s = undefined;
+    let ySwitches = 0;
+    for (const [t, _] of ys) {
+        if (s !== t) {
+            s = t;
+            ++ySwitches;
+        }
+    }
+
+    return xSwitches > 2 && ySwitches > 2;
 }

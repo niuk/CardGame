@@ -17,7 +17,7 @@ export async function connect() {
     }
 }
 
-webSocket.onmessage = e => {
+webSocket.onmessage = async e => {
     const obj = JSON.parse(e.data);
     if ('methodName' in obj) {
         const result = <Lib.Result>obj;
@@ -85,9 +85,10 @@ webSocket.onmessage = e => {
         // binary search still needs to work
         State.selectedIndices.sort((a, b) => a - b);
 
+        await Sprite.load(gameState);
+
         State.linkSpritesWithCards(previousGameState, gameState);
         State.setPlayerSpriteTargets(gameState);
-        Sprite.transformPlayerContainers(gameState);
     } else {
         throw new Error(JSON.stringify(e.data));
     }

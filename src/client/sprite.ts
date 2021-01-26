@@ -41,9 +41,13 @@ async function loadTexture(key: string, src: string) {
 
 type Zone = { zone: 'None' } | { zone: 'Deck' } | { zone: 'Player', playerIndex: number };
 
+let loading = false;
+let onTickAdded: (deltaTime: number) => void | undefined;
+
 export default class Sprite {
     public static app: PIXI.Application;
 
+    public static onTick: (deltaTime: number) => void;
     public static onDragStart: (position: V.IVector2, sprite: Sprite) => void;
     public static onDragMove: (position: V.IVector2, sprite: Sprite) => void;
     public static onDragEnd: (position: V.IVector2, sprite: Sprite) => void;
@@ -62,7 +66,10 @@ export default class Sprite {
     public static deckContainer: PIXI.Container;
     public static playerContainers: PIXI.Container[];
 
-    public static async load(onTextureLoaded: (progress: number) => void) {
+    public static async load(gameState: Lib.GameState) {
+        if (loading) return;
+        loading = true;
+
         if (!this.app) {
             this.app = new PIXI.Application(<PIXI.IApplicationOptions>{
                 view: <HTMLCanvasElement>document.getElementById('canvas')
@@ -70,7 +77,6 @@ export default class Sprite {
 
             this.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
             this.deckContainer.zIndex = 1;
-            
             this.playerContainers = [
                 Sprite.app.stage.addChild(new PIXI.Container()),
                 Sprite.app.stage.addChild(new PIXI.Container()),
@@ -82,9 +88,16 @@ export default class Sprite {
                 playerContainer.zIndex = 2;
                 playerContainer.sortableChildren = true;
             }
+
+            this.app.stage.sortableChildren = true;
         }
 
         if (loadedTextureCount < totalTextureCount) {
+            const bar = <HTMLProgressElement>document.getElementById('loading-bar');
+            bar.style.visibility = 'visible';
+            bar.value = loadedTextureCount;
+            bar.max = totalTextureCount;
+
             for (let suit = 0; suit <= 4; ++suit) {
                 for (let rank = 0; rank <= 14; ++rank) {
                     if (suit === Lib.Suit.Joker) {
@@ -101,75 +114,91 @@ export default class Sprite {
                         JSON.stringify([suit, rank]),
                         `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`
                     );
-                    onTextureLoaded(++loadedTextureCount / totalTextureCount);
+                    bar.value = ++loadedTextureCount;
                 }
             }
 
             let i = 0;
             for (const color of colors) {
                 await loadTexture(`Back${i++}`, `PlayingCards/BackColor_${color}.png`);
-                onTextureLoaded(++loadedTextureCount / totalTextureCount);
+                bar.value = ++loadedTextureCount;
             }
 
+            bar.style.visibility = 'hidden';
             console.log('all card images loaded');
-            
+        }
+
+        if (!background) {
             const dummySprite = new Sprite({ zone: 'None' }, new PIXI.Texture(new PIXI.BaseTexture()));
             dummySprite.position = { x: -this.width, y: -this.height };
             
             background = this.app.stage.addChild(PIXI.Sprite.from(<PIXI.Texture>backgroundTextures[backgroundIndex]));
             background.zIndex = 0;
             background.position.set(0, 0);
-            background.width = this.app.view.width;
-            background.height = this.app.view.height;
             background.interactive = true;
             background.on('pointerdown', (event: PIXI.InteractionEvent) => this.onDragStart(event.data.global, dummySprite));
             background.on('pointerup', (event: PIXI.InteractionEvent) => this.onDragEnd(event.data.global, dummySprite));
+
+            console.log('background loaded');
         }
+
+        // get pixels per centimeter, which is constant
+        if (this.pixelsPerCM === 0) {
+            const testElement = document.createElement('div');
+            testElement.style.width = '1cm';
+            document.body.appendChild(testElement);
+            this.pixelsPerCM = testElement.offsetWidth;
+            document.body.removeChild(testElement);
+        }
+
+        // both the view (the canvas element) and the renderer must be resized
+        this.app.view.width = document.body.clientWidth;
+        this.app.view.height = document.body.clientHeight;
+        this.app.renderer.resize(
+            document.body.clientWidth,
+            document.body.clientHeight
+        );
 
         this.pixelsPerPercentWidth = this.app.view.width / 100;
         this.pixelsPerPercentHeight = this.app.view.height / 100;
-        
         this.fixedGap = 0.15 * this.pixelsPerCM;
         this.deckGap = 0.1 * this.pixelsPerPercentHeight;
         this.gap = 1.8 * this.pixelsPerPercentHeight;
         this.width = 10 * this.pixelsPerPercentHeight;
         this.height = 16 * this.pixelsPerPercentHeight;
-
-        background.width = document.body.clientWidth;
-        background.height = document.body.clientHeight;
-
         for (const sprite of sprites) {
-            sprite._sprite.width = Sprite.width;
-            sprite._sprite.height = Sprite.height;
+            sprite._sprite.width = this.width;
+            sprite._sprite.height = this.height;
         }
 
-        // get pixels per centimeter, which is constant
-        const testElement = document.createElement('div');
-        testElement.style.width = '1cm';
-        document.body.appendChild(testElement);
-        this.pixelsPerCM = testElement.offsetWidth;
-        document.body.removeChild(testElement);
+        background.width = this.app.view.width;
+        background.height = this.app.view.height;
 
-        this.app.view.style.visibility = 'visible';
-        this.app.view.width = document.body.clientWidth;
-        this.app.view.height = document.body.clientHeight;
-        this.app.renderer.resize(document.body.clientWidth, document.body.clientHeight);
-        this.app.stage.sortableChildren = true;        
-    }
-
-    public static transformPlayerContainers(gameState: Lib.GameState) {
-        const playerContainer = this.playerContainers[gameState.playerIndex];
-        if (!playerContainer) throw new Error();
-        playerContainer.zIndex = 2;
-
-        const leftPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 1) % 4];
-        leftPlayerContainer.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
-        leftPlayerContainer.rotation = -Math.PI / 2;
+        if (gameState) {
+            const playerContainer = this.playerContainers[gameState.playerIndex];
+            if (!playerContainer) throw new Error();
+            playerContainer.zIndex = 2;
     
-        const rightPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 3) % 4];
-        rightPlayerContainer.position.x = Sprite.app.view.width;
-        rightPlayerContainer.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
-        rightPlayerContainer.rotation = Math.PI / 2;
+            const leftPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 1) % 4];
+            leftPlayerContainer.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
+            leftPlayerContainer.rotation = -Math.PI / 2;
+        
+            const rightPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 3) % 4];
+            rightPlayerContainer.position.x = Sprite.app.view.width;
+            rightPlayerContainer.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
+            rightPlayerContainer.rotation = Math.PI / 2;
+        }
+
+        if (onTickAdded !== this.onTick) {
+            if (onTickAdded) {
+                this.app.ticker.remove(onTickAdded);
+            }
+            
+            this.app.ticker.add(this.onTick);
+            onTickAdded = this.onTick;
+        }
+
+        loading = false;
     }
 
     public static getTexture(stringForCard: string) {
