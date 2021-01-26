@@ -95,9 +95,9 @@ window.onkeydown = (e: KeyboardEvent) => {
     } else if (e.key === 'Shift') {
         holdingShift = true;
     } else if (e.key === 'ArrowLeft') {
-        State.backgroundBackward();
+        Sprite.backgroundBackward();
     } else if (e.key === 'ArrowRight') {
-        State.backgroundForward();
+        Sprite.backgroundForward();
     }
 };
 

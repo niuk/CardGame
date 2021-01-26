@@ -17,59 +17,6 @@ export let backSpritesForPlayer: Sprite[][] = [];
 // each element corresponds to a face card by index
 export let faceSpritesForPlayer: Sprite[][] = [];
 
-Sprite.app.stage.sortableChildren = true;
-
-let backgroundIndex = 0;
-const backgroundTextures = [
-    PIXI.Texture.from('wood-364693.jpg'),
-    PIXI.Texture.from('wooden-plank-textured-background-material.jpg'),
-    PIXI.Texture.from('marble-black.jpg'),
-    PIXI.Texture.from('marble-black-gold.jpg'),
-    PIXI.Texture.from('kalle-kortelainen-7JtgUEYVOu0-unsplash.jpg'),
-    PIXI.Texture.from('scott-webb-S_eu4NqJt5Y-unsplash.jpg')
-];
-
-const dummySprite = new Sprite(Sprite.app.stage, new PIXI.Texture(new PIXI.BaseTexture()));
-dummySprite.position = { x: -Sprite.width, y: -Sprite.height };
-
-export const background = Sprite.app.stage.addChild(PIXI.Sprite.from(<PIXI.Texture>backgroundTextures[backgroundIndex]));
-background.zIndex = 0;
-background.position.set(0, 0);
-background.width = Sprite.app.view.width;
-background.height = Sprite.app.view.height;
-background.interactive = true;
-background.on('pointerdown', (event: PIXI.InteractionEvent) => Sprite.onDragStart(event.data.global, dummySprite));
-background.on('pointerup', (event: PIXI.InteractionEvent) => Sprite.onDragEnd(event.data.global, dummySprite));
-
-export function backgroundBackward() {
-    backgroundIndex = (backgroundIndex + 1) % backgroundTextures.length;
-    background.texture = <PIXI.Texture>backgroundTextures[backgroundIndex];
-}
-
-export function backgroundForward() {
-    --backgroundIndex;
-    if (backgroundIndex < 0) {
-        backgroundIndex = backgroundTextures.length - 1;
-    }
-
-    background.texture = <PIXI.Texture>backgroundTextures[backgroundIndex];
-}
-
-export let deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
-deckContainer.zIndex = 1;
-
-export let playerContainers = [
-    Sprite.app.stage.addChild(new PIXI.Container()),
-    Sprite.app.stage.addChild(new PIXI.Container()),
-    Sprite.app.stage.addChild(new PIXI.Container()),
-    Sprite.app.stage.addChild(new PIXI.Container())
-];
-
-for (const playerContainer of playerContainers) {
-    playerContainer.zIndex = 2;
-    playerContainer.sortableChildren = true;
-}
-
 let onSpritesLinkedWithCards = () => {};
 
 export function getSpritesLinkedWithCardsPromise(): Promise<void> {
@@ -82,10 +29,6 @@ export function getSpritesLinkedWithCardsPromise(): Promise<void> {
 }
 
 export function linkSpritesWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState) {
-    const container = playerContainers[gameState.playerIndex];
-    if (!container) throw new Error();
-    container.zIndex = 2;
-
     const previousDeckSprites = deckSprites;
     deckSprites = [];
 
@@ -220,9 +163,6 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         for (let i = 0; i < playerState.cards.length; ++i) {
             if (faceSprites[i]) continue;
 
-            const container = playerContainers[playerIndex];
-            if (!container) throw new Error();
-
             const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
 
             // ... the previously shared cards of other players
@@ -250,7 +190,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                         const sprite = otherPreviousFaceSprites.splice(k, 1)[0];
                         if (!sprite) throw new Error();
 
-                        sprite.transfer(container, texture);
+                        sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                         faceSprites[i] = sprite;
 
@@ -270,7 +210,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 const sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                 if (!sprite) throw new Error();
 
-                sprite.transfer(container, texture);
+                sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                 faceSprites[i] = sprite;
             }
@@ -289,9 +229,6 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         backSprites,
         previousBackSprites
     ) => {
-        const container = playerContainers[playerIndex];
-        if (container === undefined) throw new Error();
-
         const texture = Sprite.getTexture(`Back${playerIndex + 1}`);
 
         for (let i = playerState.cards.length; i < playerState.totalCount; ++i) {
@@ -301,7 +238,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer(container, texture);
+                sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                 backSprites.push(sprite);
             } else if (
@@ -313,7 +250,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousDeckSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer(container, texture);
+                sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                 backSprites.push(sprite);
             } else {
@@ -336,7 +273,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                         const sprite = otherPreviousFaceSprites.splice(0, 1)[0];
                         if (!sprite) throw new Error();
-                        sprite.transfer(container, texture);
+                        sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                         backSprites.push(sprite);
 
@@ -360,9 +297,6 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         backSprites,
         previousBackSprites
     ) => {
-        const container = playerContainers[playerIndex];
-        if (container === undefined) throw new Error();
-
         // link the player's remaining face cards with...
         for (let i = 0; i < playerState.cards.length; ++i) {
             const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
@@ -375,12 +309,12 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer(container, texture);
+                sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                 faceSprites[i] = sprite;
             } else {
                 // ... or nothing
-                faceSprites[i] = new Sprite(container, texture);
+                faceSprites[i] = new Sprite({ zone: 'Player', playerIndex }, texture);
             }
         }
 
@@ -398,12 +332,12 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer(container, texture);
+                sprite.transfer({ zone: 'Player', playerIndex }, texture);
 
                 backSprites.push(sprite);
             } else {
                 // ... or nothing
-                backSprites.push(new Sprite(container, texture));
+                backSprites.push(new Sprite({ zone: 'Player', playerIndex }, texture));
             }
         }
 
@@ -433,7 +367,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer(deckContainer, texture);
+                sprite.transfer({ zone: 'Deck' }, texture);
 
                 deckSprites.push(sprite);
 
@@ -444,7 +378,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer(deckContainer, texture);
+                sprite.transfer({ zone: 'Deck' }, texture);
 
                 deckSprites.push(sprite);
 
@@ -456,7 +390,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
         if (deckSprites.length === i) {
             // ... or nothing
-            deckSprites.push(new Sprite(deckContainer, texture));
+            deckSprites.push(new Sprite({ zone: 'Deck' }, texture));
         }
     }
 
@@ -544,17 +478,4 @@ export function setPlayerSpriteTargets(
     player.shareCount = shareCount;
     player.revealCount = revealCount;
     player.groupCount = groupCount;
-}
-
-export function transformPlayerContainers(gameState: Lib.GameState) {
-    let container: PIXI.Container;
-
-    container = <PIXI.Container>playerContainers[(gameState.playerIndex + 1) % 4];
-    container.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
-    container.rotation = -Math.PI / 2;
-
-    container = <PIXI.Container>playerContainers[(gameState.playerIndex + 3) % 4];
-    container.position.x = Sprite.app.view.width;
-    container.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
-    container.rotation = Math.PI / 2;
 }

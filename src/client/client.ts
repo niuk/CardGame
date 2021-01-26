@@ -1,5 +1,6 @@
 import * as Lib from '../lib';
 import * as State from './state';
+import Sprite from './sprite';
 
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
@@ -86,7 +87,7 @@ webSocket.onmessage = e => {
 
         State.linkSpritesWithCards(previousGameState, gameState);
         State.setPlayerSpriteTargets(gameState);
-        State.transformPlayerContainers(gameState);
+        Sprite.transformPlayerContainers(gameState);
     } else {
         throw new Error(JSON.stringify(e.data));
     }
