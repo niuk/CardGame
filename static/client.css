@@ -23,9 +23,10 @@ html, body {
     visibility: hidden;
 }
 
-#status {
+#connectionStatus {
     position: absolute;
     right: 0px;
+    z-index: 10;
 }
 
 #credits {
@@ -55,4 +56,5 @@ html, body {
 
 #canvas {
     position: absolute;
+    z-index: 0;
 }
