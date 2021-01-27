@@ -53,13 +53,30 @@ export enum Rank {
 
 export type Card = [Suit, Rank];
 
+export type PreviousLocation = Deck | Revealed | HiddenLeft | HiddenRight;
+
+export interface Revealed {
+    previousLocation: 'Revealed';
+    playerIndex: number;
+    cardIndex: number;
+}
+
+export interface HiddenLeft {
+    previousLocation: 'HiddenLeft';
+    playerIndex: number;
+}
+
+export interface HiddenRight {
+    previousLocation: 'HiddenRight';
+    playerIndex: number;
+}
+
 export interface PlayerState {
     name: string;
     shareCount: number;
     revealCount: number;
     groupCount: number;
-    totalCount: number;
-    cards: Card[];
+    cardsWithPreviousLocations: [Card | null, PreviousLocation][];
 }
 
 export interface GameState {
@@ -75,6 +92,7 @@ export type Method =
     JoinGame |
     TakeCard |
     DrawCard |
+    GiveCardsToOtherPlayer |
     ReturnCardsToDeck |
     ReorderCards;
 
@@ -84,6 +102,7 @@ export type MethodName =
     'JoinGame' |
     'TakeCard' |
     'DrawCard' |
+    'GiveCardsToOtherPlayer' |
     'ReturnCardsToDeck' |
     'ReorderCards';
 
@@ -117,8 +136,14 @@ export interface DrawCard {
     methodName: 'DrawCard';
 }
 
+export interface GiveCardsToOtherPlayer {
+    methodName: 'GiveCardsToOtherPlayer';
+    otherPlayerIndex: number;
+    cardsToGiveToOtherPlayer: Card[];
+}
+
 export interface ReturnCardsToDeck {
-    methodName: 'ReturnCardsToDeck'
+    methodName: 'ReturnCardsToDeck';
     cardsToReturnToDeck: Card[];
 }
 

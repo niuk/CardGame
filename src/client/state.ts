@@ -57,6 +57,8 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
             previousFaceSprites: Sprite[],
             backSprites: Sprite[],
             previousBackSprites: Sprite[],
+            playerContainer: PIXI.Container,
+            backTexture: PIXI.Texture
         ) => 'break' | 'continue'
     ) {
         for (let i = 0; i < 4; ++i) {
@@ -85,6 +87,10 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
             const previousBackSprites = previousBackSpritesForPlayer[i] ?? [];
             previousBackSpritesForPlayer[i] = previousBackSprites;
 
+            const container = Sprite.playerContainers[i];
+            if (!container) throw new Error();
+            const backTexture = Sprite.getTexture(`Back${i}`);    
+
             const control = callback(
                 i,
                 playerState,
@@ -93,6 +99,8 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                 previousFaceSprites,
                 backSprites,
                 previousBackSprites,
+                container,
+                backTexture
             );
 
             if (control === 'break') {
@@ -105,7 +113,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         }
     }
 
-    // try to link the player's face cards with those he had previously
+    // (1)
     forEachPlayer((
         playerIndex,
         playerState,
@@ -115,28 +123,25 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         backSprites,
         previousBackSprites
     ) => {
-        // iterate backwards to reserve as many cards as possible for sharing with other players
-        // the outer loop must also loop backwards so that our links are 'stable' w.r.t. duplicate cards
-        for (let i = playerState.cards.length - 1; i >= 0; --i) {
+        for (let i = 0; i < playerState.cards.length; ++i) {
             if (faceSprites[i]) continue;
 
-            for (let j = previousPlayerState.cards.length - 1; j >= 0; --j) {
+            for (let j = 0; j < previousPlayerState.cards.length; ++j) {
                 if (JSON.stringify(playerState.cards[i]) === JSON.stringify(previousPlayerState.cards[j])) {
+                    if (previousPlayerState.shareCount > j) {
+                        previousPlayerState.shareCount--;
+                    }
+
+                    if (previousPlayerState.revealCount > j) {
+                        previousPlayerState.revealCount--;
+                    }
+
+                    if (previousPlayerState.groupCount> j) {
+                        previousPlayerState.groupCount--;
+                    }
+
+                    previousPlayerState.totalCount--;
                     previousPlayerState.cards.splice(j, 1);
-
-                    if (j < previousPlayerState.shareCount) {
-                        --previousPlayerState.shareCount;
-                    }
-
-                    if (j < previousPlayerState.revealCount) {
-                        --previousPlayerState.revealCount;
-                    }
-
-                    if (j < previousPlayerState.groupCount) {
-                        --previousPlayerState.groupCount;
-                    }
-
-                    --previousPlayerState.totalCount;
 
                     const faceSprite = previousFaceSprites.splice(j, 1)[0];
                     if (faceSprite === undefined) throw new Error();
@@ -150,7 +155,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         return 'continue';
     });
 
-    // try to link each face card with...
+    // (2)
     forEachPlayer((
         playerIndex,
         playerState,
@@ -158,14 +163,14 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         faceSprites,
         previousFaceSprites,
         backSprites,
-        previousBackSprites
+        previousBackSprites,
+        container
     ) => {
         for (let i = 0; i < playerState.cards.length; ++i) {
             if (faceSprites[i]) continue;
 
             const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
 
-            // ... the previously shared cards of other players
             forEachPlayer((
                 otherPlayerIndex,
                 otherPlayerState,
@@ -179,20 +184,28 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
                     return 'continue';
                 }
 
-                for (let k = 0; k < otherPreviousPlayerState.shareCount; ++k) {
-                    if (JSON.stringify(playerState.cards[i]) === JSON.stringify(otherPreviousPlayerState.cards[k])) {
-                        otherPreviousPlayerState.shareCount--;
-                        otherPreviousPlayerState.revealCount--;
-                        otherPreviousPlayerState.groupCount--;
+                for (let j = 0; j < otherPreviousPlayerState.cards.length; ++j) {
+                    if (JSON.stringify(playerState.cards[i]) === JSON.stringify(otherPreviousPlayerState.cards[j])) {
+                        if (otherPreviousPlayerState.shareCount > j) {
+                            otherPreviousPlayerState.shareCount--;
+                        }
+
+                        if (otherPreviousPlayerState.revealCount > j) {
+                            otherPreviousPlayerState.revealCount--;
+                        }
+
+                        if (otherPreviousPlayerState.groupCount > j) {
+                            otherPreviousPlayerState.groupCount--;
+                        }
+
                         otherPreviousPlayerState.totalCount--;
-                        otherPreviousPlayerState.cards.splice(k, 1);
+                        otherPreviousPlayerState.cards.splice(j, 1);
     
-                        const sprite = otherPreviousFaceSprites.splice(k, 1)[0];
+                        const sprite = otherPreviousFaceSprites.splice(j, 1)[0];
                         if (!sprite) throw new Error();
-
-                        sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
                         faceSprites[i] = sprite;
+
+                        sprite.transfer(container, texture);
 
                         return 'break';
                     }
@@ -200,26 +213,12 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 return 'continue';
             });
-
-            // ... a card drawn from the deck
-            if (!faceSprites[i] &&
-                previousGameState &&
-                previousGameState.deckCount > 0
-            ) {
-                previousGameState.deckCount--;
-                const sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
-                if (!sprite) throw new Error();
-
-                sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
-                faceSprites[i] = sprite;
-            }
         }
 
         return 'continue';
     });
 
-    // link each of the player's back cards with...
+    // (3)
     forEachPlayer((
         playerIndex,
         playerState,
@@ -227,67 +226,30 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         faceSprites,
         previousFaceSprites,
         backSprites,
-        previousBackSprites
+        previousBackSprites,
+        container,
+        backTexture
     ) => {
-        const texture = Sprite.getTexture(`Back${playerIndex + 1}`);
-
-        for (let i = playerState.cards.length; i < playerState.totalCount; ++i) {
+        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
             if (previousPlayerState.totalCount > previousPlayerState.cards.length) {
-                // ... his previous back cards
+                if (previousPlayerState.groupCount > previousPlayerState.cards.length) {
+                    previousPlayerState.groupCount--;
+                }
+                
                 previousPlayerState.totalCount--;
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
                 backSprites.push(sprite);
-            } else if (
-                previousGameState &&
-                previousGameState.deckCount > 0
-            ) {
-                // ... any cards previously in the deck
-                previousGameState.deckCount--;
 
-                const sprite = previousDeckSprites.splice(0, 1)[0];
-                if (!sprite) throw new Error();
-                sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
-                backSprites.push(sprite);
-            } else {
-                // ... previously shared cards of other players
-                forEachPlayer((
-                    otherPlayerIndex,
-                    otherPlayerState,
-                    otherPreviousPlayerState,
-                    otherFaceSprites,
-                    otherPreviousFaceSprites,
-                    otherBackSprites,
-                    otherPreviousBackSprites
-                ) => {
-                    if (otherPreviousPlayerState.shareCount > 0) {
-                        otherPreviousPlayerState.shareCount--;
-                        otherPreviousPlayerState.revealCount--;
-                        otherPreviousPlayerState.groupCount--;
-                        otherPreviousPlayerState.totalCount--;
-                        otherPreviousPlayerState.cards.splice(0, 1);
-
-                        const sprite = otherPreviousFaceSprites.splice(0, 1)[0];
-                        if (!sprite) throw new Error();
-                        sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
-                        backSprites.push(sprite);
-
-                        return 'break';
-                    }
-
-                    return 'continue';
-                });
+                sprite.transfer(container, backTexture);
             }
         }
 
         return 'continue';
     });
 
+    // link each player's face cards with their previous back cards
     forEachPlayer((
         playerIndex,
         playerState,
@@ -295,35 +257,46 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
         faceSprites,
         previousFaceSprites,
         backSprites,
-        previousBackSprites
+        previousBackSprites,
+        container
     ) => {
-        // link the player's remaining face cards with...
         for (let i = 0; i < playerState.cards.length; ++i) {
-            const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
-    
             if (faceSprites[i]) continue;
 
+            const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
+
             if (previousPlayerState.totalCount > previousPlayerState.cards.length) {
-                // ... his previous back cards
+                if (previousPlayerState.groupCount > previousPlayerState.cards.length) {
+                    previousPlayerState.groupCount--;
+                }
+
                 previousPlayerState.totalCount--;
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
                 faceSprites[i] = sprite;
-            } else {
-                // ... or nothing
-                faceSprites[i] = new Sprite({ zone: 'Player', playerIndex }, texture);
+
+                sprite.transfer(container, texture);
             }
         }
 
-        // link the player's remaining back cards with...
-        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
-            const texture = Sprite.getTexture(`Back${playerIndex + 1}`);
+        return 'continue';
+    });
 
+    // link each player's back cards with their previous face cards
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites,
+        container,
+        backTexture
+    ) => {
+        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
             if (previousPlayerState.cards.length > 0) {
-                // ... his previous face cards
                 previousPlayerState.shareCount = Math.max(0, previousPlayerState.shareCount - 1);
                 previousPlayerState.revealCount = Math.max(0, previousPlayerState.revealCount - 1);
                 previousPlayerState.groupCount = Math.max(0, previousPlayerState.groupCount - 1);
@@ -332,13 +305,158 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer({ zone: 'Player', playerIndex }, texture);
-
                 backSprites.push(sprite);
-            } else {
-                // ... or nothing
-                backSprites.push(new Sprite({ zone: 'Player', playerIndex }, texture));
+
+                sprite.transfer(container, backTexture);
             }
+        }
+
+        return 'continue';
+    });
+
+    // link the player's back cards with other player's previous cards
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites,
+        container,
+        backTexture
+    ) => {
+        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
+            forEachPlayer((
+                otherPlayerIndex,
+                otherPlayerState,
+                otherPreviousPlayerState,
+                otherFaceSprites,
+                otherPreviousFaceSprites,
+                otherBackSprites,
+                otherPreviousBackSprites
+            ) => {
+                if (otherPreviousPlayerState.cards.length > 0) {
+                    otherPreviousPlayerState.shareCount = Math.max(0, otherPreviousPlayerState.shareCount - 1);
+                    otherPreviousPlayerState.revealCount = Math.max(0, otherPreviousPlayerState.revealCount - 1);
+                    otherPreviousPlayerState.groupCount = Math.max(0, otherPreviousPlayerState.groupCount - 1);
+                    otherPreviousPlayerState.totalCount--;
+                    otherPreviousPlayerState.cards.splice(0, 1);
+
+                    const sprite = otherPreviousFaceSprites.splice(0, 1)[0];
+                    if (!sprite) throw new Error();
+                    backSprites.push(sprite);
+
+                    sprite.transfer(container, backTexture);
+
+                    return 'break';
+                }
+
+                return 'continue';
+            });
+        }
+
+        return 'continue';
+    });
+
+    // link the player's back cards with cards previously in the deck
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites,
+        container,
+        backTexture
+    ) => {
+        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
+            if (previousGameState &&
+                previousGameState.deckCount > 0
+            ) {
+                previousGameState.deckCount--;
+
+                const sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
+                if (!sprite) throw new Error();
+                backSprites.push(sprite);
+
+                sprite.transfer(container, backTexture);
+            }
+        }
+
+        return 'continue';
+    });
+
+    // link the player's face cards with cards previously in the deck
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites,
+        container
+    ) => {
+        for (let i = 0; i < playerState.cards.length; ++i) {
+            if (faceSprites[i]) continue;
+
+            const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
+
+            if (previousGameState &&
+                previousGameState.deckCount > 0
+            ) {
+                // ... a card drawn from the deck
+                previousGameState.deckCount--;
+
+                const sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
+                if (!sprite) throw new Error();
+                faceSprites[i] = sprite;
+
+                sprite.transfer(container, texture);
+            }
+        }
+
+        return 'continue';
+    });
+    
+    // create new sprites for each unlinked face card
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites,
+        container
+    ) => {
+        for (let i = 0; i < playerState.cards.length; ++i) {
+            if (faceSprites[i]) continue;
+
+            const texture = Sprite.getTexture(JSON.stringify(playerState.cards[i]));
+
+            faceSprites[i] = new Sprite(container, texture);
+        }
+
+        return 'continue';
+    });
+
+    // create new sprites for each unlinked back card
+    forEachPlayer((
+        playerIndex,
+        playerState,
+        previousPlayerState,
+        faceSprites,
+        previousFaceSprites,
+        backSprites,
+        previousBackSprites,
+        container,
+        backTexture
+    ) => {
+        for (let i = playerState.cards.length + backSprites.length; i < playerState.totalCount; ++i) {
+            backSprites.push(new Sprite(container, backTexture));
         }
 
         return 'continue';
@@ -367,9 +485,9 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousFaceSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer({ zone: 'Deck' }, texture);
-
                 deckSprites.push(sprite);
+
+                sprite.transfer(Sprite.deckContainer, texture);
 
                 return 'break';
             } else if (previousPlayerState.totalCount > 0) {
@@ -378,9 +496,9 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
                 const sprite = previousBackSprites.splice(0, 1)[0];
                 if (!sprite) throw new Error();
-                sprite.transfer({ zone: 'Deck' }, texture);
-
                 deckSprites.push(sprite);
+
+                sprite.transfer(Sprite.deckContainer, texture);
 
                 return 'break';
             } else {
@@ -390,7 +508,7 @@ export function linkSpritesWithCards(previousGameState: Lib.GameState | undefine
 
         if (deckSprites.length === i) {
             // ... or nothing
-            deckSprites.push(new Sprite({ zone: 'Deck' }, texture));
+            deckSprites.push(new Sprite(Sprite.deckContainer, texture));
         }
     }
 
@@ -410,8 +528,7 @@ export function setPlayerSpriteTargets(
     shareCount?: number,
     revealCount?: number,
     groupCount?: number,
-    splitIndex?: number,
-    returnToDeck?: boolean
+    splitIndex?: number
 ) {
     const sprites = faceSpritesForPlayer[gameState.playerIndex];
     if (sprites === undefined) throw new Error();
@@ -425,7 +542,6 @@ export function setPlayerSpriteTargets(
     revealCount = revealCount ?? player.revealCount;
     groupCount = groupCount ?? player.groupCount;
     splitIndex = splitIndex ?? player.cards.length;
-    returnToDeck = returnToDeck ?? false;
 
     // clear for reinsertion
     sprites.splice(0, sprites.length);

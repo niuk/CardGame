@@ -3,16 +3,18 @@ import WebSocket from 'ws';
 import * as Lib from '../lib';
 import Game from './game.js';
 
-export default class Player {
+export default class Player implements Lib.PlayerState {
     ws: WebSocket;
 
     game: Game | undefined = undefined;
-    name = '';
     index = -1;
+
+    // Lib.PlayerState properties
+    name = '';
     shareCount: number = 0;
     revealCount: number = 0;
     groupCount: number = 0;
-    cards: Lib.Card[] = [];
+    cardsWithPreviousLocations: [Lib.Card | null, Lib.PreviousLocation][] = [];
 
     constructor(ws: WebSocket) {
         this.ws = ws;
@@ -54,17 +56,21 @@ export default class Player {
                     shareCount: this.shareCount,
                     revealCount: this.revealCount,
                     groupCount: this.groupCount,
-                    totalCount: this.cards.length,
-                    cards: this.cards
+                    cardsWithPreviousLocations: this.cardsWithPreviousLocations
                 });
             } else {
+                const hidden: [null, Lib.PreviousLocation][] = otherPlayer.cardsWithPreviousLocations
+                    .slice(otherPlayer.revealCount)
+                    .map(([_, previousLocation]) => [null, previousLocation]);
+                const cardsWithPreviousLocations = otherPlayer
+                    .cardsWithPreviousLocations.slice(0, otherPlayer.revealCount)
+                    .concat(...hidden);
                 playerStates.push({
                     name: otherPlayer.name,
                     shareCount: otherPlayer.shareCount,
                     revealCount: otherPlayer.revealCount,
                     groupCount: otherPlayer.groupCount,
-                    totalCount: otherPlayer.cards.length,
-                    cards: otherPlayer.cards.slice(0, otherPlayer.revealCount)
+                    cardsWithPreviousLocations
                 });
             }
         }
@@ -183,51 +189,32 @@ export default class Player {
                 console.log(`player '${this.name}' in slot ${this.index} drew card ${
                     JSON.stringify(card)
                 }, cards: ${JSON.stringify(this.cards)}`);
+            } else if (method.methodName === 'GiveCardsToOtherPlayer') {
+                const otherPlayer = this.game.players[method.otherPlayerIndex]
+                if (!otherPlayer) throw new Error(`no player at index ${method.otherPlayerIndex}`);
+
+                this.disownCards(method.cardsToGiveToOtherPlayer);
+
+                otherPlayer.shareCount += method.cardsToGiveToOtherPlayer.length;
+                otherPlayer.revealCount += method.cardsToGiveToOtherPlayer.length;
+                otherPlayer.groupCount += method.cardsToGiveToOtherPlayer.length;
+                otherPlayer.cards.unshift(...method.cardsToGiveToOtherPlayer);
+
+                console.log(`'${this.name}' in slot ${this.index} gave cards to '${otherPlayer.name}' in slot ${otherPlayer.index}: ${
+                    JSON.stringify(method.cardsToGiveToOtherPlayer)
+                }, cards: ${
+                    JSON.stringify(this.cards)
+                }`);
             } else if (method.methodName === 'ReturnCardsToDeck') {
-                const newCards = this.cards.slice();
-                let newShareCount = this.shareCount;
-                let newRevealCount = this.revealCount;
-                let newGroupCount = this.groupCount;
+                this.disownCards(method.cardsToReturnToDeck);
 
-                for (let i = 0; i < method.cardsToReturnToDeck.length; ++i) {
-                    for (let j = 0; j < newCards.length; ++j) {
-                        if (JSON.stringify(method.cardsToReturnToDeck[i]) === JSON.stringify(newCards[j])) {
-                            newCards.splice(j, 1);
-
-                            if (j < newShareCount) {
-                                --newShareCount;
-                            }
-
-                            if (j < newRevealCount) {
-                                --newRevealCount;
-                            }
-
-                            if (j < newGroupCount) {
-                                --newGroupCount;
-                            }
-
-                            break;
-                        }
-                    }
-                }
-
-                if (this.cards.length - newCards.length != method.cardsToReturnToDeck.length) {
-                    throw new Error(`could not find all cards to return: ${
-                        JSON.stringify(method.cardsToReturnToDeck)
-                    }, cards.length: ${this.cards.length}, newCards.length: ${newCards.length}`);
-                }
-
-                this.cards = newCards;
-                this.shareCount = newShareCount;
-                this.revealCount = newRevealCount;
-                this.groupCount = newGroupCount;
                 this.game.cardsInDeck.push(...method.cardsToReturnToDeck);
 
                 console.log(`'${this.name}' in slot ${this.index} returned cards: ${
                     JSON.stringify(method.cardsToReturnToDeck)
                 }, cards: ${
                     JSON.stringify(this.cards)
-                }`);        
+                }`);
             } else if (method.methodName === 'ReorderCards') {
                 let oldCards = this.cards.slice();
                 let newCards: Lib.Card[] = [];
@@ -262,5 +249,45 @@ export default class Player {
                 const _: never = method;
             }
         }
+    }
+
+    private disownCards(cardsToMove: Lib.Card[]) {
+        const newCards = this.cards.slice();
+        let newShareCount = this.shareCount;
+        let newRevealCount = this.revealCount;
+        let newGroupCount = this.groupCount;
+    
+        for (let i = 0; i < cardsToMove.length; ++i) {
+            for (let j = 0; j < newCards.length; ++j) {
+                if (JSON.stringify(cardsToMove[i]) === JSON.stringify(newCards[j])) {
+                    newCards.splice(j, 1);
+    
+                    if (j < newShareCount) {
+                        --newShareCount;
+                    }
+    
+                    if (j < newRevealCount) {
+                        --newRevealCount;
+                    }
+    
+                    if (j < newGroupCount) {
+                        --newGroupCount;
+                    }
+    
+                    break;
+                }
+            }
+        }
+
+        if (this.cards.length - newCards.length != cardsToMove.length) {
+            throw new Error(`could not find all cards: ${
+                JSON.stringify(cardsToMove)
+            }, player.cards.length: ${this.cards.length}, newCards.length: ${newCards.length}`);
+        }
+
+        this.cards = newCards;
+        this.shareCount = newShareCount;
+        this.revealCount = newRevealCount;
+        this.groupCount = newGroupCount;
     }
 }

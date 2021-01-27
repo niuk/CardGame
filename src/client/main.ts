@@ -238,9 +238,10 @@ function renderPlayer(deltaTime: number) {
     if (Input.action !== 'Deselect' &&
         Input.action !== 'None' &&
         Input.action !== 'SortByRank' &&
-        Input.action !== 'SortBySuit' &&
-        Input.action.type === 'ReturnToDeck'
-    ) {
+        Input.action !== 'SortBySuit' && (
+        Input.action.type === 'ReturnToDeck' ||
+        Input.action.type === 'GiveToOtherPlayer'
+    )) {
         for (const selectedIndex of State.selectedIndices) {
             if (shareCount > selectedIndex) {
                 shareCount--;

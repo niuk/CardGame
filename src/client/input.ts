@@ -24,6 +24,7 @@ interface WaitingForNewCard {
 
 interface GiveToOtherPlayer {
     type: 'GiveToOtherPlayer';
+    otherPlayerIndex: number;
     cardIndex: number;
     mousePositionToSpritePosition: V.IVector2;
 }
@@ -269,16 +270,21 @@ Sprite.onDragEnd = async () => {
         Client.sortBySuit(gameState);
     } else if (action === 'Deselect') {
         State.selectedIndices.splice(0, State.selectedIndices.length);
-    } else if (action.type === 'DrawFromDeck' || action.type === 'WaitingForNewCard') {
+    } else if (
+        action.type === 'TakeFromOtherPlayer' ||
+        action.type === 'DrawFromDeck' ||
+        action.type === 'WaitingForNewCard'
+    ) {
         // do nothing
     } else if (action.type === 'Reorder') {
         previousClickIndex = action.cardIndex;
         await Client.reorderCards(gameState);
+    } else if (action.type === 'GiveToOtherPlayer') {
+        previousClickIndex = -1;
+        await Client.giveToOtherPlayer(gameState, action.otherPlayerIndex);
     } else if (action.type === 'ReturnToDeck') {
         previousClickIndex = -1;
-        console.log('PRE returnCardsToDeck', gameState.playerStates[gameState.playerIndex]?.cards.length);
         await Client.returnCardsToDeck(gameState);
-        console.log('POST returnCardsToDeck', gameState.playerStates[gameState.playerIndex]?.cards.length);
     } else if (action.type === 'ControlShiftClick') {
         if (previousClickIndex === -1) {
             previousClickIndex = action.cardIndex;
@@ -314,6 +320,8 @@ Sprite.onDragEnd = async () => {
     } else if (action.type === 'Click') {
         previousClickIndex = action.cardIndex;
         State.selectedIndices.splice(0, State.selectedIndices.length, action.cardIndex);
+    } else {
+        const _: never = action;
     }
 
     State.setPlayerSpriteTargets(gameState);
@@ -417,21 +425,72 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         deck1 = V.add(center, halfCardSize);
     }
 
+    const leftPlayerIndex = (gameState.playerIndex + 1) % 4;
+    const leftPlayerState = gameState.playerStates[leftPlayerIndex];
+    const left0 = leftPlayerState ? {
+        x: 0,
+        y: (1 - 1 / goldenRatio) * Sprite.app.view.height - getLeftExtent(leftPlayerState) * Sprite.gap - Sprite.width
+    } : undefined;
+    const left1 = leftPlayerState ? {
+        x: 2 * (Sprite.height + Sprite.gap),
+        y: (1 - 1 / goldenRatio) * Sprite.app.view.height + getRightExtent(leftPlayerState) * Sprite.gap + Sprite.width
+    } : undefined;
+
+    const topPlayerIndex = (gameState.playerIndex + 2) % 4;
+    const topPlayerState = gameState.playerStates[topPlayerIndex];
+    const top0 = topPlayerState ? {
+        x: Sprite.app.view.width / goldenRatio - getLeftExtent(topPlayerState) * Sprite.gap - Sprite.width,
+        y: 0
+    } : undefined;
+    const top1 = topPlayerState ? {
+        x: Sprite.app.view.width / goldenRatio + getRightExtent(topPlayerState) * Sprite.gap + Sprite.width,
+        y: 2 * (Sprite.height + Sprite.gap)
+    } : undefined;
+
+    const rightPlayerIndex = (gameState.playerIndex + 3) % 4;
+    const rightPlayerState = gameState.playerStates[rightPlayerIndex];
+    const right0 = rightPlayerState ? {
+        x: Sprite.app.view.width - 2 * (Sprite.height + Sprite.gap),
+        y: Sprite.app.view.height / goldenRatio - getRightExtent(rightPlayerState) * Sprite.gap - Sprite.width
+    } : undefined;
+    const right1 = rightPlayerState ? {
+        x: Sprite.app.view.width,
+        y: Sprite.app.view.height / goldenRatio + getLeftExtent(rightPlayerState) * Sprite.gap + Sprite.width
+    } : undefined;
+
     if (intersectBox(drag0, drag1, deck0, deck1)) {
-        action = { cardIndex, mousePositionToSpritePosition, type: 'ReturnToDeck' };
+        action = {
+            type: 'ReturnToDeck',
+            cardIndex,
+            mousePositionToSpritePosition
+        };
 
         splitIndex = reservedSpritesAndCards.length;
-    } else {
-        
-    }
+    } else if (left0 && left1 && intersectBox(drag0, drag1, left0, left1)) {
+        action = {
+            type: 'GiveToOtherPlayer',
+            otherPlayerIndex: leftPlayerIndex,
+            cardIndex,
+            mousePositionToSpritePosition
+        };
 
-    const deckDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height / 2 - Sprite.height / 2));
-    const revealDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - 2 * Sprite.height));
-    const hideDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - Sprite.height));
+        splitIndex = reservedSpritesAndCards.length;
+    } else if (top0 && top1 && intersectBox(drag0, drag1, top0, top1)) {
+        action = {
+            type: 'GiveToOtherPlayer',
+            otherPlayerIndex: topPlayerIndex,
+            cardIndex,
+            mousePositionToSpritePosition
+        };
 
-    // set the action for onmouseup
-    if (deckDistance < revealDistance && deckDistance < hideDistance) {
-        action = { cardIndex, mousePositionToSpritePosition, type: 'ReturnToDeck' };
+        splitIndex = reservedSpritesAndCards.length;
+    } else if (right0 && right1 && intersectBox(drag0, drag1, right0, right1)) {
+        action = {
+            type: 'GiveToOtherPlayer',
+            otherPlayerIndex: rightPlayerIndex,
+            cardIndex,
+            mousePositionToSpritePosition
+        };
 
         splitIndex = reservedSpritesAndCards.length;
     } else {
@@ -439,6 +498,9 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
 
         // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
         const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
+        const revealDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - 2 * Sprite.height));
+        const hideDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - Sprite.height));
+        
         let splitLeft = (leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width) / 2 < goldenX;
         let start: number;
         let end: number;
@@ -561,8 +623,21 @@ function drag(gameState: Lib.GameState, cardIndex: number, mousePositionToSprite
         shareCount,
         revealCount,
         groupCount,
-        splitIndex,
-        action.type === 'ReturnToDeck'
+        splitIndex
+    );
+}
+
+function getLeftExtent(playerState: Lib.PlayerState) {
+    return Math.max(
+        playerState.shareCount,
+        playerState.groupCount - playerState.revealCount
+    );
+}
+
+function getRightExtent(playerState: Lib.PlayerState) {
+    return Math.max(
+        playerState.revealCount - playerState.shareCount,
+        playerState.totalCount - playerState.groupCount
     );
 }
 

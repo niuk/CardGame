@@ -181,6 +181,23 @@ export async function drawCard(): Promise<void> {
     await promise;
 }
 
+export async function giveToOtherPlayer(gameState: Lib.GameState, otherPlayerIndex: number) {
+    const player = gameState.playerStates[gameState.playerIndex];
+    if (!player) throw new Error();
+
+    await new Promise<void>((resolve, reject) => {
+        addCallback('GiveCardsToOtherPlayer', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.GiveCardsToOtherPlayer>{
+            methodName: 'GiveCardsToOtherPlayer',
+            otherPlayerIndex,
+            cardsToGiveToOtherPlayer: State.selectedIndices.map(i => player.cards[i])
+        }));
+    })
+    
+    // make the selected cards disappear
+    State.selectedIndices.splice(0, State.selectedIndices.length);
+}
+
 export async function returnCardsToDeck(gameState: Lib.GameState) {
     const player = gameState.playerStates[gameState.playerIndex];
     if (!player) throw new Error();
@@ -192,7 +209,7 @@ export async function returnCardsToDeck(gameState: Lib.GameState) {
             cardsToReturnToDeck: State.selectedIndices.map(i => player.cards[i])
         }));
     });
-    
+
     // make the selected cards disappear
     State.selectedIndices.splice(0, State.selectedIndices.length);
 }

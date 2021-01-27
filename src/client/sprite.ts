@@ -39,8 +39,6 @@ async function loadTexture(key: string, src: string) {
     ));
 }
 
-type Zone = { zone: 'None' } | { zone: 'Deck' } | { zone: 'Player', playerIndex: number };
-
 let loading = false;
 let onTickAdded: (deltaTime: number) => void | undefined;
 
@@ -129,9 +127,9 @@ export default class Sprite {
         }
 
         if (!background) {
-            const dummySprite = new Sprite({ zone: 'None' }, new PIXI.Texture(new PIXI.BaseTexture()));
+            const dummySprite = new Sprite(new PIXI.Container(), new PIXI.Texture(new PIXI.BaseTexture()));
             dummySprite.position = { x: -this.width, y: -this.height };
-            
+
             background = this.app.stage.addChild(PIXI.Sprite.from(<PIXI.Texture>backgroundTextures[backgroundIndex]));
             background.zIndex = 0;
             background.position.set(0, 0);
@@ -277,7 +275,7 @@ export default class Sprite {
 
     public target: V.IVector2;
 
-    public constructor(zone: Zone, texture: PIXI.Texture) {
+    public constructor(parent: PIXI.Container, texture: PIXI.Texture) {
         this.target = { x: 0, y: 0 };
 
         this._sprite = new PIXI.Sprite(texture);
@@ -316,33 +314,15 @@ export default class Sprite {
         this._sprite.on('pointerup', onPointerUp);
         this._sprite.on('pointerupoutside', onPointerUp);
 
-        if (zone.zone === 'None') {
-            // this is a dummy
-        } else if (zone.zone === 'Deck') {
-            Sprite.deckContainer.addChild(this._sprite);
-        } else if (zone.zone === 'Player') {
-            Sprite.playerContainers[zone.playerIndex]?.addChild(this._sprite);
-        } else {
-            const _: never = zone;
-        }
+        parent.addChild(this._sprite);
     }
 
-    public transfer(zone: Zone, texture: PIXI.Texture) {
+    public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
         const oldParent = this._sprite.parent;
 
         // save this sprite's world transform position and rotation
         const position = oldParent.localTransform.apply(this.position);
         const rotation = oldParent.rotation;
-
-        let parent: PIXI.Container | undefined;
-        if (zone.zone === 'None') {
-            throw new Error();
-        } else if (zone.zone === 'Deck') {
-            parent = Sprite.deckContainer;
-        } else {
-            parent = Sprite.playerContainers[zone.playerIndex];
-            if (!parent) throw new Error();
-        }
 
         parent.addChild(this._sprite);
         this._sprite.texture = texture;
