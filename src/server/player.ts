@@ -23,8 +23,7 @@ export default class Player implements Lib.PlayerState {
             const method = <Lib.Method>JSON.parse(message.data.toString());
             let errorDescription: string | undefined = undefined
             try {
-                this.game?.resetDeckCardOrigins();
-                this.resetCardOrigins();
+                this.game?.resetCardOrigins();
                 await this.invoke(method);
             } catch (e) {
                 console.error(e);
@@ -45,7 +44,7 @@ export default class Player implements Lib.PlayerState {
         };
     }
 
-    private resetCardOrigins() {
+    public resetCardOrigins(): void {
         let cardIndex = 0;
         for (const cardWithOrigin of this.cardsWithOrigins) {
             cardWithOrigin[1] = {
@@ -119,7 +118,7 @@ export default class Player implements Lib.PlayerState {
                 throw new Error(`could not join game '${this.game.gameId}'`);
             }
 
-            console.log(`player '${this.name}' joined game '${this.game.gameId}'`);
+            console.log(`player '${this.name}' joined game '${this.game.gameId}' at ${this.index}`);
         } else {
             if (!this.game) throw new Error('you are not in a game');
 
@@ -130,7 +129,7 @@ export default class Player implements Lib.PlayerState {
                 }
 
                 if (method.cardIndex < 0 || otherPlayer.shareCount <= method.cardIndex) {
-                    throw new Error(`player '${otherPlayer.name}' at index ${otherPlayer.index} doesn't have a shared card at index ${method.cardIndex}`);
+                    throw new Error(`player '${otherPlayer.name}' doesn't have a shared card at index ${method.cardIndex}`);
                 }
 
                 if (method.cardIndex < otherPlayer.shareCount) {
@@ -148,14 +147,13 @@ export default class Player implements Lib.PlayerState {
                 const card = otherPlayer.cardsWithOrigins.splice(method.cardIndex, 1)[0]?.[0];
                 if (!card) throw new Error();
 
-                this.resetCardOrigins();
                 this.cardsWithOrigins.push([card, {
                     origin: 'Hand',
                     playerIndex: method.otherPlayerIndex,
                     cardIndex: method.cardIndex
                 }]);
 
-                console.log(`player '${this.name}' at index ${this.index} took card ${card} from player '${otherPlayer.name}' at index ${otherPlayer.index}`);
+                console.log(`player '${this.name}' took card ${card} from player '${otherPlayer.name}'`);
             } else if (method.methodName === 'DrawFromDeck') {
                 const card = this.game.deckCardsWithOrigins.splice(Math.floor(Math.random() * this.game.deckCardsWithOrigins.length), 1)[0]?.[0];
                 if (card === undefined) {

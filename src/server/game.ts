@@ -45,9 +45,13 @@ export default class Game {
         this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
     }
 
-    public resetDeckCardOrigins(): void {
+    public resetCardOrigins(): void {
         for (const deckCardWithOrigin of this.deckCardsWithOrigins) {
             deckCardWithOrigin[1] = { origin: 'Deck' };
+        }
+
+        for (const player of this.players) {
+            player.resetCardOrigins();
         }
     }
     

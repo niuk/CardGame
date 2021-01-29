@@ -262,17 +262,15 @@ export default class Sprite {
     
             const container = Sprite.playerContainers[playerIndex];
             if (!container) throw new Error();
-            const backTexture = Sprite.getTexture(`Back${playerIndex}`);    
+            const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);    
     
-            for (const cardWithOrigin of playerState.cardsWithOrigins) {
-                const [card, origin] = cardWithOrigin;
-    
+            for (const [card, origin] of playerState.cardsWithOrigins) {
                 let sprite: Sprite | undefined;
                 if (origin.origin === 'Deck') {
                     sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
                 } else if (origin.origin === 'Hand') {
-                    if (playerIndex === origin.playerIndex) {
-                        sprite = previousFaceSprites[origin.cardIndex];
+                    if (origin.playerIndex === gameState.playerIndex) {
+                        sprite = previousFaceSpritesForPlayer[gameState.playerIndex]?.[origin.cardIndex];
                     } else {
                         const originPlayer = previousGameState?.playerStates[origin.playerIndex];
                         if (originPlayer) {

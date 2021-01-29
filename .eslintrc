@@ -11,6 +11,6 @@
         "node": true
     },
     "parserOptions": {
-        "project": "src/server/tsconfig.json"
+        "project": "src/client/tsconfig.json"
     }
 }

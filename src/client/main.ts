@@ -55,54 +55,70 @@ function addCharsFromText(text: string) {
 
 window.onload = async () => {
     // connected; now we can activate buttons
-    (<HTMLButtonElement>document.getElementById('joinGame')).onclick = async e => {
-        getConnectionStatusElement().innerHTML = `Joining game '${getGameIdElement().value}'...`;
-
-        Lib.setCookie('playerName', getPlayerNameElement().value);
-
-        await Sprite.load(undefined);
-
+    const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
+    const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
+    joinGameButton.onclick = async e => {
+        joinGameButton.disabled = true;
+        newGameButton.disabled = true;
         try {
-            await Client.setPlayerName(getPlayerNameElement().value);
-            await Client.joinGame(getGameIdElement().value);
-        } catch (e) {
-            getConnectionStatusElement().innerHTML = `Error: ${JSON.stringify(e)}`;
-            throw e;
-        }
+            getConnectionStatusElement().innerHTML = `Joining game '${getGameIdElement().value}'...`;
 
-        while (!Client.gameState) {
-            await Lib.delay(100);
-        }
+            Lib.setCookie('playerName', getPlayerNameElement().value);
 
-        getConnectionStatusElement().innerHTML = `Game: ${Client.gameState.gameId}`;
-        document.body.removeChild(getFormElement());
-    
-        await Sprite.load(Client.gameState);
+            await Sprite.load(undefined);
+
+            try {
+                await Client.setPlayerName(getPlayerNameElement().value);
+                await Client.joinGame(getGameIdElement().value);
+            } catch (e) {
+                getConnectionStatusElement().innerHTML = `Error: ${JSON.stringify(e)}`;
+                throw e;
+            }
+
+            while (!Client.gameState) {
+                await Lib.delay(100);
+            }
+
+            getConnectionStatusElement().innerHTML = `Game: ${Client.gameState.gameId}`;
+            document.body.removeChild(getFormElement());
+        
+            await Sprite.load(Client.gameState);
+        } finally {
+            joinGameButton.disabled = false;
+            newGameButton.disabled = false;
+        }
     };
 
-    (<HTMLButtonElement>document.getElementById('newGame')).onclick = async e => {
-        getConnectionStatusElement().innerHTML = `Creating new game...`;
-
-        Lib.setCookie('playerName', getPlayerNameElement().value);
-
-        await Sprite.load(undefined);
-
+    newGameButton.onclick = async e => {
+        joinGameButton.disabled = true;
+        newGameButton.disabled = true;
         try {
-            await Client.setPlayerName(getPlayerNameElement().value);
-            await Client.newGame();
-        } catch (e) {
-            getConnectionStatusElement().innerHTML = `Error: ${JSON.stringify(e)}`;
-            throw e;
+            getConnectionStatusElement().innerHTML = `Creating new game...`;
+
+            Lib.setCookie('playerName', getPlayerNameElement().value);
+
+            await Sprite.load(undefined);
+
+            try {
+                await Client.setPlayerName(getPlayerNameElement().value);
+                await Client.newGame();
+            } catch (e) {
+                getConnectionStatusElement().innerHTML = `Error: ${JSON.stringify(e)}`;
+                throw e;
+            }
+
+            while (!Client.gameState) {
+                await Lib.delay(100);
+            }
+
+            getConnectionStatusElement().innerHTML = `Game: ${Client.gameState.gameId}`;
+            document.body.removeChild(getFormElement());
+
+            await Sprite.load(Client.gameState);
+        } finally {
+            joinGameButton.disabled = false;
+            newGameButton.disabled = false;
         }
-
-        while (!Client.gameState) {
-            await Lib.delay(100);
-        }
-
-        getConnectionStatusElement().innerHTML = `Game: ${Client.gameState.gameId}`;
-        document.body.removeChild(getFormElement());
-
-        await Sprite.load(Client.gameState);
     };
 
     Sprite.onTick = deltaTime => {
