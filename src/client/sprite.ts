@@ -404,21 +404,14 @@ export default class Sprite {
         const onPointerUp = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 dragging = false;
-                console.log('onDragEnd', Sprite.onDragEnd);
                 Sprite.onDragEnd?.(event.data.global.clone(), this);
             }
         };
 
         this._sprite.on('pointerdown', onPointerDown);
         this._sprite.on('pointermove', onPointerMove);
-        this._sprite.on('pointerup', e => {
-            console.log('pointerup');
-            onPointerUp(e);
-        });
-        this._sprite.on('pointerupoutside', e => {
-            console.log('pointerupoutside');
-            onPointerUp(e);
-        });
+        this._sprite.on('pointerup', onPointerUp);
+        this._sprite.on('pointerupoutside', onPointerUp);
 
         parent.addChild(this._sprite);
     }
