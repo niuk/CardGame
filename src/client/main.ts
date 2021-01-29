@@ -529,7 +529,7 @@ function addLabel(
     }
 
     // workaround for a bug
-    if (label && label.transform !== null) {
+    if (label && label.transform === null) {
         labelsUsingCurrentFonts.delete(label);
         label.destroy();
         label = undefined;
