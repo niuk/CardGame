@@ -23,7 +23,7 @@ export default class Game {
     }
 
     public players: Player[] = []
-    public cardsInDeck: Lib.Card[] = [];
+    public deckWithOrigins: [Lib.Card, Lib.Origin][] = [];
 
     public constructor() {
         do {
@@ -34,20 +34,61 @@ export default class Game {
 
         for (let i = 0; i < 4; ++i) {
             for (let j = 1; j <= 13; ++j) {
-                this.cardsInDeck.push([i, j]);
-                this.cardsInDeck.push([i, j]);
+                this.deckWithOrigins.push([[i, j], { origin: 'Deck' }]);
+                this.deckWithOrigins.push([[i, j], { origin: 'Deck' }]);
             }
         }
 
-        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Big]);
-        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Big]);
-        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Small]);
-        this.cardsInDeck.push([Lib.Suit.Joker, Lib.Rank.Small]);
+        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
+        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
+        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
+        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
+    }
+    
+    public getStateForPlayerAt(playerIndex: number): Lib.GameState {
+        const playerStates: (Lib.PlayerState | null)[] = [];    
+        for (const player of this.players) {
+            if (player.index === playerIndex) {
+                playerStates.push({
+                    name: player.name,
+                    shareCount: player.shareCount,
+                    revealCount: player.revealCount,
+                    groupCount: player.groupCount,
+                    cardsWithOrigins: player.cardsWithOrigins
+                });
+            } else {
+                const hidden: [null, Lib.Origin][] = player.cardsWithOrigins
+                    .slice(player.revealCount)
+                    .map(([_, previousLocation]) => [null, previousLocation]);
+                const cardsWithOrigins = player
+                    .cardsWithOrigins.slice(0, player.revealCount)
+                    .concat(...hidden);
+                playerStates.push({
+                    name: player.name,
+                    shareCount: player.shareCount,
+                    revealCount: player.revealCount,
+                    groupCount: player.groupCount,
+                    cardsWithOrigins
+                });
+            }
+        }
+        
+        return {
+            gameId: this.gameId,
+            deckOrigins: this.deckWithOrigins.map(([_, origin]) => origin),
+            playerIndex,
+            playerStates
+        };
     }
 
-    public broadcastState() {
+    public broadcastStateExceptToPlayerAt(playerIndex: number) {
         for (const player of this.players) {
-            player.sendState();
+            if (player.index !== playerIndex) {
+                player.ws.send(JSON.stringify({
+                    newGameState: this.getStateForPlayerAt(player.index),
+                    methodResult: null
+                }));
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ const suits = ['Club', 'Diamond', 'Heart', 'Spade', 'Joker'];
 const textures = new Map<string, PIXI.Texture>();
 const sprites = new Set<Sprite>();
 
+let background: PIXI.Sprite;
 let backgroundIndex = 0;
 const backgroundTextures = [
     PIXI.Texture.from('wood-364693.jpg'),
@@ -20,7 +21,6 @@ const backgroundTextures = [
     PIXI.Texture.from('kalle-kortelainen-7JtgUEYVOu0-unsplash.jpg'),
     PIXI.Texture.from('scott-webb-S_eu4NqJt5Y-unsplash.jpg')
 ];
-let background: PIXI.Sprite;
 
 let loadedTextureCount = 0;
 let totalTextureCount = 4 * 13 + 2 + colors.length;
@@ -54,12 +54,12 @@ export default class Sprite {
     public static pixelsPerCM = 0;
     public static pixelsPerPercentWidth = 0;
     public static pixelsPerPercentHeight = 0;
-
-    public static fixedGap: number;
-    public static deckGap: number;
-    public static gap: number;
-    public static width: number;
-    public static height: number;
+    public static dragThreshold = 0;
+    public static fixedGap = 0;
+    public static deckGap = 0;
+    public static gap = 0;
+    public static width = 0;
+    public static height = 0;
 
     public static deckContainer: PIXI.Container;
     public static playerContainers: PIXI.Container[];
@@ -149,6 +149,8 @@ export default class Sprite {
             document.body.removeChild(testElement);
         }
 
+        this.dragThreshold = 0.5 * this.pixelsPerCM;
+
         // both the view (the canvas element) and the renderer must be resized
         this.app.view.width = document.body.clientWidth;
         this.app.view.height = document.body.clientHeight;
@@ -224,13 +226,8 @@ export default class Sprite {
     
     private _sprite: PIXI.Sprite;
 
-    public getOffsetInParentTransform(point: V.IVector2): V.IVector2 {
-        const offset = V.sub(this.position, this._sprite.parent.localTransform.applyInverse(point));
-        this._sprite.pivot.set(
-            (offset.x - this.position.x) / Sprite.width,
-            (offset.y - this.position.y) / Sprite.height
-        );
-        return offset;
+    public get texture() {
+        return this._sprite.texture;
     }
 
     public get position(): V.IVector2 {
@@ -315,6 +312,15 @@ export default class Sprite {
         this._sprite.on('pointerupoutside', onPointerUp);
 
         parent.addChild(this._sprite);
+    }
+
+    public getOffsetInParentTransform(point: V.IVector2): V.IVector2 {
+        const offset = V.sub(this.position, this._sprite.parent.localTransform.applyInverse(point));
+        this._sprite.pivot.set(
+            (offset.x - this.position.x) / Sprite.width,
+            (offset.y - this.position.y) / Sprite.height
+        );
+        return offset;
     }
 
     public transfer(parent: PIXI.Container, texture: PIXI.Texture) {

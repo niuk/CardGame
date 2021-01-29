@@ -4,6 +4,7 @@ import * as Lib from '../lib';
 import * as Client from './client';
 import * as State from './state';
 import * as Input from './input';
+import * as V from './vector';
 import Sprite from './sprite';
 
 const getPlayerNameElement = () => (<HTMLInputElement>document.getElementById('playerName'));
@@ -142,8 +143,6 @@ window.onresize = async () => {
 
             Sprite.load(Client.gameState);
 
-            State.setPlayerSpriteTargets(Client.gameState);
-
             resize = undefined;
         })();
     }
@@ -154,9 +153,6 @@ const deckLabels: (PIXI.BitmapText | undefined)[] = [];
 const deckDealDuration = 1000;
 let deckDealTime: number | undefined = undefined;
 function renderDeck(deltaTime: number) {
-    const deckCount = Client.gameState?.deckCount;
-    if (deckCount === undefined) return;
-
     if (deckDealTime === undefined) {
         deckDealTime = performance.now();
     }
@@ -165,22 +161,17 @@ function renderDeck(deltaTime: number) {
         const deckSprite = State.deckSprites[i];
         if (!deckSprite) throw new Error();
 
-        if (i === deckCount - 1 &&
-            Input.action !== "None" &&
-            Input.action !== "SortBySuit" &&
-            Input.action !== "SortByRank" &&
-            Input.action !== "Deselect" && (
-            Input.action.type === "DrawFromDeck" ||
-            Input.action.type === "WaitingForNewCard"
-        )) {
-            // set in onmousemove
-        } else if (performance.now() - deckDealTime < i * deckDealDuration / deckCount) {
+        if (i === State.deckSprites.length - 1 &&
+            Input.action.action === "DrawFromDeck"
+        ) {
+            deckSprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
+        } else if (performance.now() - deckDealTime < i * deckDealDuration / State.deckSprites.length) {
             // card not yet dealt; keep top left
             deckSprite.position = { x: -Sprite.width, y: -Sprite.height };
             deckSprite.target = { x: -Sprite.width, y: -Sprite.height };
         } else {
             deckSprite.target = {
-                x: Sprite.app.view.width / 2 - Sprite.width / 2 - (i - deckCount / 2) * Sprite.deckGap,
+                x: Sprite.app.view.width / 2 - Sprite.width / 2 - (i - State.deckSprites.length / 2) * Sprite.deckGap,
                 y: Sprite.app.view.height / 2 - Sprite.height / 2
             };
         }
@@ -189,9 +180,9 @@ function renderDeck(deltaTime: number) {
     }
     
     let [i, y] = 上下(deckLabels, Sprite.deckContainer, 0,
-        Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + deckCount / 2) * Sprite.deckGap,
+        Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + State.deckSprites.length / 2) * Sprite.deckGap,
         Sprite.app.view.height / 2 - Sprite.height / 2,
-        `︵${数(deckCount)}︶`,
+        `︵${数(State.deckSprites.length)}︶`,
         '小字',
         13);
 
@@ -209,40 +200,100 @@ function renderPlayer(deltaTime: number) {
     const gameState = Client.gameState;
     if (!gameState) return;
 
-    const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
-    if (!sprites) throw new Error();
-
-    let i = 0;
-    for (const sprite of sprites) {
-        sprite.selected = Lib.binarySearchNumber(State.selectedIndices, i) >= 0;
-        sprite.zIndex = i + 2;
-        sprite.animate(deltaTime);
-
-        ++i;
-    }
-
-    const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
-
     const container = Sprite.playerContainers[gameState.playerIndex];
     if (!container) throw new Error();
 
     const playerState = gameState.playerStates[gameState.playerIndex];
     if (!playerState) throw new Error();
 
+    const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
+    if (!sprites) throw new Error();
+
+    const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
+
+    let cardIndex = 0;
+    const dragSprites: Sprite[] = [];
+    for (const sprite of sprites) {
+        if (Input.selectedIndices.has(cardIndex) && (
+            Input.action.action === 'GiveToOtherPlayer' ||
+            Input.action.action === 'ReturnToDeck' ||
+            Input.action.action === 'Reorder'
+        )) {
+            if (cardIndex <= Input.action.cardIndex) {
+                for (const previousDragSprite of dragSprites) {
+                    previousDragSprite.target = V.sub(previousDragSprite.target, { x: Sprite.gap, y: 0 });
+                }
+
+                sprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
+                dragSprites.push(sprite);
+            } else {
+                const lastDragSprite = dragSprites[dragSprites.length - 1];
+                if (!lastDragSprite) throw new Error();
+                sprite.target = V.add(lastDragSprite.target, { x: Sprite.gap, y: 0 });
+                dragSprites.push(sprite);
+            }
+        } else if (Input.selectedIndices.has(cardIndex) && (
+            Input.action.action === 'ControlShiftClick' ||
+            Input.action.action === 'ControlClick' ||
+            Input.action.action === 'ShiftClick' ||
+            Input.action.action === 'Click'
+        ) && (Input.action.cardIndex === cardIndex || Input.selectedIndices.contains(Input.action.cardIndex))) {
+            if (Input.action.cardIndex === cardIndex) {
+                sprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
+            } else {
+                const offset = Input.action.selectedSpriteOffsets[cardIndex];
+                if (!offset) throw new Error();
+                sprite.target = V.add(Input.mouseMovePosition, offset);
+            }
+        } else {
+            if (cardIndex < playerState.shareCount) {
+                sprite.target = {
+                    x: goldenX - Sprite.width + (cardIndex - playerState.shareCount) * Sprite.gap,
+                    y: Sprite.app.view.height - 2 * Sprite.height - 2 * Sprite.gap
+                };
+            } else if (cardIndex < playerState.revealCount) {
+                sprite.target = {
+                    x: goldenX + (1 + cardIndex - playerState.shareCount) * Sprite.gap,
+                    y: Sprite.app.view.height - 2 * Sprite.height - 2 * Sprite.gap
+                };
+            } else {
+                if (cardIndex < playerState.groupCount) {
+                    sprite.target = {
+                        x: goldenX - Sprite.width + (cardIndex - playerState.revealCount - (playerState.groupCount - playerState.revealCount)) * Sprite.gap,
+                        y: Sprite.app.view.height - Sprite.height
+                    };
+                } else {
+                    sprite.target = {
+                        x: goldenX + (1 + cardIndex - playerState.groupCount) * Sprite.gap,
+                        y: Sprite.app.view.height - Sprite.height
+                    };
+                }
+            }    
+        }
+
+        // 0 is for lines, 1 is for labels, so + 2 to draw on top of them
+        sprite.zIndex = 2 + cardIndex;
+        sprite.selected = Input.selectedIndices.has(cardIndex);
+
+        ++cardIndex;
+    }
+
+    // since we might shift dragSprites to the left in each iteration, we can't animate inside the previous loop
+    // instead, we must animate after the previous loop is done setting targets
+    for (const sprite of sprites) {
+        sprite.animate(deltaTime);
+    }
+
     addAllLines(playerLines, goldenX, container, true);
 
     let shareCount = playerState.shareCount;
     let revealCount = playerState.revealCount;
     let groupCount = playerState.groupCount;
-    let totalCount = playerState.totalCount;
-    if (Input.action !== 'Deselect' &&
-        Input.action !== 'None' &&
-        Input.action !== 'SortByRank' &&
-        Input.action !== 'SortBySuit' && (
-        Input.action.type === 'ReturnToDeck' ||
-        Input.action.type === 'GiveToOtherPlayer'
-    )) {
-        for (const selectedIndex of State.selectedIndices) {
+    let totalCount = playerState.cardsWithOrigins.length;
+    if (Input.action.action === 'ReturnToDeck' ||
+        Input.action.action === 'GiveToOtherPlayer'
+    ) {
+        Input.selectedIndices.forEach((selectedIndex: number) => {
             if (shareCount > selectedIndex) {
                 shareCount--;
             }
@@ -256,7 +307,7 @@ function renderPlayer(deltaTime: number) {
             }
 
             totalCount--;
-        }
+        });
     }
 
     const j = addAllLabels(
@@ -389,7 +440,7 @@ function renderOtherPlayer(deltaTime: number) {
             playerState.shareCount,
             playerState.revealCount,
             playerState.groupCount,
-            playerState.totalCount
+            playerState.cardsWithOrigins.length
         );
     }
 }
@@ -495,10 +546,17 @@ function addAllLabels(
     groupCount: number,
     totalCount: number
 ) {
-    const score = playerState.cards.slice(0, shareCount).map(([suit, rank]) => Math.min(10, rank)).reduce((a, b) => a + b, 0);
+    const score = playerState.cardsWithOrigins.slice(0, shareCount).map(([card, origin]) => {
+        if (card) {
+            const [suit, rank] = card;
+            return Math.min(10, rank);
+        }
+
+        return 0;
+    }).reduce((a, b) => a + b, 0);
 
     const topY = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
-    const topLeftCount = playerIsYou ? shareCount : totalCount - groupCount;
+    const topLeftCount = playerIsYou ? shareCount : playerState.cardsWithOrigins.length - groupCount;
     const topLeftX = goldenX - (topLeftCount > 0 ? Sprite.width + topLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
     let i = 0, y;
     [i, y] = 上下(labels, container, i, topLeftX, topY, playerIsYou ? '得分' : '持牌', '中字', 19);

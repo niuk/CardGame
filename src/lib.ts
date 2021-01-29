@@ -1,9 +1,3 @@
-import binarySearch from 'binary-search';
-
-export function binarySearchNumber(haystack: number[], needle: number, low?: number, high?: number) {
-    return binarySearch(haystack, needle, (a, b) => a - b, low, high);
-}
-
 export function getCookie(name: string): string | undefined {
     const parts = `; ${document.cookie}`.split(`; ${name}=`);
     if (parts.length === 2) {
@@ -53,22 +47,16 @@ export enum Rank {
 
 export type Card = [Suit, Rank];
 
-export type PreviousLocation = Deck | Revealed | HiddenLeft | HiddenRight;
+export type Origin = Deck | Hand;
 
-export interface Revealed {
-    previousLocation: 'Revealed';
+export interface Deck {
+    origin: 'Deck';
+}
+
+export interface Hand {
+    origin: 'Hand';
     playerIndex: number;
     cardIndex: number;
-}
-
-export interface HiddenLeft {
-    previousLocation: 'HiddenLeft';
-    playerIndex: number;
-}
-
-export interface HiddenRight {
-    previousLocation: 'HiddenRight';
-    playerIndex: number;
 }
 
 export interface PlayerState {
@@ -76,12 +64,12 @@ export interface PlayerState {
     shareCount: number;
     revealCount: number;
     groupCount: number;
-    cardsWithPreviousLocations: [Card | null, PreviousLocation][];
+    cardsWithOrigins: [Card | null, Origin][];
 }
 
 export interface GameState {
     gameId: string;
-    deckCount: number;
+    deckOrigins: Origin[];
     playerIndex: number;
     playerStates: (PlayerState | null)[];
 }
@@ -129,7 +117,6 @@ export interface TakeCard {
     methodName: 'TakeCard';
     otherPlayerIndex: number;
     cardIndex: number;
-    card: Card;
 }
 
 export interface DrawCard {
@@ -139,12 +126,12 @@ export interface DrawCard {
 export interface GiveCardsToOtherPlayer {
     methodName: 'GiveCardsToOtherPlayer';
     otherPlayerIndex: number;
-    cardsToGiveToOtherPlayer: Card[];
+    cardIndicesToGiveToOtherPlayer: number[];
 }
 
 export interface ReturnCardsToDeck {
     methodName: 'ReturnCardsToDeck';
-    cardsToReturnToDeck: Card[];
+    cardIndicesToReturnToDeck: number[];
 }
 
 export interface ReorderCards {
@@ -152,5 +139,5 @@ export interface ReorderCards {
     newShareCount: number;
     newRevealCount: number;
     newGroupCount: number;
-    reorderedCards: Card[];
+    newCardsWithOrigins: [Card, Origin][];
 }

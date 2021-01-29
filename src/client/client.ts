@@ -1,4 +1,5 @@
 import * as Lib from '../lib';
+import * as Input from './input';
 import * as State from './state';
 import Sprite from './sprite';
 
@@ -18,79 +19,35 @@ export async function connect() {
 }
 
 webSocket.onmessage = async e => {
-    const obj = JSON.parse(e.data);
-    if ('methodName' in obj) {
-        const result = <Lib.Result>obj;
+    const { newGameState,                       methodResult }:
+          { newGameState: Lib.GameState | null, methodResult: Lib.Result | null } = JSON.parse(e.data);
 
-        const callbacks = callbacksForMethodType.get(result.methodName);
-        if (callbacks === undefined || callbacks.length === 0) {
-            throw new Error(`no callbacks found for method: ${result.methodName}`);
-        }
-
-        const callback = callbacks.shift();
-        if (callback === undefined) {
-            throw new Error(`callback is undefined for method: ${result.methodName}`);
-        }
-        
-        callback(result);
-    } else if (
-        'gameId' in obj &&
-        'deckCount' in obj &&
-        'playerIndex' in obj &&
-        'playerStates' in obj
-    ) {
-        if (JSON.stringify(gameState) === JSON.stringify(obj)) {
-            return; // TODO: figure out why receiving duplicate game states corrupts our sprite arrays
-        }
-
+    if (newGameState) {
         const previousGameState = gameState;
-        gameState = <Lib.GameState>obj;
+        gameState = newGameState;
 
         console.log(`received gameState: ${JSON.stringify(gameState)}`);
 
         Lib.setCookie('gameId', gameState.gameId);
 
-        // selected indices might have shifted
-        const cards = gameState.playerStates[gameState.playerIndex]?.cards;
-        const previousCards = previousGameState?.playerStates[previousGameState.playerIndex]?.cards;
-        if (cards !== undefined && previousCards !== undefined) {
-            const newSelectedIndices = [];
-            
-            for (const selectedIndex of State.selectedIndices) {
-                const candidates = [];
-                for (let i = 0; i < cards.length; ++i) {
-                    if (JSON.stringify(previousCards[selectedIndex]) === JSON.stringify(cards[i])) {
-                        candidates.push(i);
-                    }
-                }
-
-                let min = Infinity;
-                let closest = undefined;
-                for (let candidate of candidates) {
-                    const distance = Math.abs(candidate - selectedIndex);
-                    if (min > distance) {
-                        min = distance;
-                        closest = candidate;
-                    }
-                }
-
-                if (closest !== undefined) {
-                    newSelectedIndices.push(closest);
-                }
-            }
-
-            State.selectedIndices.splice(0, State.selectedIndices.length, ...newSelectedIndices);
-        }
-
-        // binary search still needs to work
-        State.selectedIndices.sort((a, b) => a - b);
-
         await Sprite.load(gameState);
 
+        Input.linkInputWithCards(gameState);
         State.linkSpritesWithCards(previousGameState, gameState);
-        State.setPlayerSpriteTargets(gameState);
-    } else {
-        throw new Error(JSON.stringify(e.data));
+    }
+
+    if (methodResult) {
+        const callbacks = callbacksForMethodType.get(methodResult.methodName);
+        if (callbacks === undefined || callbacks.length === 0) {
+            throw new Error(`no callbacks found for method: ${methodResult.methodName}`);
+        }
+
+        const callback = callbacks.shift();
+        if (callback === undefined) {
+            throw new Error(`callback is undefined for method: ${methodResult.methodName}`);
+        }
+
+        callback(methodResult);
     }
 };
 
@@ -114,8 +71,8 @@ function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (r
     });
 }
 
-export async function setPlayerName(playerName: string) {
-    await new Promise<void>((resolve, reject) => {
+export function setPlayerName(playerName: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
         addCallback('SetPlayerName', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.SetPlayerName>{
             methodName: 'SetPlayerName',
@@ -124,159 +81,139 @@ export async function setPlayerName(playerName: string) {
     })
 }
 
-export async function joinGame(gameId: string) {
+export function joinGame(gameId: string): Promise<void> {
     // try to join the game
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
         addCallback('JoinGame', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.JoinGame>{
             methodName: 'JoinGame',
             gameId
         }));
     });
-
-    while (!gameState) {
-        await Lib.delay(100);
-    }
 }
 
-export async function newGame() {
-    await new Promise<void>((resolve, reject) => {
+export function newGame(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
         addCallback('NewGame', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.NewGame>{
             methodName: 'NewGame'
         }));
     });
-
-    while (!gameState) {
-        await Lib.delay(100);
-    }
 }
 
-export async function takeCard(otherPlayerIndex: number, cardIndex: number, card: Lib.Card) {
-    const promise = State.getSpritesLinkedWithCardsPromise();
-
-    await new Promise<void>((resolve, reject) => {
+export function takeCard(otherPlayerIndex: number, cardIndex: number) {
+    return new Promise<void>((resolve, reject) => {
         addCallback('TakeCard', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.TakeCard>{
             methodName: 'TakeCard',
             otherPlayerIndex,
-            cardIndex,
-            card
+            cardIndex
         }));
     });
-
-    await promise;
 }
 
-export async function drawCard(): Promise<void> {
-    const promise = State.getSpritesLinkedWithCardsPromise();
-
-    await new Promise<void>((resolve, reject) => {
+export function drawCard(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
         addCallback('DrawCard', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.DrawCard>{
             methodName: 'DrawCard'
         } as Lib.DrawCard));
     });
-
-    await promise;
 }
 
-export async function giveToOtherPlayer(gameState: Lib.GameState, otherPlayerIndex: number) {
-    const player = gameState.playerStates[gameState.playerIndex];
-    if (!player) throw new Error();
-
-    await new Promise<void>((resolve, reject) => {
+export function giveToOtherPlayer(otherPlayerIndex: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
         addCallback('GiveCardsToOtherPlayer', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.GiveCardsToOtherPlayer>{
             methodName: 'GiveCardsToOtherPlayer',
             otherPlayerIndex,
-            cardsToGiveToOtherPlayer: State.selectedIndices.map(i => player.cards[i])
+            cardIndicesToGiveToOtherPlayer: Array.from(Input.selectedIndices.iterator())
         }));
     })
-    
-    // make the selected cards disappear
-    State.selectedIndices.splice(0, State.selectedIndices.length);
 }
 
-export async function returnCardsToDeck(gameState: Lib.GameState) {
-    const player = gameState.playerStates[gameState.playerIndex];
-    if (!player) throw new Error();
-
-    await new Promise<void>((resolve, reject) => {
+export function returnCardsToDeck(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
         addCallback('ReturnCardsToDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.ReturnCardsToDeck>{
             methodName: 'ReturnCardsToDeck',
-            cardsToReturnToDeck: State.selectedIndices.map(i => player.cards[i])
+            cardIndicesToReturnToDeck: Array.from(Input.selectedIndices.iterator())
         }));
     });
-
-    // make the selected cards disappear
-    State.selectedIndices.splice(0, State.selectedIndices.length);
 }
 
-export function reorderCards(gameState: Lib.GameState) {
-    const player = gameState.playerStates[gameState.playerIndex];
-    if (!player) throw new Error();
-
+export function reorderCards(
+    newShareCount: number,
+    newRevealCount: number,
+    newGroupCount: number,
+    newCardsWithOrigins: [Lib.Card, Lib.Origin][]
+): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('ReorderCards', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.ReorderCards>{
             methodName: 'ReorderCards',
-            reorderedCards: player.cards,
-            newShareCount: player.shareCount,
-            newRevealCount: player.revealCount,
-            newGroupCount: player.groupCount
+            newShareCount,
+            newRevealCount,
+            newGroupCount,
+            newCardsWithOrigins
         }));
     });
 }
 
 export function sortBySuit(gameState: Lib.GameState) {
-    let compareFn = ([aSuit, aRank]: Lib.Card, [bSuit, bRank]: Lib.Card) => {
+    return sortCards(gameState, (
+        [[aSuit, aRank], aOrigin]: [Lib.Card, Lib.Origin],
+        [[bSuit, bRank], bOrigin]: [Lib.Card, Lib.Origin]
+    ) => {
         if (aSuit !== bSuit) {
             return aSuit - bSuit;
         } else {
             return aRank - bRank;
         }
-    };
-
-    const player = gameState.playerStates[gameState.playerIndex];
-    if (player === undefined || player === null) throw new Error();
-
-    const previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(player.cards, 0, player.shareCount, compareFn);
-    sortCards(player.cards, player.shareCount, player.revealCount, compareFn);
-    sortCards(player.cards, player.revealCount, player.groupCount, compareFn);
-    sortCards(player.cards, player.groupCount, player.totalCount, compareFn);
-    State.linkSpritesWithCards(previousGameState, gameState);
-    return reorderCards(gameState);
+    });
 }
 
 export function sortByRank(gameState: Lib.GameState) {
-    let compareFn = ([aSuit, aRank]: Lib.Card, [bSuit, bRank]: Lib.Card) => {
+    return sortCards(gameState, (
+        [[aSuit, aRank], aOrigin]: [Lib.Card, Lib.Origin],
+        [[bSuit, bRank], bOrigin]: [Lib.Card, Lib.Origin]
+    ) => {
         if (aRank !== bRank) {
             return aRank - bRank;
         } else {
             return aSuit - bSuit;
         }
-    };
-
-    const player = gameState.playerStates[gameState.playerIndex];
-    if (player === undefined || player === null) throw new Error();
-
-    const previousGameState = <Lib.GameState>JSON.parse(JSON.stringify(gameState));
-    sortCards(player.cards, 0, player.shareCount, compareFn);
-    sortCards(player.cards, player.shareCount, player.revealCount, compareFn);
-    sortCards(player.cards, player.revealCount, player.groupCount, compareFn);
-    sortCards(player.cards, player.groupCount, player.totalCount, compareFn);
-    State.linkSpritesWithCards(previousGameState, gameState);
-    return reorderCards(gameState);
+    });
 }
 
-function sortCards(
-    cards: Lib.Card[],
+function sortCards(gameState: Lib.GameState, compareFn: (a: [Lib.Card, Lib.Origin], b: [Lib.Card, Lib.Origin]) => number) {
+    const player = gameState.playerStates[gameState.playerIndex];
+    if (!player) throw new Error();
+
+    const newShareCount = player.shareCount;
+    const newRevealCount = player.revealCount;
+    const newGroupCount = player.groupCount;
+    const newCardsWithOrigins: [Lib.Card, Lib.Origin][] = player.cardsWithOrigins.map(([card, origin], index) => {
+        if (!card) throw new Error();
+        return [card, {
+            origin: 'Hand',
+            playerIndex: gameState.playerIndex,
+            cardIndex: index
+        }];
+    });
+
+    sortSection(newCardsWithOrigins, 0, player.shareCount, compareFn);
+    sortSection(newCardsWithOrigins, player.shareCount, player.revealCount, compareFn);
+    sortSection(newCardsWithOrigins, player.revealCount, player.groupCount, compareFn);
+    sortSection(newCardsWithOrigins, player.groupCount, player.cardsWithOrigins.length, compareFn);
+    return reorderCards(newShareCount, newRevealCount, newGroupCount, newCardsWithOrigins);
+}
+
+function sortSection(
+    cards: [Lib.Card, Lib.Origin][],
     start: number,
     end: number,
-    compareFn: (a: Lib.Card, b: Lib.Card) => number
+    compareFn: (a: [Lib.Card, Lib.Origin], b: [Lib.Card, Lib.Origin]) => number
 ) {
     const section = cards.slice(start, end);
     section.sort(compareFn);
