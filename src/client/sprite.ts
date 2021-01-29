@@ -427,6 +427,7 @@ export default class Sprite {
         const oldParent = this._sprite.parent;
 
         // save this sprite's world transform position and rotation
+        const target = oldParent.localTransform.apply(this.target);
         const position = oldParent.localTransform.apply(this.position);
         const rotation = oldParent.rotation;
 
@@ -435,6 +436,7 @@ export default class Sprite {
         this._sprite.tint = 0xffffff;
 
         // reapply saved world transform position and rotation
+        this.target = parent.transform.localTransform.applyInverse(target);
         this.position = parent.transform.localTransform.applyInverse(position);
         this.rotation = rotation - parent.transform.rotation;
     }

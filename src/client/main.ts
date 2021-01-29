@@ -6,11 +6,6 @@ import * as Input from './input';
 import * as V from './vector';
 import Sprite from './sprite';
 
-const getPlayerNameElement = () => (<HTMLInputElement>document.getElementById('playerName'));
-const getGameIdElement = () => (<HTMLInputElement>document.getElementById('gameId'));
-const getFormElement = () => <HTMLDivElement>document.getElementById('form');
-const getConnectionStatusElement = () => <HTMLDivElement>document.getElementById('connectionStatus');
-
 const labelsUsingCurrentFonts = new Set<PIXI.BitmapText>();
 
 let 大字: PIXI.BitmapFont | undefined;
@@ -55,23 +50,29 @@ function addCharsFromText(text: string) {
 
 window.onload = async () => {
     // connected; now we can activate buttons
+    const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
+    const gameIdElement = <HTMLInputElement>document.getElementById('gameId');
+    const formElement = <HTMLDivElement>document.getElementById('form');
+    const connectionStatusElement = <HTMLDivElement>document.getElementById('connectionStatus');
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
     joinGameButton.onclick = async e => {
+        playerNameElement.disabled = true;
+        gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         try {
-            getConnectionStatusElement().innerHTML = `Joining game '${getGameIdElement().value}'...`;
+            connectionStatusElement.innerHTML = `Joining game '${gameIdElement.value}'...`;
 
-            Lib.setCookie('playerName', getPlayerNameElement().value);
+            Lib.setCookie('playerName', playerNameElement.value);
 
             await Sprite.load(undefined);
 
             try {
-                await Client.setPlayerName(getPlayerNameElement().value);
-                await Client.joinGame(getGameIdElement().value);
+                await Client.setPlayerName(playerNameElement.value);
+                await Client.joinGame(gameIdElement.value);
             } catch (e) {
-                getConnectionStatusElement().innerHTML = `Error: ${JSON.stringify(e)}`;
+                connectionStatusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
                 throw e;
             }
 
@@ -79,31 +80,35 @@ window.onload = async () => {
                 await Lib.delay(100);
             }
 
-            getConnectionStatusElement().innerHTML = `Game: ${Client.gameState.gameId}`;
-            document.body.removeChild(getFormElement());
+            connectionStatusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
+            document.body.removeChild(formElement);
         
             await Sprite.load(Client.gameState);
         } finally {
+            playerNameElement.disabled = false;
+            gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
         }
     };
 
     newGameButton.onclick = async e => {
+        playerNameElement.disabled = true;
+        gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         try {
-            getConnectionStatusElement().innerHTML = `Creating new game...`;
+            connectionStatusElement.innerHTML = `Creating new game...`;
 
-            Lib.setCookie('playerName', getPlayerNameElement().value);
+            Lib.setCookie('playerName', playerNameElement.value);
 
             await Sprite.load(undefined);
 
             try {
-                await Client.setPlayerName(getPlayerNameElement().value);
+                await Client.setPlayerName(playerNameElement.value);
                 await Client.newGame();
             } catch (e) {
-                getConnectionStatusElement().innerHTML = `Error: ${JSON.stringify(e)}`;
+                connectionStatusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
                 throw e;
             }
 
@@ -111,11 +116,13 @@ window.onload = async () => {
                 await Lib.delay(100);
             }
 
-            getConnectionStatusElement().innerHTML = `Game: ${Client.gameState.gameId}`;
-            document.body.removeChild(getFormElement());
+            connectionStatusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
+            document.body.removeChild(formElement);
 
             await Sprite.load(Client.gameState);
         } finally {
+            playerNameElement.disabled = false;
+            gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
         }
@@ -139,13 +146,13 @@ window.onload = async () => {
         gameId = '';
     }
 
-    getPlayerNameElement().value = decodeURI(playerName);
-    getGameIdElement().value = gameId;
+    playerNameElement.value = decodeURI(playerName);
+    gameIdElement.value = gameId;
 
     // connect before we allow creating or joining games
-    getConnectionStatusElement().innerHTML = 'Connecting...';
+    connectionStatusElement.innerHTML = 'Connecting...';
     await Client.connect();
-    getConnectionStatusElement().innerHTML = `Connected.`;
+    connectionStatusElement.innerHTML = `Connected.`;
 
     await spriteLoad;
 }

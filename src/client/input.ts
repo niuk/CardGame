@@ -533,12 +533,14 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
     } : undefined;
 
     if (intersectBox(drag0, drag1, deck0, deck1)) {
+        console.log(`return cards`);
         action = {
             action: 'Return',
             cardIndex,
             spriteOffset
         };
     } else if (left0 && left1 && intersectBox(drag0, drag1, left0, left1)) {
+        console.log(`give left`);
         action = {
             action: 'Give',
             otherPlayerIndex: leftPlayerIndex,
@@ -546,6 +548,7 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
             spriteOffset
         };
     } else if (top0 && top1 && intersectBox(drag0, drag1, top0, top1)) {
+        console.log(`give top`);
         action = {
             action: 'Give',
             otherPlayerIndex: topPlayerIndex,
@@ -553,6 +556,7 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
             spriteOffset
         };
     } else if (right0 && right1 && intersectBox(drag0, drag1, right0, right1)) {
+        console.log(`give right`);
         action = {
             action: 'Give',
             otherPlayerIndex: rightPlayerIndex,
@@ -679,6 +683,7 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
             newGroupCount !== player.groupCount ||
             reorder
         ) {
+            console.log(`reorder cards`);
             await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newCardsWithOrigins);
         }
     }
