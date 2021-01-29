@@ -52,8 +52,7 @@ export default class Sprite {
 
     // these parameters change with resizing
     public static pixelsPerCM = 0;
-    public static pixelsPerPercentWidth = 0;
-    public static pixelsPerPercentHeight = 0;
+    public static pixelsPerPercent = 0;
     public static dragThreshold = 0;
     public static fixedGap = 0;
     public static deckGap = 0;
@@ -175,13 +174,12 @@ export default class Sprite {
 
             this.dragThreshold = 0.5 * this.pixelsPerCM;
 
-            this.pixelsPerPercentWidth = this.app.view.width / 100;
-            this.pixelsPerPercentHeight = this.app.view.height / 100;
+            this.pixelsPerPercent = Math.min(this.app.view.width / 100, this.app.view.height / 100);
             this.fixedGap = 0.15 * this.pixelsPerCM;
-            this.deckGap = 0.1 * this.pixelsPerPercentHeight;
-            this.gap = 1.8 * this.pixelsPerPercentHeight;
-            this.width = 10 * this.pixelsPerPercentHeight;
-            this.height = 16 * this.pixelsPerPercentHeight;
+            this.deckGap = 0.1 * this.pixelsPerPercent;
+            this.gap = 1.8 * this.pixelsPerPercent;
+            this.width = 10 * this.pixelsPerPercent;
+            this.height = 16 * this.pixelsPerPercent;
             for (const sprite of sprites) {
                 sprite._sprite.width = this.width;
                 sprite._sprite.height = this.height;

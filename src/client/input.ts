@@ -96,6 +96,8 @@ export type Action =
     Click;
 
 export let action: Action = { action: 'None' };
+let drewFromDeck = false;
+let tookFromPlayer = -1;
 
 // indices of cards for drag & drop
 export const selectedIndices = new SortedSet<number>();
@@ -203,6 +205,7 @@ Sprite.onDragStart = (position, sprite) => {
             action: 'Draw',
             spriteOffset: V.sub(sprite.position, position)
         };
+        drewFromDeck = true;
     } else {
         action = { action: 'Deselect' };
 
@@ -242,6 +245,7 @@ Sprite.onDragStart = (position, sprite) => {
                             otherPlayerIndex: playerIndex,
                             cardIndex
                         };
+                        tookFromPlayer = playerIndex;
                     }
                 }
             }
@@ -349,31 +353,31 @@ Sprite.onDragEnd = async () => {
 
         if (action.action === 'None') {
             // do nothing
-        } else if (
-            action.action === 'SortByRank'
-        ) {
+        } else if (action.action === 'SortByRank') {
             Client.sortByRank(gameState);
-        } else if (
-            action.action === 'SortBySuit'
-        ) {
+        } else if (action.action === 'SortBySuit') {
             Client.sortBySuit(gameState);
-        } else if (
-            action.action === 'Deselect'
-        ) {
+        } else if (action.action === 'Deselect') {
             selectedIndices.clear();
-        } else if (
-            action.action === 'Draw' ||
-            action.action === 'Take' ||
-            action.action === 'Reorder'
-        ) {
+        } else if (action.action === 'Draw' || action.action === 'Take') {
             // taking from other players or the deck are placeholder states until mouse movement reaches threshold
+        } else if (action.action === 'Reorder') {
             // reordering happens in onDragMove
+            previousClickIndex = action.cardIndex;
         } else if (action.action === 'Give') {
-            previousClickIndex = -1;
-            await Client.giveToOtherPlayer(action.otherPlayerIndex);
+            if (tookFromPlayer === action.otherPlayerIndex) {
+                previousClickIndex = action.cardIndex;
+            } else {
+                previousClickIndex = -1;
+                await Client.giveToOtherPlayer(action.otherPlayerIndex);
+            }
         } else if (action.action === 'Return') {
-            previousClickIndex = -1;
-            await Client.returnToDeck();
+            if (drewFromDeck) {
+                previousClickIndex = action.cardIndex;
+            } else {
+                previousClickIndex = -1;
+                await Client.returnToDeck();
+            }
         } else if (action.action === 'ControlShiftClick') {
             if (previousClickIndex === -1) {
                 previousClickIndex = action.cardIndex;
@@ -413,6 +417,8 @@ Sprite.onDragEnd = async () => {
         }
     } finally {
         action = { action: 'None' };
+        drewFromDeck = false;
+        tookFromPlayer = -1;
     }
 }
 
