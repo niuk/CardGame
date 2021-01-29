@@ -53,7 +53,7 @@ window.onload = async () => {
     const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
     const gameIdElement = <HTMLInputElement>document.getElementById('gameId');
     const formElement = <HTMLDivElement>document.getElementById('form');
-    const connectionStatusElement = <HTMLDivElement>document.getElementById('connectionStatus');
+    const statusElement = <HTMLDivElement>document.getElementById('status');
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
     joinGameButton.onclick = async e => {
@@ -62,7 +62,7 @@ window.onload = async () => {
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         try {
-            connectionStatusElement.innerHTML = `Joining game '${gameIdElement.value}'...`;
+            statusElement.innerHTML = `Joining game: ${gameIdElement.value}...`;
 
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -72,7 +72,7 @@ window.onload = async () => {
                 await Client.setPlayerName(playerNameElement.value);
                 await Client.joinGame(gameIdElement.value);
             } catch (e) {
-                connectionStatusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
+                statusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
                 throw e;
             }
 
@@ -80,7 +80,7 @@ window.onload = async () => {
                 await Lib.delay(100);
             }
 
-            connectionStatusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
+            statusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
             document.body.removeChild(formElement);
         
             await Sprite.load(Client.gameState);
@@ -98,7 +98,7 @@ window.onload = async () => {
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         try {
-            connectionStatusElement.innerHTML = `Creating new game...`;
+            statusElement.innerHTML = `Creating a new game...`;
 
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -108,7 +108,7 @@ window.onload = async () => {
                 await Client.setPlayerName(playerNameElement.value);
                 await Client.newGame();
             } catch (e) {
-                connectionStatusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
+                statusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
                 throw e;
             }
 
@@ -116,7 +116,7 @@ window.onload = async () => {
                 await Lib.delay(100);
             }
 
-            connectionStatusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
+            statusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
             document.body.removeChild(formElement);
 
             await Sprite.load(Client.gameState);
@@ -150,9 +150,9 @@ window.onload = async () => {
     gameIdElement.value = gameId;
 
     // connect before we allow creating or joining games
-    connectionStatusElement.innerHTML = 'Connecting...';
+    statusElement.innerHTML = 'Connecting...';
     await Client.connect();
-    connectionStatusElement.innerHTML = `Connected.`;
+    statusElement.innerHTML = `Connected.`;
 
     await spriteLoad;
 }

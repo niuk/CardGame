@@ -15,7 +15,7 @@ html, body {
     transform: translate(-50%, -50%);
 }
 
-#loading-bar {
+#loadingBar {
     position: relative;
     visibility: hidden;
     width: 100%;
@@ -24,6 +24,7 @@ html, body {
 #status {
     position: absolute;
     right: 0px;
+    z-index: 2;
 }
 
 #credits {

@@ -128,7 +128,7 @@ export default class Sprite {
             background.height = this.app.view.height;
 
             if (loadedTextureCount < totalTextureCount) {
-                const bar = <HTMLProgressElement>document.getElementById('loading-bar');
+                const bar = <HTMLProgressElement>document.getElementById('loadingBar');
                 bar.style.visibility = 'visible';
                 bar.value = loadedTextureCount;
                 bar.max = totalTextureCount;
