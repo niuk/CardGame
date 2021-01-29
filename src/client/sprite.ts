@@ -86,6 +86,8 @@ export default class Sprite {
 
                 this.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
                 this.deckContainer.zIndex = 1;
+                this.deckContainer.sortableChildren = true;
+
                 this.playerContainers = [
                     Sprite.app.stage.addChild(new PIXI.Container()),
                     Sprite.app.stage.addChild(new PIXI.Container()),
@@ -188,7 +190,7 @@ export default class Sprite {
             if (gameState) {
                 const playerContainer = this.playerContainers[gameState.playerIndex];
                 if (!playerContainer) throw new Error();
-                playerContainer.zIndex = 2;
+                playerContainer.zIndex = 3;
         
                 const leftPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 1) % 4];
                 leftPlayerContainer.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
@@ -246,6 +248,30 @@ export default class Sprite {
         const previousFaceSpritesForPlayer = this.faceSpritesForPlayer;
         this.faceSpritesForPlayer = [];
     
+        const getSpriteWithOrigin = (origin: Lib.Origin) => {
+            let sprite: Sprite | undefined;
+            if (origin.origin === 'Deck') {
+                sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
+            } else if (origin.origin === 'Hand') {
+                if (origin.playerIndex === gameState.playerIndex) {
+                    sprite = previousFaceSpritesForPlayer[gameState.playerIndex]?.[origin.cardIndex];
+                } else {
+                    const originPlayer = previousGameState?.playerStates[origin.playerIndex];
+                    if (originPlayer) {
+                        if (origin.cardIndex < originPlayer.revealCount) {
+                            sprite = previousFaceSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex];
+                        } else {
+                            sprite = previousBackSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
+                        }
+                    }
+                }
+            } else {
+                const _: never = origin;
+            }
+
+            return sprite;
+        };
+    
         for (let playerIndex = 0; playerIndex < 4; ++playerIndex) {
             const playerState = gameState.playerStates[playerIndex];
             if (!playerState) continue;
@@ -262,29 +288,10 @@ export default class Sprite {
     
             const container = Sprite.playerContainers[playerIndex];
             if (!container) throw new Error();
-            const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);    
-    
+            const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);
+            
             for (const [card, origin] of playerState.cardsWithOrigins) {
-                let sprite: Sprite | undefined;
-                if (origin.origin === 'Deck') {
-                    sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
-                } else if (origin.origin === 'Hand') {
-                    if (origin.playerIndex === gameState.playerIndex) {
-                        sprite = previousFaceSpritesForPlayer[gameState.playerIndex]?.[origin.cardIndex];
-                    } else {
-                        const originPlayer = previousGameState?.playerStates[origin.playerIndex];
-                        if (originPlayer) {
-                            if (origin.cardIndex < originPlayer.revealCount) {
-                                sprite = previousFaceSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex];
-                            } else {
-                                sprite = previousBackSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
-                            }
-                        }
-                    }
-                } else {
-                    const _: never = origin;
-                }
-    
+                let sprite = getSpriteWithOrigin(origin);
                 if (card) {
                     const faceTexture = Sprite.getTexture(JSON.stringify(card));
                     if (sprite) {
@@ -306,23 +313,8 @@ export default class Sprite {
             }
         }
     
-        for (const origin of gameState.deckOrigins) {
-            let sprite: Sprite | undefined;
-            if (origin.origin === 'Deck') {
-                sprite = previousDeckSprites.splice(0, 1)[0];
-            } else if (origin.origin === 'Hand') {
-                const originPlayer = previousGameState?.playerStates[origin.playerIndex];
-                if (originPlayer) {
-                    if (origin.cardIndex < originPlayer.revealCount) {
-                        sprite = previousFaceSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex];
-                    } else {
-                        sprite = previousBackSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
-                    }
-                }
-            } else {
-                const _: never = origin;
-            }
-    
+        for (const origin of gameState.deckOrigins.reverse()) {
+            let sprite = getSpriteWithOrigin(origin);
             const deckTexture = Sprite.getTexture('Back0');
             if (sprite) {
                 sprite.transfer(Sprite.deckContainer, deckTexture);
@@ -330,27 +322,8 @@ export default class Sprite {
                 sprite = new Sprite(Sprite.deckContainer, deckTexture);
             }
     
-            this.deckSprites.push(sprite);
+            this.deckSprites.unshift(sprite);
         }
-    
-        // cleanup shouldn't be necessary since no cards can be destroyed
-        /*
-        for (const previousFaceSprites of previousFaceSpritesForPlayer) {
-            for (const previousFaceSprite of previousFaceSprites) {
-                previousFaceSprite.destroy();
-            }
-        }
-    
-        for (const previousBackSprites of previousBackSpritesForPlayer) {
-            for (const previousBackSprite of previousBackSprites) {
-                previousBackSprite.destroy();
-            }
-        }
-    
-        for (const previousDeckSprite of previousDeckSprites) {
-            previousDeckSprite.destroy();
-        }
-        */
     }
 
     private _sprite: PIXI.Sprite;
@@ -431,14 +404,21 @@ export default class Sprite {
         const onPointerUp = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 dragging = false;
+                console.log('onDragEnd', Sprite.onDragEnd);
                 Sprite.onDragEnd?.(event.data.global.clone(), this);
             }
         };
 
         this._sprite.on('pointerdown', onPointerDown);
         this._sprite.on('pointermove', onPointerMove);
-        this._sprite.on('pointerup', onPointerUp);
-        this._sprite.on('pointerupoutside', onPointerUp);
+        this._sprite.on('pointerup', e => {
+            console.log('pointerup');
+            onPointerUp(e);
+        });
+        this._sprite.on('pointerupoutside', e => {
+            console.log('pointerupoutside');
+            onPointerUp(e);
+        });
 
         parent.addChild(this._sprite);
     }

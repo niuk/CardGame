@@ -204,9 +204,7 @@ Sprite.onDragStart = (position, sprite) => {
             spriteOffset: V.sub(sprite.position, position)
         };
     } else {
-        action = {
-            action: 'Deselect'
-        };
+        action = { action: 'Deselect' };
 
         for (let playerIndex = 0; playerIndex < 4; ++playerIndex) {
             const sprites = Sprite.faceSpritesForPlayer[playerIndex];
@@ -251,91 +249,101 @@ Sprite.onDragStart = (position, sprite) => {
     }
 }
 
-let dragInProgress = false;
-Sprite.onDragMove = async (position, sprite) => {
+let promise: Promise<void> | undefined;
+
+Sprite.onDragMove = (position, sprite) => {
     mouseMovePosition = position;
     exceededDragThreshold = exceededDragThreshold ||
         V.distance(mouseMovePosition, mouseDownPosition) > Sprite.dragThreshold;
 
-    if (dragInProgress) return;
-    dragInProgress = true;
-    try {
-        if (action.action === 'None') {
-            // do nothing
-        } else if (action.action === 'SortBySuit') {
-            // TODO: check whether mouse position has left button bounds
-        } else if (action.action === 'SortByRank') {
-            // TODO: check whether mouse position has left button bounds
-        } else if (action.action === 'Deselect') {
-            // TODO: box selection?
-        } else if (
-            action.action === 'Take' ||
-            action.action === 'Draw'
-        ) {
-            if (exceededDragThreshold) {
-                let promise: Promise<void> | undefined;
-                if (action.action === 'Take') {
-                    promise = Client.takeFromOtherPlayer(
-                        action.otherPlayerIndex,
-                        action.cardIndex
-                    );
-                } else if (action.action === 'Draw') {
-                    promise = Client.drawFromDeck();
-                }
-
-                if (promise !== undefined) {
-                    await promise;
+    if (action.action === 'None') {
+        // do nothing
+    } else if (action.action === 'SortBySuit') {
+        // TODO: check whether mouse position has left button bounds
+    } else if (action.action === 'SortByRank') {
+        // TODO: check whether mouse position has left button bounds
+    } else if (action.action === 'Deselect') {
+        // TODO: box selection?
+    } else if (
+        action.action === 'Take' ||
+        action.action === 'Draw'
+    ) {
+        if (exceededDragThreshold) {
+            if (promise === undefined) {
+                promise = (async () => {
+                    if (action.action === 'Take') {
+                        await Client.takeFromOtherPlayer(
+                            action.otherPlayerIndex,
+                            action.cardIndex
+                        );
+                    } else if (action.action === 'Draw') {
+                        await Client.drawFromDeck();
+                    } else {
+                        const _: never = action;
+                    }
 
                     const gameState = Client.gameState;
                     if (gameState === undefined) return;
-
+        
                     const playerState = gameState.playerStates[gameState.playerIndex];
                     if (!playerState) throw new Error();
-
+        
                     // immediately select newly acquired card
                     console.log(`selecting ${playerState.cardsWithOrigins.length - 1}`);
                     const cardIndex = playerState.cardsWithOrigins.length - 1;
                     selectedIndices.clear();
                     selectedIndices.add(cardIndex);
-                    await drag(cardIndex, action.spriteOffset);
-                }
-            }
-        } else if (
-            action.action === 'Give' ||
-            action.action === 'Return' ||
-            action.action === 'Reorder'
-        ) {
-            await drag(action.cardIndex, action.spriteOffset);
-        } else if (
-            action.action === 'ControlShiftClick' ||
-            action.action === 'ControlClick' ||
-            action.action === 'ShiftClick' ||
-            action.action === 'Click'
-        ) {
-            if (exceededDragThreshold) {
-                // dragging a non-selected card selects it and only it
-                if (!selectedIndices.has(action.cardIndex)) {
-                    selectedIndices.clear();
-                    selectedIndices.add(action.cardIndex);
-                }
 
-                await drag(action.cardIndex, action.spriteOffset);
+                    await drag(cardIndex, action.spriteOffset);
+
+                    promise = undefined;
+                })();
             }
-        } else {
-            const _: never = action;
         }
-    } catch (e) {
-        action = { action: 'None' };
-        throw e;
-    } finally {
-        dragInProgress = false;
+    } else if (
+        action.action === 'Give' ||
+        action.action === 'Return' ||
+        action.action === 'Reorder'
+    ) {
+        if (promise === undefined) {
+            promise = (async () => {
+                await drag(action.cardIndex, action.spriteOffset);
+
+                promise = undefined;
+            })();
+        }
+    } else if (
+        action.action === 'ControlShiftClick' ||
+        action.action === 'ControlClick' ||
+        action.action === 'ShiftClick' ||
+        action.action === 'Click'
+    ) {
+        if (exceededDragThreshold) {
+            if (promise === undefined) {
+                promise = (async () => {
+                    // dragging a non-selected card selects it and only it
+                    if (!selectedIndices.has(action.cardIndex)) {
+                        selectedIndices.clear();
+                        selectedIndices.add(action.cardIndex);
+                    }
+        
+                    await drag(action.cardIndex, action.spriteOffset);
+
+                    promise = undefined;
+                })();
+            }
+        }
+    } else {
+        const _: never = action;
     }
 }
 
 Sprite.onDragEnd = async () => {
-    if (dragInProgress) return;
-    dragInProgress = true;
     try {
+        if (promise !== undefined) {
+            await promise;
+        }
+
         const gameState = Client.gameState;
         if (gameState === undefined) return;
 
@@ -405,7 +413,6 @@ Sprite.onDragEnd = async () => {
         }
     } finally {
         action = { action: 'None' };
-        dragInProgress = false;
     }
 }
 

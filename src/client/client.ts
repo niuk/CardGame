@@ -22,6 +22,8 @@ webSocket.onmessage = async e => {
           { newGameState: Lib.GameState | null, methodResult: Lib.Result | null } = JSON.parse(e.data);
 
     if (newGameState) {
+        console.log(newGameState);
+
         const previousGameState = gameState;
         gameState = newGameState;
 

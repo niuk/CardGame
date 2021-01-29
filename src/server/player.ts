@@ -27,7 +27,6 @@ export default class Player implements Lib.PlayerState {
                 await this.invoke(method);
             } catch (e) {
                 console.error(e);
-                
                 errorDescription = JSON.stringify(e);
             }
 

@@ -199,6 +199,7 @@ function renderDeck(deltaTime: number) {
             };
         }
 
+        deckSprite.zIndex = i;
         deckSprite.animate(deltaTime);
     }
     
@@ -625,6 +626,7 @@ function addAllLabels(
 
     for (; i < labels.length; ++i) {
         labels[i]?.destroy();
+        labels[i] = undefined;
     }
 
     return i;
