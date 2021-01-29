@@ -11,9 +11,9 @@ export default class Player implements Lib.PlayerState {
 
     // Lib.PlayerState properties
     name = '';
-    shareCount: number = 0;
-    revealCount: number = 0;
-    groupCount: number = 0;
+    shareCount = 0;
+    revealCount = 0;
+    groupCount = 0;
     cardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
 
     constructor(ws: WebSocket) {
@@ -23,13 +23,15 @@ export default class Player implements Lib.PlayerState {
             const method = <Lib.Method>JSON.parse(message.data.toString());
             let errorDescription: string | undefined = undefined
             try {
+                this.game?.resetDeckCardOrigins();
+                this.resetCardOrigins();
                 await this.invoke(method);
             } catch (e) {
                 console.error(e);
                 
                 errorDescription = JSON.stringify(e);
             }
-            
+
             ws.send(JSON.stringify({
                 newGameState: this.game?.getStateForPlayerAt(this.index),
                 methodResult: { methodName: method.methodName, errorDescription }
@@ -98,7 +100,7 @@ export default class Player implements Lib.PlayerState {
             // just try to join at any available index
             if (!joined) {
                 const i = available[0];
-                if (i) {
+                if (i !== undefined) {
                     const player = this.game.players[i];
                     if (player) {
                         this.shareCount = player.shareCount;
@@ -121,7 +123,7 @@ export default class Player implements Lib.PlayerState {
         } else {
             if (!this.game) throw new Error('you are not in a game');
 
-            if (method.methodName === 'TakeCard') {
+            if (method.methodName === 'TakeFromOtherPlayer') {
                 const otherPlayer = this.game.players[method.otherPlayerIndex];
                 if (otherPlayer === undefined) {
                     throw new Error(`game ${this.game.gameId} has no player at index ${method.otherPlayerIndex}`);
@@ -147,7 +149,6 @@ export default class Player implements Lib.PlayerState {
                 if (!card) throw new Error();
 
                 this.resetCardOrigins();
-
                 this.cardsWithOrigins.push([card, {
                     origin: 'Hand',
                     playerIndex: method.otherPlayerIndex,
@@ -155,28 +156,27 @@ export default class Player implements Lib.PlayerState {
                 }]);
 
                 console.log(`player '${this.name}' at index ${this.index} took card ${card} from player '${otherPlayer.name}' at index ${otherPlayer.index}`);
-            } else if (method.methodName === 'DrawCard') {
-                const card = this.game.deckWithOrigins.splice(Math.floor(Math.random() * this.game.deckWithOrigins.length), 1)[0]?.[0];
+            } else if (method.methodName === 'DrawFromDeck') {
+                const card = this.game.deckCardsWithOrigins.splice(Math.floor(Math.random() * this.game.deckCardsWithOrigins.length), 1)[0]?.[0];
                 if (card === undefined) {
-                    throw new Error(`deck has no cards (${this.game.deckWithOrigins.length} remaining)`);
+                    throw new Error(`deck has no cards (${this.game.deckCardsWithOrigins.length} remaining)`);
                 }
-
-                this.resetCardOrigins();
 
                 this.cardsWithOrigins.push([card, { origin: 'Deck' }]);
                 
                 console.log(`player '${this.name}' drew card ${
                     JSON.stringify(card)
                 }, cardsWithOrigins: ${JSON.stringify(this.cardsWithOrigins)}`);
-            } else if (method.methodName === 'GiveCardsToOtherPlayer') {
+            } else if (method.methodName === 'GiveToOtherPlayer') {
                 const otherPlayer = this.game.players[method.otherPlayerIndex]
                 if (!otherPlayer) throw new Error(`no player at index ${method.otherPlayerIndex}`);
 
-                const disownedCardsWithOrigins = this.disownCards(method.cardIndicesToGiveToOtherPlayer);
+                const disownedCardsWithOrigins = this.disownCardsWithOrigins(method.cardIndicesToGiveToOtherPlayer);
 
                 otherPlayer.shareCount += method.cardIndicesToGiveToOtherPlayer.length;
                 otherPlayer.revealCount += method.cardIndicesToGiveToOtherPlayer.length;
                 otherPlayer.groupCount += method.cardIndicesToGiveToOtherPlayer.length;
+
                 otherPlayer.cardsWithOrigins.unshift(...disownedCardsWithOrigins);
 
                 console.log(`'${this.name}' gave cards to '${otherPlayer.name}': ${
@@ -184,24 +184,27 @@ export default class Player implements Lib.PlayerState {
                 }, cardsWithOrigins: ${
                     JSON.stringify(this.cardsWithOrigins)
                 }`);
-            } else if (method.methodName === 'ReturnCardsToDeck') {
-                const disownedCardsWithOrigins = this.disownCards(method.cardIndicesToReturnToDeck);
+            } else if (method.methodName === 'ReturnToDeck') {
+                const disownedCardsWithOrigins = this.disownCardsWithOrigins(method.cardIndicesToReturnToDeck);
 
-                this.game.deckWithOrigins.push(...disownedCardsWithOrigins);
+                this.game.deckCardsWithOrigins.push(...disownedCardsWithOrigins);
 
                 console.log(`'${this.name}' returned cards: ${
                     JSON.stringify(disownedCardsWithOrigins)
                 }, cards: ${
                     JSON.stringify(this.cardsWithOrigins)
                 }`);
-            } else if (method.methodName === 'ReorderCards') {
+            } else if (method.methodName === 'Reorder') {
+                console.log(method.newCardsWithOrigins);
+
                 const cardFlags: boolean[] = [];
                 for (const [card, origin] of method.newCardsWithOrigins) {
                     if (origin.origin !== 'Hand') {
                         throw new Error(`tried to reorder with bad origin: ${JSON.stringify(method.newCardsWithOrigins)}`);
                     }
 
-                    if (cardFlags[origin.cardIndex]) {
+                    const cardFlag = cardFlags[origin.cardIndex];
+                    if (cardFlag !== undefined && cardFlag) {
                         throw new Error(`already moved card at index ${origin.cardIndex}`);
                     }
 
@@ -231,7 +234,7 @@ export default class Player implements Lib.PlayerState {
         }
     }
 
-    private disownCards(cardIndices: number[]): [Lib.Card, Lib.Origin][] {
+    private disownCardsWithOrigins(cardIndices: number[]): [Lib.Card, Lib.Origin][] {
         // use temporaries so that errors don't result in corrupt state
         const newCardsWithOrigins = this.cardsWithOrigins.slice();
         let newShareCount = this.shareCount;

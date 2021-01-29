@@ -1,15 +1,14 @@
 import * as Lib from '../lib';
 import * as Input from './input';
-import * as State from './state';
 import Sprite from './sprite';
 
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
 
 // open websocket connection to get game state updates
-let webSocket = new WebSocket(`wss://${window.location.hostname}/`);
+const webSocket = new WebSocket(`wss://${window.location.hostname}/`);
 
-export async function connect() {
+export async function connect(): Promise<void> {
     // wait for connection
     while (webSocket.readyState != WebSocket.OPEN) {
         console.log(`webSocket.readyState: ${webSocket.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
@@ -23,17 +22,17 @@ webSocket.onmessage = async e => {
           { newGameState: Lib.GameState | null, methodResult: Lib.Result | null } = JSON.parse(e.data);
 
     if (newGameState) {
+        console.log(newGameState);
+
         const previousGameState = gameState;
         gameState = newGameState;
-
-        console.log(`received gameState: ${JSON.stringify(gameState)}`);
 
         Lib.setCookie('gameId', gameState.gameId);
 
         await Sprite.load(gameState);
 
-        Input.linkInputWithCards(gameState);
-        State.linkSpritesWithCards(previousGameState, gameState);
+        Input.linkWithCards(gameState);
+        Sprite.linkWithCards(previousGameState, gameState);
     }
 
     if (methodResult) {
@@ -52,7 +51,7 @@ webSocket.onmessage = async e => {
 };
 
 const callbacksForMethodType = new Map<Lib.MethodName, ((result: Lib.Result) => void)[]>();
-function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: any) => void) {
+function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: string) => void) {
     //console.log(`adding callback for method '${methodName}'`);
 
     let callbacks = callbacksForMethodType.get(methodName);
@@ -63,7 +62,7 @@ function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (r
 
     callbacks.push(result => {
         //console.log(`invoking callback for method '${methodName}'`);
-        if ('errorDescription' in result) {
+        if ('errorDescription' in result && result.errorDescription !== undefined) {
             reject(result.errorDescription);
         } else {
             resolve();
@@ -101,43 +100,43 @@ export function newGame(): Promise<void> {
     });
 }
 
-export function takeCard(otherPlayerIndex: number, cardIndex: number) {
+export function takeFromOtherPlayer(otherPlayerIndex: number, cardIndex: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-        addCallback('TakeCard', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.TakeCard>{
-            methodName: 'TakeCard',
+        addCallback('TakeFromOtherPlayer', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.TakeFromOtherPlayer>{
+            methodName: 'TakeFromOtherPlayer',
             otherPlayerIndex,
             cardIndex
         }));
     });
 }
 
-export function drawCard(): Promise<void> {
+export function drawFromDeck(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-        addCallback('DrawCard', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.DrawCard>{
-            methodName: 'DrawCard'
-        } as Lib.DrawCard));
+        addCallback('DrawFromDeck', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.DrawFromDeck>{
+            methodName: 'DrawFromDeck'
+        }));
     });
 }
 
 export function giveToOtherPlayer(otherPlayerIndex: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-        addCallback('GiveCardsToOtherPlayer', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.GiveCardsToOtherPlayer>{
-            methodName: 'GiveCardsToOtherPlayer',
+        addCallback('GiveToOtherPlayer', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.GiveToOtherPlayer>{
+            methodName: 'GiveToOtherPlayer',
             otherPlayerIndex,
-            cardIndicesToGiveToOtherPlayer: Array.from(Input.selectedIndices.iterator())
+            cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice()
         }));
     })
 }
 
-export function returnCardsToDeck(): Promise<void> {
+export function returnToDeck(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-        addCallback('ReturnCardsToDeck', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.ReturnCardsToDeck>{
-            methodName: 'ReturnCardsToDeck',
-            cardIndicesToReturnToDeck: Array.from(Input.selectedIndices.iterator())
+        addCallback('ReturnToDeck', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.ReturnToDeck>{
+            methodName: 'ReturnToDeck',
+            cardIndicesToReturnToDeck: Input.selectedIndices.slice()
         }));
     });
 }
@@ -149,9 +148,9 @@ export function reorderCards(
     newCardsWithOrigins: [Lib.Card, Lib.Origin][]
 ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-        addCallback('ReorderCards', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.ReorderCards>{
-            methodName: 'ReorderCards',
+        addCallback('Reorder', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.Reorder>{
+            methodName: 'Reorder',
             newShareCount,
             newRevealCount,
             newGroupCount,
@@ -160,7 +159,7 @@ export function reorderCards(
     });
 }
 
-export function sortBySuit(gameState: Lib.GameState) {
+export function sortBySuit(gameState: Lib.GameState): Promise<void> {
     return sortCards(gameState, (
         [[aSuit, aRank], aOrigin]: [Lib.Card, Lib.Origin],
         [[bSuit, bRank], bOrigin]: [Lib.Card, Lib.Origin]
@@ -173,7 +172,7 @@ export function sortBySuit(gameState: Lib.GameState) {
     });
 }
 
-export function sortByRank(gameState: Lib.GameState) {
+export function sortByRank(gameState: Lib.GameState): Promise<void> {
     return sortCards(gameState, (
         [[aSuit, aRank], aOrigin]: [Lib.Card, Lib.Origin],
         [[bSuit, bRank], bOrigin]: [Lib.Card, Lib.Origin]

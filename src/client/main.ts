@@ -2,7 +2,6 @@ import * as PIXI from 'pixi.js-legacy';
 
 import * as Lib from '../lib';
 import * as Client from './client';
-import * as State from './state';
 import * as Input from './input';
 import * as V from './vector';
 import Sprite from './sprite';
@@ -21,7 +20,7 @@ let 小字: PIXI.BitmapFont | undefined;
 const characters = new Set<string>();
 const textStyle = new PIXI.TextStyle({
     fontFamily: 'sans-serif',
-    fill: "white",
+    fill: 'white',
     dropShadow: true,
     dropShadowDistance: 0,
     dropShadowAngle: 0,
@@ -55,27 +54,14 @@ function addCharsFromText(text: string) {
 }
 
 window.onload = async () => {
-    let playerName = Lib.getCookie('playerName');
-    if (!playerName) {
-        playerName = '';
-    }
-    
-    let gameId = Lib.getCookie('gameId');
-    if (!gameId) {
-        gameId = '';
-    }
-
-    // connect before we allow creating or joining games
-    getConnectionStatusElement().innerHTML = 'Connecting...';
-    await Client.connect();
-    getConnectionStatusElement().innerHTML = `Connected.`;
-
     // connected; now we can activate buttons
     (<HTMLButtonElement>document.getElementById('joinGame')).onclick = async e => {
         getConnectionStatusElement().innerHTML = `Joining game '${getGameIdElement().value}'...`;
 
         Lib.setCookie('playerName', getPlayerNameElement().value);
-    
+
+        await Sprite.load(undefined);
+
         try {
             await Client.setPlayerName(getPlayerNameElement().value);
             await Client.joinGame(getGameIdElement().value);
@@ -99,6 +85,8 @@ window.onload = async () => {
 
         Lib.setCookie('playerName', getPlayerNameElement().value);
 
+        await Sprite.load(undefined);
+
         try {
             await Client.setPlayerName(getPlayerNameElement().value);
             await Client.newGame();
@@ -117,19 +105,38 @@ window.onload = async () => {
         await Sprite.load(Client.gameState);
     };
 
-    getPlayerNameElement().value = decodeURI(playerName);
-    getGameIdElement().value = gameId;
-
     Sprite.onTick = deltaTime => {
         renderDeck(deltaTime);
         renderPlayer(deltaTime);
         renderOtherPlayer(deltaTime);
     };
+
+    const spriteLoad = Sprite.load(undefined);
+
+    let playerName = Lib.getCookie('playerName');
+    if (playerName === undefined) {
+        playerName = '';
+    }
+    
+    let gameId = Lib.getCookie('gameId');
+    if (gameId === undefined) {
+        gameId = '';
+    }
+
+    getPlayerNameElement().value = decodeURI(playerName);
+    getGameIdElement().value = gameId;
+
+    // connect before we allow creating or joining games
+    getConnectionStatusElement().innerHTML = 'Connecting...';
+    await Client.connect();
+    getConnectionStatusElement().innerHTML = `Connected.`;
+
+    await spriteLoad;
 }
 
 // it takes a while for page elements to render at their new size,
 // so we must wait a bit before observing their sizes
-let resizeTime: number = Infinity;
+let resizeTime = Infinity;
 let resize: Promise<void> | undefined;
 
 window.onresize = async () => {
@@ -157,21 +164,21 @@ function renderDeck(deltaTime: number) {
         deckDealTime = performance.now();
     }
 
-    for (let i = 0; i < State.deckSprites.length; ++i) {
-        const deckSprite = State.deckSprites[i];
+    for (let i = 0; i < Sprite.deckSprites.length; ++i) {
+        const deckSprite = Sprite.deckSprites[i];
         if (!deckSprite) throw new Error();
 
-        if (i === State.deckSprites.length - 1 &&
-            Input.action.action === "DrawFromDeck"
+        if (i === Sprite.deckSprites.length - 1 &&
+            Input.action.action === 'Draw'
         ) {
             deckSprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
-        } else if (performance.now() - deckDealTime < i * deckDealDuration / State.deckSprites.length) {
+        } else if (performance.now() - deckDealTime < i * deckDealDuration / Sprite.deckSprites.length) {
             // card not yet dealt; keep top left
             deckSprite.position = { x: -Sprite.width, y: -Sprite.height };
             deckSprite.target = { x: -Sprite.width, y: -Sprite.height };
         } else {
             deckSprite.target = {
-                x: Sprite.app.view.width / 2 - Sprite.width / 2 - (i - State.deckSprites.length / 2) * Sprite.deckGap,
+                x: Sprite.app.view.width / 2 - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
                 y: Sprite.app.view.height / 2 - Sprite.height / 2
             };
         }
@@ -179,22 +186,27 @@ function renderDeck(deltaTime: number) {
         deckSprite.animate(deltaTime);
     }
     
-    let [i, y] = 上下(deckLabels, Sprite.deckContainer, 0,
-        Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + State.deckSprites.length / 2) * Sprite.deckGap,
-        Sprite.app.view.height / 2 - Sprite.height / 2,
-        `︵${数(State.deckSprites.length)}︶`,
-        '小字',
-        13);
+    if (Client.gameState) {
+        let [i, y] = 上下(deckLabels, Sprite.deckContainer, 0,
+            Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,
+            Sprite.app.view.height / 2 - Sprite.height / 2,
+            `︵${数(Sprite.deckSprites.length)}︶`,
+            '小字',
+            13);
 
-    for (; i < deckLabels.length; ++i) {
-        deckLabels[i]?.destroy();
+        y = y;
+
+        for (; i < deckLabels.length; ++i) {
+            deckLabels[i]?.destroy();
+            deckLabels[i] = undefined;
+        }
     }
 }
 
 const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
-let playerLines: (PIXI.Graphics | undefined)[] = [];
-let playerLabels: (PIXI.BitmapText | undefined)[] = [];
+const playerLines: (PIXI.Graphics | undefined)[] = [];
+const playerLabels: (PIXI.BitmapText | undefined)[] = [];
 
 function renderPlayer(deltaTime: number) {
     const gameState = Client.gameState;
@@ -206,7 +218,7 @@ function renderPlayer(deltaTime: number) {
     const playerState = gameState.playerStates[gameState.playerIndex];
     if (!playerState) throw new Error();
 
-    const sprites = State.faceSpritesForPlayer[gameState.playerIndex];
+    const sprites = Sprite.faceSpritesForPlayer[gameState.playerIndex];
     if (!sprites) throw new Error();
 
     const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
@@ -215,8 +227,8 @@ function renderPlayer(deltaTime: number) {
     const dragSprites: Sprite[] = [];
     for (const sprite of sprites) {
         if (Input.selectedIndices.has(cardIndex) && (
-            Input.action.action === 'GiveToOtherPlayer' ||
-            Input.action.action === 'ReturnToDeck' ||
+            Input.action.action === 'Give' ||
+            Input.action.action === 'Return' ||
             Input.action.action === 'Reorder'
         )) {
             if (cardIndex <= Input.action.cardIndex) {
@@ -237,7 +249,7 @@ function renderPlayer(deltaTime: number) {
             Input.action.action === 'ControlClick' ||
             Input.action.action === 'ShiftClick' ||
             Input.action.action === 'Click'
-        ) && (Input.action.cardIndex === cardIndex || Input.selectedIndices.contains(Input.action.cardIndex))) {
+        ) && (Input.action.cardIndex === cardIndex || Input.selectedIndices.has(Input.action.cardIndex))) {
             if (Input.action.cardIndex === cardIndex) {
                 sprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
             } else {
@@ -290,8 +302,8 @@ function renderPlayer(deltaTime: number) {
     let revealCount = playerState.revealCount;
     let groupCount = playerState.groupCount;
     let totalCount = playerState.cardsWithOrigins.length;
-    if (Input.action.action === 'ReturnToDeck' ||
-        Input.action.action === 'GiveToOtherPlayer'
+    if (Input.action.action === 'Return' ||
+        Input.action.action === 'Give'
     ) {
         Input.selectedIndices.forEach((selectedIndex: number) => {
             if (shareCount > selectedIndex) {
@@ -350,8 +362,8 @@ function renderPlayer(deltaTime: number) {
     sortBySuitLabel.on('pointerup', () => Client.sortBySuit(gameState));
 }
 
-let otherPlayerLines: (PIXI.Graphics | undefined)[][] = [];
-let otherPlayerLabels: (PIXI.BitmapText | undefined)[][] = [];
+const otherPlayerLines: (PIXI.Graphics | undefined)[][] = [];
+const otherPlayerLabels: (PIXI.BitmapText | undefined)[][] = [];
 
 function renderOtherPlayer(deltaTime: number) {
     const gameState = Client.gameState;
@@ -370,7 +382,7 @@ function renderOtherPlayer(deltaTime: number) {
             (Sprite.app.view.width - Sprite.app.view.height) / 2 + Sprite.app.view.height / goldenRatio;
         const centerY = Sprite.height + Sprite.gap;
 
-        const faceSprites = State.faceSpritesForPlayer[playerIndex];
+        const faceSprites = Sprite.faceSpritesForPlayer[playerIndex];
         if (!faceSprites) throw new Error();
 
         let j = 0;
@@ -393,7 +405,7 @@ function renderOtherPlayer(deltaTime: number) {
             ++j;
         }
 
-        const backSprites = State.backSpritesForPlayer[playerIndex];
+        const backSprites = Sprite.backSpritesForPlayer[playerIndex];
         if (!backSprites) throw new Error();
 
         j = 0;
@@ -496,13 +508,15 @@ function addLabel(
     if (label && !labelsUsingCurrentFonts.has(label)) {
         label.destroy();
         label = undefined;
+        labels[i] = undefined;
     }
 
     // workaround for a bug
-    if (label && !label.transform) {
+    if (label && label.transform !== null) {
         labelsUsingCurrentFonts.delete(label);
         label.destroy();
         label = undefined;
+        labels[i] = undefined;
     }
 
     if (!label) {
@@ -525,7 +539,7 @@ function addLabel(
     }
 
     // check for valid transform to work around a bug
-    if (label.transform && (
+    if (label.transform !== null && (
         label.position.x !== positionX ||
         label.position.y !== positionY
     )) {
@@ -631,7 +645,7 @@ const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '
 function 数(n: number): string {
     if (n <= 10) {
         const digit = digits[n];
-        if (!digit) throw new Error();
+        if (digit === undefined) throw new Error();
         return digit;
     } else if (n <= 19) {
         return `十${digits[n % 10]}`;

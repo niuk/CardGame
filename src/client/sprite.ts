@@ -23,7 +23,7 @@ const backgroundTextures = [
 ];
 
 let loadedTextureCount = 0;
-let totalTextureCount = 4 * 13 + 2 + colors.length;
+const totalTextureCount = 4 * 13 + 2 + colors.length;
 
 async function loadTexture(key: string, src: string) {
     await new Promise(resolve => {
@@ -39,7 +39,7 @@ async function loadTexture(key: string, src: string) {
     ));
 }
 
-let loading = false;
+let loadPromise: Promise<void> | undefined = undefined;
 let onTickAdded: (deltaTime: number) => void | undefined;
 
 export default class Sprite {
@@ -64,144 +64,156 @@ export default class Sprite {
     public static deckContainer: PIXI.Container;
     public static playerContainers: PIXI.Container[];
 
-    public static async load(gameState: Lib.GameState) {
-        if (loading) return;
-        loading = true;
+    // for animating the deck
+    public static deckSprites: Sprite[] = [];
+    // associative arrays, one for each player at their player index
+    // each element corresponds to a back card by index
+    public static backSpritesForPlayer: Sprite[][] = [];
+    // each element corresponds to a face card by index
+    public static faceSpritesForPlayer: Sprite[][] = [];
 
-        if (!this.app) {
-            this.app = new PIXI.Application(<PIXI.IApplicationOptions>{
-                view: <HTMLCanvasElement>document.getElementById('canvas')
-            });
-
-            this.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
-            this.deckContainer.zIndex = 1;
-            this.playerContainers = [
-                Sprite.app.stage.addChild(new PIXI.Container()),
-                Sprite.app.stage.addChild(new PIXI.Container()),
-                Sprite.app.stage.addChild(new PIXI.Container()),
-                Sprite.app.stage.addChild(new PIXI.Container())
-            ];
-
-            for (const playerContainer of this.playerContainers) {
-                playerContainer.zIndex = 2;
-                playerContainer.sortableChildren = true;
-            }
-
-            this.app.stage.sortableChildren = true;
+    public static async load(gameState: Lib.GameState | undefined): Promise<void> {
+        if (loadPromise) {
+            await loadPromise;
+            return;
         }
 
-        if (loadedTextureCount < totalTextureCount) {
-            const bar = <HTMLProgressElement>document.getElementById('loading-bar');
-            bar.style.visibility = 'visible';
-            bar.value = loadedTextureCount;
-            bar.max = totalTextureCount;
+        loadPromise = (async () => {
+            if (this.app === undefined) {
+                this.app = new PIXI.Application(<PIXI.IApplicationOptions>{
+                    view: <HTMLCanvasElement>document.getElementById('canvas')
+                });
 
-            for (let suit = 0; suit <= 4; ++suit) {
-                for (let rank = 0; rank <= 14; ++rank) {
-                    if (suit === Lib.Suit.Joker) {
-                        if (0 < rank && rank < 14) {
-                            continue;
+                this.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
+                this.deckContainer.zIndex = 1;
+                this.playerContainers = [
+                    Sprite.app.stage.addChild(new PIXI.Container()),
+                    Sprite.app.stage.addChild(new PIXI.Container()),
+                    Sprite.app.stage.addChild(new PIXI.Container()),
+                    Sprite.app.stage.addChild(new PIXI.Container())
+                ];
+
+                for (const playerContainer of this.playerContainers) {
+                    playerContainer.zIndex = 2;
+                    playerContainer.sortableChildren = true;
+                }
+
+                this.app.stage.sortableChildren = true;
+            }
+
+            // both the view (the canvas element) and the renderer must be resized
+            this.app.view.width = document.body.clientWidth;
+            this.app.view.height = document.body.clientHeight;
+            this.app.renderer.resize(
+                document.body.clientWidth,
+                document.body.clientHeight
+            );
+
+            if (background === undefined) {
+                const dummySprite = new Sprite(new PIXI.Container(), new PIXI.Texture(new PIXI.BaseTexture()));
+                dummySprite.position = { x: -this.width, y: -this.height };
+
+                background = this.app.stage.addChild(PIXI.Sprite.from(<PIXI.Texture>backgroundTextures[backgroundIndex]));
+                background.zIndex = 0;
+                background.position.set(0, 0);
+                background.interactive = true;
+                background.on('pointerdown', (event: PIXI.InteractionEvent) => this.onDragStart(event.data.global, dummySprite));
+                background.on('pointerup', (event: PIXI.InteractionEvent) => this.onDragEnd(event.data.global, dummySprite));
+
+                console.log('background loaded');
+            }
+
+            background.width = this.app.view.width;
+            background.height = this.app.view.height;
+
+            if (loadedTextureCount < totalTextureCount) {
+                const bar = <HTMLProgressElement>document.getElementById('loading-bar');
+                bar.style.visibility = 'visible';
+                bar.value = loadedTextureCount;
+                bar.max = totalTextureCount;
+
+                for (let suit = 0; suit <= 4; ++suit) {
+                    for (let rank = 0; rank <= 14; ++rank) {
+                        if (suit === Lib.Suit.Joker) {
+                            if (0 < rank && rank < 14) {
+                                continue;
+                            }
+                        } else {
+                            if (rank < 1 || 13 < rank) {
+                                continue;
+                            }
                         }
-                    } else {
-                        if (rank < 1 || 13 < rank) {
-                            continue;
-                        }
+
+                        await loadTexture(
+                            JSON.stringify([suit, rank]),
+                            `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`
+                        );
+                        bar.value = ++loadedTextureCount;
                     }
+                }
 
-                    await loadTexture(
-                        JSON.stringify([suit, rank]),
-                        `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`
-                    );
+                let i = 0;
+                for (const color of colors) {
+                    await loadTexture(`Back${i++}`, `PlayingCards/BackColor_${color}.png`);
                     bar.value = ++loadedTextureCount;
                 }
+
+                bar.style.visibility = 'hidden';
+                console.log('all card images loaded');
             }
 
-            let i = 0;
-            for (const color of colors) {
-                await loadTexture(`Back${i++}`, `PlayingCards/BackColor_${color}.png`);
-                bar.value = ++loadedTextureCount;
+            // get pixels per centimeter, which is constant
+            if (this.pixelsPerCM === 0) {
+                const testElement = document.createElement('div');
+                testElement.style.width = '1cm';
+                document.body.appendChild(testElement);
+                this.pixelsPerCM = testElement.offsetWidth;
+                document.body.removeChild(testElement);
             }
 
-            bar.style.visibility = 'hidden';
-            console.log('all card images loaded');
-        }
+            this.dragThreshold = 0.5 * this.pixelsPerCM;
 
-        if (!background) {
-            const dummySprite = new Sprite(new PIXI.Container(), new PIXI.Texture(new PIXI.BaseTexture()));
-            dummySprite.position = { x: -this.width, y: -this.height };
+            this.pixelsPerPercentWidth = this.app.view.width / 100;
+            this.pixelsPerPercentHeight = this.app.view.height / 100;
+            this.fixedGap = 0.15 * this.pixelsPerCM;
+            this.deckGap = 0.1 * this.pixelsPerPercentHeight;
+            this.gap = 1.8 * this.pixelsPerPercentHeight;
+            this.width = 10 * this.pixelsPerPercentHeight;
+            this.height = 16 * this.pixelsPerPercentHeight;
+            for (const sprite of sprites) {
+                sprite._sprite.width = this.width;
+                sprite._sprite.height = this.height;
+            }
 
-            background = this.app.stage.addChild(PIXI.Sprite.from(<PIXI.Texture>backgroundTextures[backgroundIndex]));
-            background.zIndex = 0;
-            background.position.set(0, 0);
-            background.interactive = true;
-            background.on('pointerdown', (event: PIXI.InteractionEvent) => this.onDragStart(event.data.global, dummySprite));
-            background.on('pointerup', (event: PIXI.InteractionEvent) => this.onDragEnd(event.data.global, dummySprite));
-
-            console.log('background loaded');
-        }
-
-        // get pixels per centimeter, which is constant
-        if (this.pixelsPerCM === 0) {
-            const testElement = document.createElement('div');
-            testElement.style.width = '1cm';
-            document.body.appendChild(testElement);
-            this.pixelsPerCM = testElement.offsetWidth;
-            document.body.removeChild(testElement);
-        }
-
-        this.dragThreshold = 0.5 * this.pixelsPerCM;
-
-        // both the view (the canvas element) and the renderer must be resized
-        this.app.view.width = document.body.clientWidth;
-        this.app.view.height = document.body.clientHeight;
-        this.app.renderer.resize(
-            document.body.clientWidth,
-            document.body.clientHeight
-        );
-
-        this.pixelsPerPercentWidth = this.app.view.width / 100;
-        this.pixelsPerPercentHeight = this.app.view.height / 100;
-        this.fixedGap = 0.15 * this.pixelsPerCM;
-        this.deckGap = 0.1 * this.pixelsPerPercentHeight;
-        this.gap = 1.8 * this.pixelsPerPercentHeight;
-        this.width = 10 * this.pixelsPerPercentHeight;
-        this.height = 16 * this.pixelsPerPercentHeight;
-        for (const sprite of sprites) {
-            sprite._sprite.width = this.width;
-            sprite._sprite.height = this.height;
-        }
-
-        background.width = this.app.view.width;
-        background.height = this.app.view.height;
-
-        if (gameState) {
-            const playerContainer = this.playerContainers[gameState.playerIndex];
-            if (!playerContainer) throw new Error();
-            playerContainer.zIndex = 2;
-    
-            const leftPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 1) % 4];
-            leftPlayerContainer.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
-            leftPlayerContainer.rotation = -Math.PI / 2;
+            if (gameState) {
+                const playerContainer = this.playerContainers[gameState.playerIndex];
+                if (!playerContainer) throw new Error();
+                playerContainer.zIndex = 2;
         
-            const rightPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 3) % 4];
-            rightPlayerContainer.position.x = Sprite.app.view.width;
-            rightPlayerContainer.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
-            rightPlayerContainer.rotation = Math.PI / 2;
-        }
-
-        if (onTickAdded !== this.onTick) {
-            if (onTickAdded) {
-                this.app.ticker.remove(onTickAdded);
-            }
+                const leftPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 1) % 4];
+                leftPlayerContainer.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
+                leftPlayerContainer.rotation = -Math.PI / 2;
             
-            this.app.ticker.add(this.onTick);
-            onTickAdded = this.onTick;
-        }
+                const rightPlayerContainer = <PIXI.Container>this.playerContainers[(gameState.playerIndex + 3) % 4];
+                rightPlayerContainer.position.x = Sprite.app.view.width;
+                rightPlayerContainer.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
+                rightPlayerContainer.rotation = Math.PI / 2;
+            }
 
-        loading = false;
+            if (onTickAdded !== this.onTick) {
+                if (onTickAdded !== undefined) {
+                    this.app.ticker.remove(onTickAdded);
+                }
+                
+                this.app.ticker.add(this.onTick);
+                onTickAdded = this.onTick;
+            }
+
+            loadPromise = undefined;
+        })();
     }
 
-    public static getTexture(stringForCard: string) {
+    public static getTexture(stringForCard: string): PIXI.Texture {
         const image = textures.get(stringForCard);
         if (image === undefined) {
             throw new Error(`couldn't get sprite '${stringForCard}'`);
@@ -210,12 +222,12 @@ export default class Sprite {
         return image;
     }
 
-    public static backgroundBackward() {
+    public static backgroundBackward(): void {
         backgroundIndex = (backgroundIndex + 1) % backgroundTextures.length;
         background.texture = <PIXI.Texture>backgroundTextures[backgroundIndex];
     }
     
-    public static backgroundForward() {
+    public static backgroundForward(): void {
         --backgroundIndex;
         if (backgroundIndex < 0) {
             backgroundIndex = backgroundTextures.length - 1;
@@ -223,10 +235,129 @@ export default class Sprite {
     
         background.texture = <PIXI.Texture>backgroundTextures[backgroundIndex];
     }
+
+    public static linkWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState): void {
+        const previousDeckSprites = this.deckSprites;
+        this.deckSprites = [];
     
+        const previousBackSpritesForPlayer = this.backSpritesForPlayer;
+        this.backSpritesForPlayer = [];
+    
+        const previousFaceSpritesForPlayer = this.faceSpritesForPlayer;
+        this.faceSpritesForPlayer = [];
+    
+        for (let playerIndex = 0; playerIndex < 4; ++playerIndex) {
+            const playerState = gameState.playerStates[playerIndex];
+            if (!playerState) continue;
+    
+            const faceSprites = this.faceSpritesForPlayer[playerIndex] ?? [];
+            this.faceSpritesForPlayer[playerIndex] = faceSprites;
+            const previousFaceSprites = previousFaceSpritesForPlayer[playerIndex] ?? [];
+            previousFaceSpritesForPlayer[playerIndex] = previousFaceSprites;
+    
+            const backSprites = this.backSpritesForPlayer[playerIndex] ?? [];
+            this.backSpritesForPlayer[playerIndex] = backSprites;
+            const previousBackSprites = previousBackSpritesForPlayer[playerIndex] ?? [];
+            previousBackSpritesForPlayer[playerIndex] = previousBackSprites;
+    
+            const container = Sprite.playerContainers[playerIndex];
+            if (!container) throw new Error();
+            const backTexture = Sprite.getTexture(`Back${playerIndex}`);    
+    
+            for (const cardWithOrigin of playerState.cardsWithOrigins) {
+                const [card, origin] = cardWithOrigin;
+    
+                let sprite: Sprite | undefined;
+                if (origin.origin === 'Deck') {
+                    sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
+                } else if (origin.origin === 'Hand') {
+                    if (playerIndex === origin.playerIndex) {
+                        sprite = previousFaceSprites[origin.cardIndex];
+                    } else {
+                        const originPlayer = previousGameState?.playerStates[origin.playerIndex];
+                        if (originPlayer) {
+                            if (origin.cardIndex < originPlayer.revealCount) {
+                                sprite = previousFaceSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex];
+                            } else {
+                                sprite = previousBackSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
+                            }
+                        }
+                    }
+                } else {
+                    const _: never = origin;
+                }
+    
+                if (card) {
+                    const faceTexture = Sprite.getTexture(JSON.stringify(card));
+                    if (sprite) {
+                        sprite.transfer(container, faceTexture);
+                    } else {
+                        sprite = new Sprite(container, faceTexture);
+                    }
+    
+                    faceSprites.push(sprite);
+                } else {
+                    if (sprite) {
+                        sprite.transfer(container, backTexture);
+                    } else {
+                        sprite = new Sprite(container, backTexture);
+                    }
+    
+                    backSprites.push(sprite);
+                }
+            }
+        }
+    
+        for (const origin of gameState.deckOrigins) {
+            let sprite: Sprite | undefined;
+            if (origin.origin === 'Deck') {
+                sprite = previousDeckSprites.splice(0, 1)[0];
+            } else if (origin.origin === 'Hand') {
+                const originPlayer = previousGameState?.playerStates[origin.playerIndex];
+                if (originPlayer) {
+                    if (origin.cardIndex < originPlayer.revealCount) {
+                        sprite = previousFaceSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex];
+                    } else {
+                        sprite = previousBackSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
+                    }
+                }
+            } else {
+                const _: never = origin;
+            }
+    
+            const deckTexture = Sprite.getTexture('Back0');
+            if (sprite) {
+                sprite.transfer(Sprite.deckContainer, deckTexture);
+            } else {
+                sprite = new Sprite(Sprite.deckContainer, deckTexture);
+            }
+    
+            this.deckSprites.push(sprite);
+        }
+    
+        // cleanup shouldn't be necessary since no cards can be destroyed
+        /*
+        for (const previousFaceSprites of previousFaceSpritesForPlayer) {
+            for (const previousFaceSprite of previousFaceSprites) {
+                previousFaceSprite.destroy();
+            }
+        }
+    
+        for (const previousBackSprites of previousBackSpritesForPlayer) {
+            for (const previousBackSprite of previousBackSprites) {
+                previousBackSprite.destroy();
+            }
+        }
+    
+        for (const previousDeckSprite of previousDeckSprites) {
+            previousDeckSprite.destroy();
+        }
+        */
+    }
+
     private _sprite: PIXI.Sprite;
 
-    public get texture() {
+    public get texture(): PIXI.Texture {
         return this._sprite.texture;
     }
 
@@ -234,27 +365,27 @@ export default class Sprite {
         return this._sprite.position;
     }
 
-    public set position(value) {
+    public set position(value: V.IVector2) {
         this._sprite.position.set(value.x, value.y);
     }
 
-    public get rotation() {
+    public get rotation(): number {
         return this._sprite.rotation;
     }
 
-    public set rotation(value) {
+    public set rotation(value: number) {
         this._sprite.rotation = value;
     }
 
-    public destroy() {
+    public destroy(): void {
         this._sprite.destroy();
     }
 
-    public get selected() {
+    public get selected(): boolean {
         return this._sprite.tint == 0xffffff;
     }
 
-    public set selected(value) {
+    public set selected(value: boolean) {
         if (value) {
             this._sprite.tint = 0xd0d0d0;
         } else {
@@ -262,11 +393,11 @@ export default class Sprite {
         }
     }
 
-    public get zIndex() {
+    public get zIndex(): number {
         return this._sprite.zIndex;
     }
 
-    public set zIndex(value) {
+    public set zIndex(value: number) {
         this._sprite.zIndex = value;
     }
 
@@ -288,18 +419,18 @@ export default class Sprite {
         // also, we only want to fire onDragMove when this sprite is the one the pointer was down on
         let dragging = false;
 
-        let onPointerDown = (event: PIXI.InteractionEvent) => {
+        const onPointerDown = (event: PIXI.InteractionEvent) => {
             dragging = true;
             Sprite.onDragStart?.(event.data.global.clone(), this);
         };
 
-        let onPointerMove = (event: PIXI.InteractionEvent) => {
+        const onPointerMove = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 Sprite.onDragMove?.(event.data.global.clone(), this);
             }
         };
 
-        let onPointerUp = (event: PIXI.InteractionEvent) => {
+        const onPointerUp = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 dragging = false;
                 Sprite.onDragEnd?.(event.data.global.clone(), this);
@@ -323,7 +454,7 @@ export default class Sprite {
         return offset;
     }
 
-    public transfer(parent: PIXI.Container, texture: PIXI.Texture) {
+    public transfer(parent: PIXI.Container, texture: PIXI.Texture): void {
         const oldParent = this._sprite.parent;
 
         // save this sprite's world transform position and rotation
@@ -339,7 +470,7 @@ export default class Sprite {
         this.rotation = rotation - parent.transform.rotation;
     }
 
-    animate(deltaTime: number) {
+    animate(deltaTime: number): void {
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
         this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);

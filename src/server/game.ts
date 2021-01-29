@@ -7,7 +7,7 @@ import Player from './player';
 export default class Game {
     private static gamesById = new Map<string, Game>();
 
-    public static get(gameId: string) {
+    public static get(gameId: string): Game {
         const game = this.gamesById.get(gameId);
         if (game === undefined) {
             throw new Error(`there's no game with id ${gameId}`);
@@ -18,12 +18,12 @@ export default class Game {
 
     private _gameId: string;
 
-    public get gameId() {
+    public get gameId(): string {
         return this._gameId;
     }
 
     public players: Player[] = []
-    public deckWithOrigins: [Lib.Card, Lib.Origin][] = [];
+    public deckCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
 
     public constructor() {
         do {
@@ -34,15 +34,21 @@ export default class Game {
 
         for (let i = 0; i < 4; ++i) {
             for (let j = 1; j <= 13; ++j) {
-                this.deckWithOrigins.push([[i, j], { origin: 'Deck' }]);
-                this.deckWithOrigins.push([[i, j], { origin: 'Deck' }]);
+                this.deckCardsWithOrigins.push([[i, j], { origin: 'Deck' }]);
+                this.deckCardsWithOrigins.push([[i, j], { origin: 'Deck' }]);
             }
         }
 
-        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
-        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
-        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
-        this.deckWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
+    }
+
+    public resetDeckCardOrigins(): void {
+        for (const deckCardWithOrigin of this.deckCardsWithOrigins) {
+            deckCardWithOrigin[1] = { origin: 'Deck' };
+        }
     }
     
     public getStateForPlayerAt(playerIndex: number): Lib.GameState {
@@ -57,31 +63,29 @@ export default class Game {
                     cardsWithOrigins: player.cardsWithOrigins
                 });
             } else {
-                const hidden: [null, Lib.Origin][] = player.cardsWithOrigins
-                    .slice(player.revealCount)
-                    .map(([_, previousLocation]) => [null, previousLocation]);
-                const cardsWithOrigins = player
-                    .cardsWithOrigins.slice(0, player.revealCount)
-                    .concat(...hidden);
                 playerStates.push({
                     name: player.name,
                     shareCount: player.shareCount,
                     revealCount: player.revealCount,
                     groupCount: player.groupCount,
-                    cardsWithOrigins
+                    cardsWithOrigins: player.cardsWithOrigins
+                        .slice(0, player.revealCount)
+                        .concat(player.cardsWithOrigins
+                            .slice(player.revealCount)
+                            .map(([_, previousLocation]) => [null, previousLocation]))
                 });
             }
         }
         
         return {
             gameId: this.gameId,
-            deckOrigins: this.deckWithOrigins.map(([_, origin]) => origin),
+            deckOrigins: this.deckCardsWithOrigins.map(([_, origin]) => origin),
             playerIndex,
             playerStates
         };
     }
 
-    public broadcastStateExceptToPlayerAt(playerIndex: number) {
+    public broadcastStateExceptToPlayerAt(playerIndex: number): void {
         for (const player of this.players) {
             if (player.index !== playerIndex) {
                 player.ws.send(JSON.stringify({

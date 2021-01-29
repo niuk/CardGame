@@ -7,15 +7,15 @@ export function getCookie(name: string): string | undefined {
     }
 }
 
-export function setCookie(name: string, value: string) {
-    document.cookie = `${name}=${value}`;
+export function setCookie(name: string, value: string): void {
+    document.cookie = `${name}=${value}; SameSite=Lax`;
 }
 
 export function getParam(name: string): string | undefined {
     return window.location.search.split(`${name}=`)[1]?.split("&")[0];
 }
 
-export function delay(ms: number) {
+export function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -78,21 +78,21 @@ export type Method =
     SetPlayerName |
     NewGame |
     JoinGame |
-    TakeCard |
-    DrawCard |
-    GiveCardsToOtherPlayer |
-    ReturnCardsToDeck |
-    ReorderCards;
+    TakeFromOtherPlayer |
+    GiveToOtherPlayer |
+    DrawFromDeck |
+    ReturnToDeck |
+    Reorder;
 
 export type MethodName =
     'SetPlayerName' |
     'NewGame' |
     'JoinGame' |
-    'TakeCard' |
-    'DrawCard' |
-    'GiveCardsToOtherPlayer' |
-    'ReturnCardsToDeck' |
-    'ReorderCards';
+    'TakeFromOtherPlayer' |
+    'GiveToOtherPlayer' |
+    'DrawFromDeck' |
+    'ReturnToDeck' |
+    'Reorder';
 
 export interface Result {
     methodName: MethodName;
@@ -113,29 +113,29 @@ export interface JoinGame {
     gameId: string;
 }
 
-export interface TakeCard {
-    methodName: 'TakeCard';
+export interface TakeFromOtherPlayer {
+    methodName: 'TakeFromOtherPlayer';
     otherPlayerIndex: number;
     cardIndex: number;
 }
 
-export interface DrawCard {
-    methodName: 'DrawCard';
-}
-
-export interface GiveCardsToOtherPlayer {
-    methodName: 'GiveCardsToOtherPlayer';
+export interface GiveToOtherPlayer {
+    methodName: 'GiveToOtherPlayer';
     otherPlayerIndex: number;
     cardIndicesToGiveToOtherPlayer: number[];
 }
 
-export interface ReturnCardsToDeck {
-    methodName: 'ReturnCardsToDeck';
+export interface DrawFromDeck {
+    methodName: 'DrawFromDeck';
+}
+
+export interface ReturnToDeck {
+    methodName: 'ReturnToDeck';
     cardIndicesToReturnToDeck: number[];
 }
 
-export interface ReorderCards {
-    methodName: 'ReorderCards';
+export interface Reorder {
+    methodName: 'Reorder';
     newShareCount: number;
     newRevealCount: number;
     newGroupCount: number;
