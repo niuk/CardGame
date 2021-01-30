@@ -51,6 +51,7 @@ export type Origin = Deck | Hand;
 
 export interface Deck {
     origin: 'Deck';
+    deckIndex: number;
 }
 
 export interface Hand {
@@ -139,16 +140,17 @@ export interface Reorder {
     newShareCount: number;
     newRevealCount: number;
     newGroupCount: number;
-    newCardsWithOrigins: [Card, Origin][];
+    newOriginIndices: number[];
 }
 
 export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
-    if (await Promise.race<T | 'Timeout'>([p, (async () => {
-        await delay(milliseconds ?? 0);
-        return 'Timeout';
-    })() as Promise<T | 'Timeout'>]) === 'Timeout') {
-        return false;
+    let done = true;
+    try {
+        done = await Promise.race<T | 'Timeout'>([p, (async () => {
+            await delay(milliseconds ?? 0);
+            return 'Timeout';
+        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
+    } finally {
+        return done;
     }
-
-    return true;
 }

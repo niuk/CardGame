@@ -33,21 +33,59 @@ export default class Game {
         Game.gamesById.set(this.gameId, this);
 
         for (let i = 0; i < 4; ++i) {
-            for (let j = 1; j <= 13; ++j) {
-                this.deckCardsWithOrigins.push([[i, j], { origin: 'Deck' }]);
-                this.deckCardsWithOrigins.push([[i, j], { origin: 'Deck' }]);
+            for (let j = 0; j < 13; ++j) {
+                this.deckCardsWithOrigins.push([[i, j + 1], {
+                    origin: 'Deck',
+                    deckIndex: this.deckCardsWithOrigins.length
+                }]);
+                this.deckCardsWithOrigins.push([[i, j + 1], {
+                    origin: 'Deck',
+                    deckIndex: this.deckCardsWithOrigins.length
+                }]);
             }
         }
 
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], { origin: 'Deck' }]);
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], { origin: 'Deck' }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
+            origin: 'Deck',
+            deckIndex: this.deckCardsWithOrigins.length
+        }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
+            origin: 'Deck',
+            deckIndex: this.deckCardsWithOrigins.length
+        }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
+            origin: 'Deck',
+            deckIndex: this.deckCardsWithOrigins.length
+        }]);
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
+            origin: 'Deck',
+            deckIndex: this.deckCardsWithOrigins.length
+        }]);
+
+        this.shuffleDeck();
+    }
+
+    public shuffleDeck(): void {
+        for (let i = this.deckCardsWithOrigins.length - 1; i >= 1; --i) {
+            const j = Math.floor(Math.random() * i);
+            console.log(`${i} <-> ${j}`);
+
+            const iCardWithOrigin = this.deckCardsWithOrigins[i];
+            if (iCardWithOrigin === undefined) throw new Error();
+            
+            const jCardWithOrigin = this.deckCardsWithOrigins[j];
+            if (jCardWithOrigin === undefined) throw new Error();
+
+            this.deckCardsWithOrigins[i] = jCardWithOrigin;
+            this.deckCardsWithOrigins[j] = iCardWithOrigin;
+        }
     }
 
     public resetCardOrigins(): void {
+        let deckIndex = 0;
         for (const deckCardWithOrigin of this.deckCardsWithOrigins) {
-            deckCardWithOrigin[1] = { origin: 'Deck' };
+            deckCardWithOrigin[1] = { origin: 'Deck', deckIndex };
+            ++deckIndex;
         }
 
         for (const player of this.players) {
@@ -56,7 +94,7 @@ export default class Game {
     }
     
     public getStateForPlayerAt(playerIndex: number): Lib.GameState {
-        const playerStates: (Lib.PlayerState | null)[] = [];    
+        const playerStates: (Lib.PlayerState | null)[] = [];
         for (const player of this.players) {
             if (player.index === playerIndex) {
                 playerStates.push({

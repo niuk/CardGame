@@ -32,7 +32,8 @@
     "watch-client": "ts-node watch-client.js",
     "watch-server": "tsc-watch --onSuccess \"npm run server\"",
     "server": "ts-node build/server/server.js",
-    "lint": "eslint src/**/*.ts"
+    "lint-server": "eslint -c src/server/.eslintrc.json src/server/*.ts",
+    "lint-client": "eslint -c src/client/.eslintrc.json src/client/*.ts"
   },
   "type": "module",
   "name": "cardgame"

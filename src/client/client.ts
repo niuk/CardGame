@@ -50,9 +50,34 @@ webSocket.onmessage = async e => {
     }
 };
 
+(async () => {
+    while (true) {
+        await Lib.delay(10);
+
+        const statusElement = <HTMLDivElement | null>document.getElementById('status');
+        if (statusElement === null) continue;
+        
+        if (webSocket.readyState === WebSocket.CLOSED) {
+            statusElement.innerHTML = 'WebSocket closed.';
+        } else if (webSocket.readyState === WebSocket.CLOSING) {
+            statusElement.innerHTML = 'WebSocket closing.';
+        } else if (webSocket.readyState === WebSocket.CONNECTING) {
+            statusElement.innerHTML = 'WebSocket connecting...';
+        } else if (webSocket.readyState === WebSocket.OPEN) {
+            if (gameState !== undefined) {
+                statusElement.innerHTML = `Game: ${gameState.gameId}<br>${Sprite.currentLoadingTexture}`;
+            } else {
+                statusElement.innerHTML = Sprite.currentLoadingTexture;
+            }
+        } else {
+            throw new Error();
+        }
+    }
+})();
+
 const callbacksForMethodType = new Map<Lib.MethodName, ((result: Lib.Result) => void)[]>();
 function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: string) => void) {
-    //console.log(`adding callback for method '${methodName}'`);
+    console.log(`adding callback for method '${methodName}'`);
 
     let callbacks = callbacksForMethodType.get(methodName);
     if (callbacks === undefined) {
@@ -61,7 +86,7 @@ function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (r
     }
 
     callbacks.push(result => {
-        //console.log(`invoking callback for method '${methodName}'`);
+        console.log(`invoking callback for method '${methodName}'`);
         if ('errorDescription' in result && result.errorDescription !== undefined) {
             reject(result.errorDescription);
         } else {
@@ -145,7 +170,7 @@ export function reorderCards(
     newShareCount: number,
     newRevealCount: number,
     newGroupCount: number,
-    newCardsWithOrigins: [Lib.Card, Lib.Origin][]
+    newOriginIndices: number[]
 ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('Reorder', resolve, reject);
@@ -154,30 +179,38 @@ export function reorderCards(
             newShareCount,
             newRevealCount,
             newGroupCount,
-            newCardsWithOrigins
+            newOriginIndices
         }));
     });
 }
 
+function adjust(rank: number): number {
+    if (rank === 1) {
+        return 13;
+    } else if (rank <= 13) {
+        return rank - 1;
+    } else {
+        return rank;
+    }
+}
+
 export function sortBySuit(gameState: Lib.GameState): Promise<void> {
-    return sortCards(gameState, (
-        [[aSuit, aRank], aOrigin]: [Lib.Card, Lib.Origin],
-        [[bSuit, bRank], bOrigin]: [Lib.Card, Lib.Origin]
-    ) => {
+    return sortCards(gameState, ([[aSuit, aRank], aIndex], [[bSuit, bRank], bIndex]) => {
         if (aSuit !== bSuit) {
             return aSuit - bSuit;
         } else {
+            aRank = adjust(aRank);
+            bRank = adjust(bRank);
             return aRank - bRank;
         }
     });
 }
 
 export function sortByRank(gameState: Lib.GameState): Promise<void> {
-    return sortCards(gameState, (
-        [[aSuit, aRank], aOrigin]: [Lib.Card, Lib.Origin],
-        [[bSuit, bRank], bOrigin]: [Lib.Card, Lib.Origin]
-    ) => {
+    return sortCards(gameState, ([[aSuit, aRank], aIndex], [[bSuit, bRank], bIndex]) => {
         if (aRank !== bRank) {
+            aRank = adjust(aRank);
+            bRank = adjust(bRank);
             return aRank - bRank;
         } else {
             return aSuit - bSuit;
@@ -185,34 +218,35 @@ export function sortByRank(gameState: Lib.GameState): Promise<void> {
     });
 }
 
-function sortCards(gameState: Lib.GameState, compareFn: (a: [Lib.Card, Lib.Origin], b: [Lib.Card, Lib.Origin]) => number) {
+function sortCards(gameState: Lib.GameState, compareFn: (a: [Lib.Card, number], b: [Lib.Card, number]) => number) {
     const player = gameState.playerStates[gameState.playerIndex];
     if (!player) throw new Error();
 
     const newShareCount = player.shareCount;
     const newRevealCount = player.revealCount;
     const newGroupCount = player.groupCount;
-    const newCardsWithOrigins: [Lib.Card, Lib.Origin][] = player.cardsWithOrigins.map(([card, origin], index) => {
-        if (!card) throw new Error();
-        return [card, {
-            origin: 'Hand',
-            playerIndex: gameState.playerIndex,
-            cardIndex: index
-        }];
+    const newCardsWithIndices: [Lib.Card, number][] = player.cardsWithOrigins.map(([card, origin], index) => {
+        if (card === null) throw new Error();
+        return [card, index];
     });
 
-    sortSection(newCardsWithOrigins, 0, player.shareCount, compareFn);
-    sortSection(newCardsWithOrigins, player.shareCount, player.revealCount, compareFn);
-    sortSection(newCardsWithOrigins, player.revealCount, player.groupCount, compareFn);
-    sortSection(newCardsWithOrigins, player.groupCount, player.cardsWithOrigins.length, compareFn);
-    return reorderCards(newShareCount, newRevealCount, newGroupCount, newCardsWithOrigins);
+    sortSection(newCardsWithIndices, 0, player.shareCount, compareFn);
+    sortSection(newCardsWithIndices, player.shareCount, player.revealCount, compareFn);
+    sortSection(newCardsWithIndices, player.revealCount, player.groupCount, compareFn);
+    sortSection(newCardsWithIndices, player.groupCount, player.cardsWithOrigins.length, compareFn);
+    return reorderCards(
+        newShareCount,
+        newRevealCount,
+        newGroupCount,
+        newCardsWithIndices.map(([card, index]) => index)
+    );
 }
 
 function sortSection(
-    cards: [Lib.Card, Lib.Origin][],
+    cards: [Lib.Card, number][],
     start: number,
     end: number,
-    compareFn: (a: [Lib.Card, Lib.Origin], b: [Lib.Card, Lib.Origin]) => number
+    compareFn: (a: [Lib.Card, number], b: [Lib.Card, number]) => number
 ) {
     const section = cards.slice(start, end);
     section.sort(compareFn);

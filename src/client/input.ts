@@ -119,12 +119,14 @@ export function linkWithCards(gameState: Lib.GameState): void {
                     selectedIndices.remove(origin.cardIndex);
 
                     if (playerIndex === gameState.playerIndex) {
+                        console.log(`selected index: ${origin.cardIndex} to ${cardIndex}`);
                         newSelectedIndices.push(cardIndex);
                     }
                 }
                 
                 if ('cardIndex' in action && action.cardIndex === origin.cardIndex) {
                     if (playerIndex === gameState.playerIndex) {
+                        console.log(`action index: ${origin.cardIndex} to ${cardIndex}`);
                         newActionCardIndex = cardIndex;
                     } else {
                         action = { action: 'None' };
@@ -273,6 +275,8 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'Draw'
     ) {
         if (exceededDragThreshold) {
+            // cache because the action might have changed after await
+            const spriteOffset = action.spriteOffset;
             if (await Lib.isDone(promise)) {
                 promise = (async () => {
                     if (action.action === 'Take') {
@@ -288,21 +292,24 @@ Sprite.onDragMove = async (position, sprite) => {
 
                     const gameState = Client.gameState;
                     if (gameState === undefined) return;
-        
+
                     const playerState = gameState.playerStates[gameState.playerIndex];
                     if (!playerState) throw new Error();
-        
+
                     // immediately select newly acquired card
                     console.log(`selecting ${playerState.cardsWithOrigins.length - 1}`);
                     const cardIndex = playerState.cardsWithOrigins.length - 1;
                     selectedIndices.clear();
                     selectedIndices.add(cardIndex);
 
-                    await drag(cardIndex, action.spriteOffset);
+                    action = {
+                        action: 'Reorder',
+                        cardIndex,
+                        spriteOffset
+                    };
+                    await drag();
                 })();
             }
-
-            await promise;
         }
     } else if (
         action.action === 'Give' ||
@@ -310,10 +317,8 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'Reorder'
     ) {
         if (await Lib.isDone(promise)) {
-            promise = drag(action.cardIndex, action.spriteOffset);
+            promise = drag();
         }
-
-        await promise;
     } else if (
         action.action === 'ControlShiftClick' ||
         action.action === 'ControlClick' ||
@@ -321,17 +326,20 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'Click'
     ) {
         if (exceededDragThreshold) {
+            // cache because the action might have changed after await
             if (await Lib.isDone(promise)) {
-                // dragging a non-selected card selects it and only it
-                if (!selectedIndices.has(action.cardIndex)) {
-                    selectedIndices.clear();
-                    selectedIndices.add(action.cardIndex);
-                }
-    
-                promise = drag(action.cardIndex, action.spriteOffset);
-            }
+                promise = (async () => {
+                    // dragging a non-selected card selects it and only it
+                    // selected indices must be modified immediate before the call to drag because drag will
+                    // modify the action's card index, which must be kept consistent with selected indices
+                    if (!selectedIndices.has(action.cardIndex)) {
+                        selectedIndices.clear();
+                        selectedIndices.add(action.cardIndex);
+                    }
 
-            await promise;
+                    await drag();
+                })();
+            }
         }
     } else {
         const _: never = action;
@@ -340,10 +348,6 @@ Sprite.onDragMove = async (position, sprite) => {
 
 Sprite.onDragEnd = async () => {
     try {
-        if (promise !== undefined) {
-            await promise;
-        }
-
         const gameState = Client.gameState;
         if (gameState === undefined) return;
 
@@ -365,14 +369,19 @@ Sprite.onDragEnd = async () => {
                 previousClickIndex = action.cardIndex;
             } else {
                 previousClickIndex = -1;
-                await Client.giveToOtherPlayer(action.otherPlayerIndex);
+                console.log(`giving to other player`);
+                if (await Lib.isDone(promise)) {
+                    promise = Client.giveToOtherPlayer(action.otherPlayerIndex);
+                }
             }
         } else if (action.action === 'Return') {
             if (drewFromDeck) {
                 previousClickIndex = action.cardIndex;
             } else {
                 previousClickIndex = -1;
-                await Client.returnToDeck();
+                if (await Lib.isDone(promise)) {
+                    promise = Client.returnToDeck();
+                }
             }
         } else if (action.action === 'ControlShiftClick') {
             if (previousClickIndex === -1) {
@@ -418,7 +427,7 @@ Sprite.onDragEnd = async () => {
     }
 }
 
-async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> {
+async function drag(): Promise<void> {
     const gameState = Client.gameState;
     if (gameState === undefined) throw new Error();
 
@@ -529,42 +538,58 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
     } : undefined;
 
     if (intersectBox(drag0, drag1, deck0, deck1)) {
-        console.log(`return cards`);
-        action = {
-            action: 'Return',
-            cardIndex,
-            spriteOffset
-        };
+        if ('cardIndex' in action && 'spriteOffset' in action) {
+            action = {
+                action: 'Return',
+                cardIndex: action.cardIndex,
+                spriteOffset: action.spriteOffset
+            };
+        } else {
+            return;
+        }
     } else if (left0 && left1 && intersectBox(drag0, drag1, left0, left1)) {
-        console.log(`give left`);
-        action = {
-            action: 'Give',
-            otherPlayerIndex: leftPlayerIndex,
-            cardIndex,
-            spriteOffset
-        };
+        if ('cardIndex' in action && 'spriteOffset' in action) {
+            action = {
+                action: 'Give',
+                otherPlayerIndex: leftPlayerIndex,
+                cardIndex: action.cardIndex,
+                spriteOffset: action.spriteOffset
+            };
+        } else {
+            return;
+        }
     } else if (top0 && top1 && intersectBox(drag0, drag1, top0, top1)) {
-        console.log(`give top`);
-        action = {
-            action: 'Give',
-            otherPlayerIndex: topPlayerIndex,
-            cardIndex,
-            spriteOffset
-        };
+        if ('cardIndex' in action && 'spriteOffset' in action) {
+            action = {
+                action: 'Give',
+                otherPlayerIndex: topPlayerIndex,
+                cardIndex: action.cardIndex,
+                spriteOffset: action.spriteOffset
+            };
+        } else {
+            return;
+        }
     } else if (right0 && right1 && intersectBox(drag0, drag1, right0, right1)) {
-        console.log(`give right`);
-        action = {
-            action: 'Give',
-            otherPlayerIndex: rightPlayerIndex,
-            cardIndex,
-            spriteOffset
-        };
+        if ('cardIndex' in action && 'spriteOffset' in action) {
+            action = {
+                action: 'Give',
+                otherPlayerIndex: rightPlayerIndex,
+                cardIndex: action.cardIndex,
+                spriteOffset: action.spriteOffset
+            };
+        } else {
+            return;
+        }
     } else {
-        action = {
-            action: 'Reorder',
-            cardIndex,
-            spriteOffset
-        };
+        if ('cardIndex' in action && 'spriteOffset' in action) {
+            action = {
+                action: 'Reorder',
+                cardIndex: action.cardIndex,
+                spriteOffset: action.spriteOffset
+            };
+        } else {
+            return;
+        }
 
         // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
         const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
@@ -661,25 +686,27 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
         //console.log(`AFTER: splitIndex: ${splitIndex}, shareCount: ${shareCount}, revealCount: ${revealCount}, groupCount: ${groupCount}, splitLeft: ${splitLeft}`);
 
         let reorder = false;
-        const newCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
-        const compareAndPushCard = ([sprite, [card, origin]]: [Sprite, [Lib.Card, Lib.Origin]]) => {
-            if (JSON.stringify(card) !== JSON.stringify(player.cardsWithOrigins[newCardsWithOrigins.length]?.[0])) {
+        const newOriginIndices: number[] = [];
+        const compareAndPushCardWithIndex = ([sprite, [card, origin]]: [Sprite, [Lib.Card, Lib.Origin]]) => {
+            if (origin.origin === 'Deck' || origin.playerIndex !== gameState.playerIndex) throw new Error();
+
+            if (JSON.stringify(card) !== JSON.stringify(player.cardsWithOrigins[newOriginIndices.length]?.[0])) {
                 reorder = true;
             }
 
-            newCardsWithOrigins.push([card, origin]);
+            newOriginIndices.push(origin.cardIndex);
         };
 
-        reserved.slice(0, splitIndex).map(compareAndPushCard);
-        moving.map(compareAndPushCard);
-        reserved.splice(splitIndex).map(compareAndPushCard);
+        reserved.slice(0, splitIndex).map(compareAndPushCardWithIndex);
+        moving.map(compareAndPushCardWithIndex);
+        reserved.splice(splitIndex).map(compareAndPushCardWithIndex);
 
         if (newShareCount !== player.shareCount ||
             newRevealCount !== player.revealCount ||
             newGroupCount !== player.groupCount ||
             reorder
         ) {
-            await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newCardsWithOrigins);
+            await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newOriginIndices);
         }
     }
 }

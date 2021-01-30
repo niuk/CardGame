@@ -11,7 +11,7 @@ export function sub(u: IVector2, v: IVector2): IVector2 {
     return { x: u.x - v.x, y: u.y - v.y };
 }
 
-export function length(v: IVector2) {
+export function length(v: IVector2): number {
     return Math.sqrt(v.x * v.x + v.y * v.y);
 }
 

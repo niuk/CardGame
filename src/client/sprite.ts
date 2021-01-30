@@ -25,12 +25,14 @@ const backgroundTextureNames = [
 let loadedTextureCount = 0;
 const totalTextureCount = backgroundTextureNames.length + 4 * 13 + 2 + colors.length;
 
+let currentLoadingTexture = '';
 async function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
+    currentLoadingTexture = src;
     await new Promise(resolve => {
         Sprite.app.loader.add(src).load(resolve);
     });
-
     textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
+    currentLoadingTexture = '';
 }
 
 async function load(gameState: Lib.GameState | undefined): Promise<void> {
@@ -77,24 +79,19 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
         );
         for (let suit = 0; suit <= 4; ++suit) {
             for (let rank = 0; rank <= 14; ++rank) {
-                let adjustedRank: number;
                 if (suit === Lib.Suit.Joker) {
                     if (0 < rank && rank < 14) {
                         continue;
                     }
-
-                    adjustedRank = rank;
                 } else {
                     if (rank < 1 || 13 < rank) {
                         continue;
                     }
-                    
-                    adjustedRank = rank === 13 ? 1 : rank + 1;
                 }
 
                 await loadTexture(
                     JSON.stringify([suit, rank]),
-                    `PlayingCards/${suits[suit]}${adjustedRank < 10 ? '0' : ''}${adjustedRank}.png`,
+                    `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
                     cardTextureFrame
                 );
                 bar.value = ++loadedTextureCount;
@@ -117,7 +114,6 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 
     // both the view (the canvas element) and the renderer must be resized
-    Sprite.app.view.style.touchAction = 'pinch-zoom';
     Sprite.app.view.width = document.body.clientWidth;
     Sprite.app.view.height = document.body.clientHeight;
     Sprite.app.renderer.resize(
@@ -137,8 +133,39 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
         background.zIndex = 0;
         background.position.set(0, 0);
         background.interactive = true;
-        background.on('pointerdown', (event: PIXI.InteractionEvent) => Sprite.onDragStart(event.data.global, dummySprite));
-        background.on('pointerup', (event: PIXI.InteractionEvent) => Sprite.onDragEnd(event.data.global, dummySprite));
+        background.on('pointerdown', (event: PIXI.InteractionEvent) => Sprite.onDragStart(event.data.global, dummySprite), { passive: true });
+        background.on('pointerup', (event: PIXI.InteractionEvent) => Sprite.onDragEnd(event.data.global, dummySprite), { passive: true });
+
+        // an attempt to enable pinch and zoom
+        /*
+        const forward = (event: PIXI.InteractionEvent) => {
+            if ('changedTouches' in event.data.originalEvent) {
+                const getTouches = (touchList: TouchList) => {
+                    const touches: Touch[] = [];
+                    for (let i = 0; i < touchList.length; ++i) {
+                        const touch = touchList.item(i);
+                        if (touch !== null) {
+                            touches[i] = touch;
+                        }
+                    }
+
+                    return touches;
+                }
+
+                const copiedEvent = new TouchEvent(event.data.originalEvent.type, {
+                    changedTouches: getTouches(event.data.originalEvent.changedTouches),
+                    targetTouches: getTouches(event.data.originalEvent.targetTouches),
+                    touches: getTouches(event.data.originalEvent.touches)
+                });
+                document.body.dispatchEvent(copiedEvent);
+                console.log('forwarded touch event to document body', event.data.originalEvent, copiedEvent);
+            }
+        };
+        background.on('touchstart', forward);
+        background.on('touchmove', forward);
+        background.on('touchend', forward);
+        background.on('touchcancel', forward);
+        */
 
         console.log('background set');
     }
@@ -222,6 +249,10 @@ export default class Sprite {
     public static backSpritesForPlayer: Sprite[][] = [];
     // each element corresponds to a face card by index
     public static faceSpritesForPlayer: Sprite[][] = [];
+
+    public static get currentLoadingTexture(): string {
+        return currentLoadingTexture;
+    }
 
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
         if (await Lib.isDone(promise)) {
@@ -432,6 +463,7 @@ export default class Sprite {
         };
 
         const onPointerUp = (event: PIXI.InteractionEvent) => {
+            console.log(event.type, dragging);
             if (dragging) {
                 dragging = false;
                 Sprite.onDragEnd?.(event.data.global.clone(), this);

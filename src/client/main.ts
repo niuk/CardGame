@@ -53,7 +53,6 @@ window.onload = async () => {
     const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
     const gameIdElement = <HTMLInputElement>document.getElementById('gameId');
     const formElement = <HTMLDivElement>document.getElementById('form');
-    const statusElement = <HTMLDivElement>document.getElementById('status');
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
     joinGameButton.onclick = async e => {
@@ -62,25 +61,15 @@ window.onload = async () => {
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         try {
-            statusElement.innerHTML = `Joining game: ${gameIdElement.value}...`;
-
             Lib.setCookie('playerName', playerNameElement.value);
 
-            await Sprite.load(undefined);
-
-            try {
-                await Client.setPlayerName(playerNameElement.value);
-                await Client.joinGame(gameIdElement.value);
-            } catch (e) {
-                statusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
-                throw e;
-            }
+            await Client.setPlayerName(playerNameElement.value);
+            await Client.joinGame(gameIdElement.value);
 
             while (!Client.gameState) {
                 await Lib.delay(100);
             }
 
-            statusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
             document.body.removeChild(formElement);
         
             await Sprite.load(Client.gameState);
@@ -98,25 +87,15 @@ window.onload = async () => {
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         try {
-            statusElement.innerHTML = `Creating a new game...`;
-
             Lib.setCookie('playerName', playerNameElement.value);
 
-            await Sprite.load(undefined);
-
-            try {
-                await Client.setPlayerName(playerNameElement.value);
-                await Client.newGame();
-            } catch (e) {
-                statusElement.innerHTML = `Error: ${JSON.stringify(e)}`;
-                throw e;
-            }
+            await Client.setPlayerName(playerNameElement.value);
+            await Client.newGame();
 
             while (!Client.gameState) {
                 await Lib.delay(100);
             }
 
-            statusElement.innerHTML = `Game: ${Client.gameState.gameId}`;
             document.body.removeChild(formElement);
 
             await Sprite.load(Client.gameState);
@@ -149,10 +128,7 @@ window.onload = async () => {
     playerNameElement.value = decodeURI(playerName);
     gameIdElement.value = gameId;
 
-    // connect before we allow creating or joining games
-    statusElement.innerHTML = 'Connecting...';
     await Client.connect();
-    statusElement.innerHTML = `Connected.`;
 
     await spriteLoad;
 }
@@ -671,9 +647,11 @@ function 上下(
 
 const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 function 数(n: number): string {
-    if (n <= 10) {
+    if (n < 0) {
+        return `负${数(-n)}`;
+    } else if (n <= 10) {
         const digit = digits[n];
-        if (digit === undefined) throw new Error();
+        if (digit === undefined) throw new Error(`no digit character found for ${n}`);
         return digit;
     } else if (n <= 19) {
         return `十${digits[n % 10]}`;
