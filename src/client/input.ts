@@ -679,7 +679,6 @@ async function drag(cardIndex: number, spriteOffset: V.IVector2): Promise<void> 
             newGroupCount !== player.groupCount ||
             reorder
         ) {
-            console.log(`reorder cards`);
             await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newCardsWithOrigins);
         }
     }

@@ -77,19 +77,24 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
         );
         for (let suit = 0; suit <= 4; ++suit) {
             for (let rank = 0; rank <= 14; ++rank) {
+                let adjustedRank: number;
                 if (suit === Lib.Suit.Joker) {
                     if (0 < rank && rank < 14) {
                         continue;
                     }
+
+                    adjustedRank = rank;
                 } else {
                     if (rank < 1 || 13 < rank) {
                         continue;
                     }
+                    
+                    adjustedRank = rank === 13 ? 1 : rank + 1;
                 }
 
                 await loadTexture(
                     JSON.stringify([suit, rank]),
-                    `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
+                    `PlayingCards/${suits[suit]}${adjustedRank < 10 ? '0' : ''}${adjustedRank}.png`,
                     cardTextureFrame
                 );
                 bar.value = ++loadedTextureCount;
@@ -112,6 +117,7 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 
     // both the view (the canvas element) and the renderer must be resized
+    Sprite.app.view.style.touchAction = 'pinch-zoom';
     Sprite.app.view.width = document.body.clientWidth;
     Sprite.app.view.height = document.body.clientHeight;
     Sprite.app.renderer.resize(
@@ -150,7 +156,6 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 
     Sprite.dragThreshold = 0.5 * Sprite.pixelsPerCM;
-
     Sprite.pixelsPerPercent = Math.min(Sprite.app.view.width / 100, Sprite.app.view.height / 100);
     Sprite.fixedGap = 0.15 * Sprite.pixelsPerCM;
     Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
