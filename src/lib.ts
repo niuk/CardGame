@@ -141,3 +141,14 @@ export interface Reorder {
     newGroupCount: number;
     newCardsWithOrigins: [Card, Origin][];
 }
+
+export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
+    if (await Promise.race<T | 'Timeout'>([p, (async () => {
+        await delay(milliseconds ?? 0);
+        return 'Timeout';
+    })() as Promise<T | 'Timeout'>]) === 'Timeout') {
+        return false;
+    }
+
+    return true;
+}

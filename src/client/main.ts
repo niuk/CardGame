@@ -160,22 +160,22 @@ window.onload = async () => {
 // it takes a while for page elements to render at their new size,
 // so we must wait a bit before observing their sizes
 let resizeTime = Infinity;
-let resize: Promise<void> | undefined;
+let resizePromise = Promise.resolve();
 
 window.onresize = async () => {
     resizeTime = performance.now() + 500;
 
-    if (!resize) {
-        resize = (async () => {
-            while (!Client.gameState || performance.now() < resizeTime) {
+    if (await Lib.isDone(resizePromise)) {
+        resizePromise = (async () => {
+            while (performance.now() < resizeTime) {
                 await Lib.delay(100);
             }
 
-            Sprite.load(Client.gameState);
-
-            resize = undefined;
+            await Sprite.load(Client.gameState);
         })();
     }
+
+    await resizePromise;
 };
 
 const deckLabels: (PIXI.BitmapText | undefined)[] = [];
@@ -268,12 +268,15 @@ function renderPlayer(deltaTime: number) {
                 sprite.target = V.add(lastDragSprite.target, { x: Sprite.gap, y: 0 });
                 dragSprites.push(sprite);
             }
-        } else if (Input.selectedIndices.has(cardIndex) && (
+        } else if ((
             Input.action.action === 'ControlShiftClick' ||
             Input.action.action === 'ControlClick' ||
             Input.action.action === 'ShiftClick' ||
             Input.action.action === 'Click'
-        ) && (Input.action.cardIndex === cardIndex || Input.selectedIndices.has(Input.action.cardIndex))) {
+        ) && (
+            Input.action.cardIndex === cardIndex ||
+            Input.selectedIndices.has(Input.action.cardIndex) && Input.selectedIndices.has(cardIndex)
+        )) {
             if (Input.action.cardIndex === cardIndex) {
                 sprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
             } else {

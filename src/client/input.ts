@@ -253,9 +253,9 @@ Sprite.onDragStart = (position, sprite) => {
     }
 }
 
-let promise: Promise<void> | undefined;
+let promise = new Promise<void>(resolve => resolve());
 
-Sprite.onDragMove = (position, sprite) => {
+Sprite.onDragMove = async (position, sprite) => {
     mouseMovePosition = position;
     exceededDragThreshold = exceededDragThreshold ||
         V.distance(mouseMovePosition, mouseDownPosition) > Sprite.dragThreshold;
@@ -273,7 +273,7 @@ Sprite.onDragMove = (position, sprite) => {
         action.action === 'Draw'
     ) {
         if (exceededDragThreshold) {
-            if (promise === undefined) {
+            if (await Lib.isDone(promise)) {
                 promise = (async () => {
                     if (action.action === 'Take') {
                         await Client.takeFromOtherPlayer(
@@ -299,23 +299,21 @@ Sprite.onDragMove = (position, sprite) => {
                     selectedIndices.add(cardIndex);
 
                     await drag(cardIndex, action.spriteOffset);
-
-                    promise = undefined;
                 })();
             }
+
+            await promise;
         }
     } else if (
         action.action === 'Give' ||
         action.action === 'Return' ||
         action.action === 'Reorder'
     ) {
-        if (promise === undefined) {
-            promise = (async () => {
-                await drag(action.cardIndex, action.spriteOffset);
-
-                promise = undefined;
-            })();
+        if (await Lib.isDone(promise)) {
+            promise = drag(action.cardIndex, action.spriteOffset);
         }
+
+        await promise;
     } else if (
         action.action === 'ControlShiftClick' ||
         action.action === 'ControlClick' ||
@@ -323,19 +321,17 @@ Sprite.onDragMove = (position, sprite) => {
         action.action === 'Click'
     ) {
         if (exceededDragThreshold) {
-            if (promise === undefined) {
-                promise = (async () => {
-                    // dragging a non-selected card selects it and only it
-                    if (!selectedIndices.has(action.cardIndex)) {
-                        selectedIndices.clear();
-                        selectedIndices.add(action.cardIndex);
-                    }
-        
-                    await drag(action.cardIndex, action.spriteOffset);
-
-                    promise = undefined;
-                })();
+            if (await Lib.isDone(promise)) {
+                // dragging a non-selected card selects it and only it
+                if (!selectedIndices.has(action.cardIndex)) {
+                    selectedIndices.clear();
+                    selectedIndices.add(action.cardIndex);
+                }
+    
+                promise = drag(action.cardIndex, action.spriteOffset);
             }
+
+            await promise;
         }
     } else {
         const _: never = action;
