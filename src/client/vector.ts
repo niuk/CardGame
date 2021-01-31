@@ -22,3 +22,10 @@ export function distance(u: IVector2, v: IVector2): number {
 export function scale(s: number, v: IVector2): IVector2 {
     return { x: s * v.x, y: s * v.y };
 }
+
+export function rotate(a: number, v: IVector2): IVector2 {
+    return {
+        x: Math.cos(a) * v.x - Math.sin(a) * v.y,
+        y: Math.sin(a) * v.x + Math.cos(a) * v.y
+    };
+}

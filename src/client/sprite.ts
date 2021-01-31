@@ -532,9 +532,13 @@ export default class Sprite {
         if (parent !== oldParent) console.log(this.position);
     }
 
-    animate(deltaTime: number): void {
+    public animate(deltaTime: number): void {
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
         this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);
+    }
+
+    public setAnchorAt(worldPosition: V.IVector2): void {
+        
     }
 }
