@@ -500,8 +500,8 @@ export default class Sprite {
         parent.addChild(this._sprite);
     }
 
-    public getOffsetInParentTransform(point: V.IVector2): V.IVector2 {
-        const offset = V.sub(this.position, this._sprite.parent.worldTransform.applyInverse(point));
+    public getOffsetInParentTransform(worldPosition: V.IVector2): V.IVector2 {
+        const offset = V.sub(this.position, this._sprite.parent.worldTransform.applyInverse(worldPosition));
         this._sprite.pivot.set(
             (offset.x - this.position.x) / Sprite.width,
             (offset.y - this.position.y) / Sprite.height
