@@ -23,9 +23,16 @@ export function scale(s: number, v: IVector2): IVector2 {
     return { x: s * v.x, y: s * v.y };
 }
 
-export function rotate(a: number, v: IVector2): IVector2 {
+export function rotateCounterclockwise(a: number, v: IVector2): IVector2 {
     return {
         x: Math.cos(a) * v.x - Math.sin(a) * v.y,
         y: Math.sin(a) * v.x + Math.cos(a) * v.y
+    };
+}
+
+export function rotateClockwise(a: number, v: IVector2): IVector2 {
+    return {
+        x: Math.sin(a) * v.y + Math.cos(a) * v.x,
+        y: Math.cos(a) * v.y - Math.sin(a) * v.x
     };
 }
