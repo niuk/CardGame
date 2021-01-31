@@ -60,7 +60,7 @@ export default class Player implements Lib.PlayerState {
         if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
         } else if (method.methodName === 'NewGame') {
-            this.game = new Game();
+            this.game = new Game(method.numPlayers, method.numDecks);
             this.game.players[0] = this;
             this.index = 0;
             
@@ -75,7 +75,7 @@ export default class Player implements Lib.PlayerState {
 
             // get unoccupied indices and indices of disconnected players
             const available = [];
-            for (let i = 0; i < 4; ++i) {
+            for (let i = 0; i < this.game.numPlayers; ++i) {
                 const player = this.game.players[i];
                 if (player === this) {
                     joined = true;
@@ -130,9 +130,9 @@ export default class Player implements Lib.PlayerState {
             if (!this.game) throw new Error('you are not in a game');
 
             if (method.methodName === 'TakeFromOtherPlayer') {
-                const otherPlayer = this.game.players[method.otherPlayerIndex];
-                if (otherPlayer === undefined) {
-                    throw new Error(`game ${this.game.gameId} has no player at index ${method.otherPlayerIndex}`);
+                const otherPlayer = this.game.players[method.playerIndex];
+                if (!otherPlayer) {
+                    throw new Error(`game ${this.game.gameId} has no player at index ${method.playerIndex}`);
                 }
 
                 if (method.cardIndex < 0 || otherPlayer.shareCount <= method.cardIndex) {
@@ -156,7 +156,7 @@ export default class Player implements Lib.PlayerState {
 
                 this.cardsWithOrigins.push([card, {
                     origin: 'Hand',
-                    playerIndex: method.otherPlayerIndex,
+                    playerIndex: method.playerIndex,
                     cardIndex: method.cardIndex
                 }]);
 
@@ -164,7 +164,7 @@ export default class Player implements Lib.PlayerState {
             } else if (method.methodName === 'DrawFromDeck') {
                 const deckIndex = this.game.deckCardsWithOrigins.length - 1;
                 const card = this.game.deckCardsWithOrigins.splice(deckIndex, 1)[0]?.[0];
-                if (card === undefined) {
+                if (!card) {
                     throw new Error(`deck has no cards (${this.game.deckCardsWithOrigins.length} remaining)`);
                 }
 
@@ -174,8 +174,8 @@ export default class Player implements Lib.PlayerState {
                     JSON.stringify(card)
                 }, cardsWithOrigins: ${JSON.stringify(this.cardsWithOrigins)}`);
             } else if (method.methodName === 'GiveToOtherPlayer') {
-                const otherPlayer = this.game.players[method.otherPlayerIndex]
-                if (!otherPlayer) throw new Error(`no player at index ${method.otherPlayerIndex}`);
+                const otherPlayer = this.game.players[method.playerIndex]
+                if (!otherPlayer) throw new Error(`no player at index ${method.playerIndex}`);
 
                 const disownedCardsWithOrigins = this.disownCardsWithOrigins(method.cardIndicesToGiveToOtherPlayer);
 
@@ -213,7 +213,7 @@ export default class Player implements Lib.PlayerState {
                     cardFlags[cardIndex] = true;
 
                     const newCard = this.cardsWithOrigins[cardIndex]?.[0];
-                    if (newCard == null || newCard === undefined) {
+                    if (!newCard) {
                         throw new Error(`no card at index ${cardIndex}`);
                     }
 
@@ -253,7 +253,7 @@ export default class Player implements Lib.PlayerState {
 
         let cardIndex = 0;
         for (const [card, origin] of this.cardsWithOrigins) {
-            if (card === null) throw new Error();
+            if (!card) throw new Error();
 
             const newOrigin: Lib.Origin = {
                 origin: 'Hand',

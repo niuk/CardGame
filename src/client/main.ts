@@ -55,6 +55,8 @@ window.onload = async () => {
     const formElement = <HTMLDivElement>document.getElementById('form');
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
+    const numPlayersSelection = <HTMLSelectElement>document.getElementById('numPlayers');
+    const numDecksSelection = <HTMLSelectElement>document.getElementById('numDecks');
     joinGameButton.onclick = async e => {
         playerNameElement.disabled = true;
         gameIdElement.disabled = true;
@@ -71,8 +73,6 @@ window.onload = async () => {
             }
 
             document.body.removeChild(formElement);
-        
-            await Sprite.load(Client.gameState);
         } finally {
             playerNameElement.disabled = false;
             gameIdElement.disabled = false;
@@ -90,15 +90,16 @@ window.onload = async () => {
             Lib.setCookie('playerName', playerNameElement.value);
 
             await Client.setPlayerName(playerNameElement.value);
-            await Client.newGame();
+            await Client.newGame(
+                JSON.parse(numPlayersSelection.value),
+                JSON.parse(numDecksSelection.value)
+            );
 
             while (!Client.gameState) {
                 await Lib.delay(100);
             }
 
             document.body.removeChild(formElement);
-
-            await Sprite.load(Client.gameState);
         } finally {
             playerNameElement.disabled = false;
             gameIdElement.disabled = false;
@@ -110,7 +111,7 @@ window.onload = async () => {
     Sprite.onTick = deltaTime => {
         renderDeck(deltaTime);
         renderPlayer(deltaTime);
-        renderOtherPlayer(deltaTime);
+        renderOtherPlayers(deltaTime);
     };
 
     const spriteLoad = Sprite.load(undefined);
@@ -212,16 +213,15 @@ function renderPlayer(deltaTime: number) {
     const gameState = Client.gameState;
     if (!gameState) return;
 
-    const container = Sprite.playerContainers[gameState.playerIndex];
-    if (!container) throw new Error();
-
     const playerState = gameState.playerStates[gameState.playerIndex];
-    if (!playerState) throw new Error();
+    const container = Sprite.playerContainers[gameState.playerIndex];
+    const width = Sprite.playerWidths[gameState.playerIndex];
+    const sprites = Sprite.playerFaceSprites[gameState.playerIndex];
+    if (!playerState || !container || width === undefined || !sprites) throw new Error();
 
-    const sprites = Sprite.faceSpritesForPlayer[gameState.playerIndex];
-    if (!sprites) throw new Error();
+    const goldenX = (1 - 1 / goldenRatio) * width;
 
-    const goldenX = (1 - 1 / goldenRatio) * Sprite.app.view.width;
+    const mouseMovePositionInContainer = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
 
     let cardIndex = 0;
     const dragSprites: Sprite[] = [];
@@ -236,7 +236,7 @@ function renderPlayer(deltaTime: number) {
                     previousDragSprite.target = V.sub(previousDragSprite.target, { x: Sprite.gap, y: 0 });
                 }
 
-                sprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
+                sprite.target = V.add(mouseMovePositionInContainer, Input.action.spriteOffset);
                 dragSprites.push(sprite);
             } else {
                 const lastDragSprite = dragSprites[dragSprites.length - 1];
@@ -254,11 +254,11 @@ function renderPlayer(deltaTime: number) {
             Input.selectedIndices.has(Input.action.cardIndex) && Input.selectedIndices.has(cardIndex)
         )) {
             if (Input.action.cardIndex === cardIndex) {
-                sprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
+                sprite.target = V.add(mouseMovePositionInContainer, Input.action.spriteOffset);
             } else {
                 const offset = Input.action.selectedSpriteOffsets[cardIndex];
                 if (!offset) throw new Error();
-                sprite.target = V.add(Input.mouseMovePosition, offset);
+                sprite.target = V.add(mouseMovePositionInContainer, offset);
             }
         } else {
             if (cardIndex < playerState.shareCount) {
@@ -299,7 +299,7 @@ function renderPlayer(deltaTime: number) {
         sprite.animate(deltaTime);
     }
 
-    addAllLines(playerLines, goldenX, container, true);
+    addAllLines(playerLines, goldenX, container, width, true);
 
     let shareCount = playerState.shareCount;
     let revealCount = playerState.revealCount;
@@ -368,25 +368,23 @@ function renderPlayer(deltaTime: number) {
 const otherPlayerLines: (PIXI.Graphics | undefined)[][] = [];
 const otherPlayerLabels: (PIXI.BitmapText | undefined)[][] = [];
 
-function renderOtherPlayer(deltaTime: number) {
+function renderOtherPlayers(deltaTime: number) {
     const gameState = Client.gameState;
-    if (gameState === undefined) return;
+    if (!gameState) return;
 
-    for (let i = 1; i < 4; ++i) {
-        const playerIndex = (gameState.playerIndex + i) % 4;
+    for (let i = 1; i < gameState.playerStates.length; ++i) {
+        const playerIndex = (gameState.playerIndex + i) % gameState.playerStates.length;
 
         const playerState = gameState.playerStates[playerIndex];
         if (!playerState) continue;
 
         const container = Sprite.playerContainers[playerIndex];
-        if (!container) throw new Error();
+        const width = Sprite.playerWidths[playerIndex];
+        const faceSprites = Sprite.playerFaceSprites[playerIndex];
+        if (!container || width === undefined || !faceSprites) throw new Error();
 
-        const goldenX = container.transform.rotation === 0 ? Sprite.app.view.width / goldenRatio :
-            (Sprite.app.view.width - Sprite.app.view.height) / 2 + Sprite.app.view.height / goldenRatio;
+        const goldenX = width / goldenRatio;
         const centerY = Sprite.height + Sprite.gap;
-
-        const faceSprites = Sprite.faceSpritesForPlayer[playerIndex];
-        if (!faceSprites) throw new Error();
 
         let j = 0;
         for (const faceSprite of faceSprites) {
@@ -408,7 +406,7 @@ function renderOtherPlayer(deltaTime: number) {
             ++j;
         }
 
-        const backSprites = Sprite.backSpritesForPlayer[playerIndex];
+        const backSprites = Sprite.playerBackSprites[playerIndex];
         if (!backSprites) throw new Error();
 
         j = 0;
@@ -438,7 +436,7 @@ function renderOtherPlayer(deltaTime: number) {
             otherPlayerLines[playerIndex] = lines;
         }
 
-        addAllLines(lines, goldenX, container, false);
+        addAllLines(lines, goldenX, container, width, false);
 
         let labels = otherPlayerLabels[playerIndex];
         if (!labels) {
@@ -484,12 +482,11 @@ function addAllLines(
     lines: (PIXI.Graphics | undefined)[],
     goldenX: number,
     container: PIXI.Container,
+    width: number,
     playerIsYou: boolean
 ) {
-    const left = (container.transform.rotation === 0 ? 0 : Sprite.app.view.width / 2 - Sprite.app.view.height / 2) + Sprite.height + Sprite.gap;
-    const right = (container.transform.rotation === 0 ? Sprite.app.view.width : Sprite.app.view.width / 2 + Sprite.app.view.height / 2) - Sprite.height - Sprite.gap;
     const centerY = playerIsYou ? Sprite.app.view.height - Sprite.height - Sprite.gap : Sprite.height + Sprite.gap;
-    addLine(lines, container, 0, left, centerY, right, centerY);
+    addLine(lines, container, 0, 1.25 * Sprite.pixelsPerCM, centerY, width - 1.25 * Sprite.pixelsPerCM, centerY);
     const top = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
     const bottom = playerIsYou ? Sprite.app.view.height : 2 * (Sprite.height + Sprite.gap);
     addLine(lines, container, 1, goldenX, top, goldenX, bottom);

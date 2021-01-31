@@ -9,7 +9,7 @@ export default class Game {
 
     public static get(gameId: string): Game {
         const game = this.gamesById.get(gameId);
-        if (game === undefined) {
+        if (!game) {
             throw new Error(`there's no game with id ${gameId}`);
         }
 
@@ -22,45 +22,41 @@ export default class Game {
         return this._gameId;
     }
 
-    public players: Player[] = []
+    public numPlayers: 4 | 5 | 6;
+    public players: (Player | undefined)[] = []
     public deckCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
 
-    public constructor() {
+    public constructor(numPlayers: 4 | 5 | 6, numDecks: number) {
         do {
             this._gameId = nanoid();
         } while (Game.gamesById.has(this.gameId));
-
         Game.gamesById.set(this.gameId, this);
 
-        for (let i = 0; i < 4; ++i) {
-            for (let j = 0; j < 13; ++j) {
-                this.deckCardsWithOrigins.push([[i, j + 1], {
-                    origin: 'Deck',
-                    deckIndex: this.deckCardsWithOrigins.length
-                }]);
-                this.deckCardsWithOrigins.push([[i, j + 1], {
-                    origin: 'Deck',
-                    deckIndex: this.deckCardsWithOrigins.length
-                }]);
-            }
+        this.numPlayers = numPlayers;
+
+        for (let i = 0; i < numPlayers; ++i) {
+            this.players[i] = undefined;
         }
 
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
-            origin: 'Deck',
-            deckIndex: this.deckCardsWithOrigins.length
-        }]);
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
-            origin: 'Deck',
-            deckIndex: this.deckCardsWithOrigins.length
-        }]);
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
-            origin: 'Deck',
-            deckIndex: this.deckCardsWithOrigins.length
-        }]);
-        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
-            origin: 'Deck',
-            deckIndex: this.deckCardsWithOrigins.length
-        }]);
+        for (let i = 0; i < numDecks; ++i) {
+            for (let j = 0; j < 4; ++j) {
+                for (let k = 0; k < 13; ++k) {
+                    this.deckCardsWithOrigins.push([[j, k + 1], {
+                        origin: 'Deck',
+                        deckIndex: this.deckCardsWithOrigins.length
+                    }]);
+                }
+            }
+
+            this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
+                origin: 'Deck',
+                deckIndex: this.deckCardsWithOrigins.length
+            }]);
+            this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
+                origin: 'Deck',
+                deckIndex: this.deckCardsWithOrigins.length
+            }]);
+        }
 
         this.shuffleDeck();
     }
@@ -71,10 +67,10 @@ export default class Game {
             console.log(`${i} <-> ${j}`);
 
             const iCardWithOrigin = this.deckCardsWithOrigins[i];
-            if (iCardWithOrigin === undefined) throw new Error();
+            if (!iCardWithOrigin) throw new Error();
             
             const jCardWithOrigin = this.deckCardsWithOrigins[j];
-            if (jCardWithOrigin === undefined) throw new Error();
+            if (!jCardWithOrigin) throw new Error();
 
             this.deckCardsWithOrigins[i] = jCardWithOrigin;
             this.deckCardsWithOrigins[j] = iCardWithOrigin;
@@ -89,14 +85,16 @@ export default class Game {
         }
 
         for (const player of this.players) {
-            player.resetCardOrigins();
+            player?.resetCardOrigins();
         }
     }
     
     public getStateForPlayerAt(playerIndex: number): Lib.GameState {
         const playerStates: (Lib.PlayerState | null)[] = [];
         for (const player of this.players) {
-            if (player.index === playerIndex) {
+            if (!player) {
+                playerStates.push(null);
+            } else if (player.index === playerIndex) {
                 playerStates.push({
                     name: player.name,
                     shareCount: player.shareCount,
@@ -129,7 +127,7 @@ export default class Game {
 
     public broadcastStateExceptToPlayerAt(playerIndex: number): void {
         for (const player of this.players) {
-            if (player.index !== playerIndex) {
+            if (player !== undefined && player.index !== playerIndex) {
                 player.ws.send(JSON.stringify({
                     newGameState: this.getStateForPlayerAt(player.index),
                     methodResult: null

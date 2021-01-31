@@ -107,6 +107,8 @@ export interface SetPlayerName {
 
 export interface NewGame {
     methodName: 'NewGame';
+    numPlayers: 4 | 5 | 6;
+    numDecks: number;
 }
 
 export interface JoinGame {
@@ -116,13 +118,13 @@ export interface JoinGame {
 
 export interface TakeFromOtherPlayer {
     methodName: 'TakeFromOtherPlayer';
-    otherPlayerIndex: number;
+    playerIndex: number;
     cardIndex: number;
 }
 
 export interface GiveToOtherPlayer {
     methodName: 'GiveToOtherPlayer';
-    otherPlayerIndex: number;
+    playerIndex: number;
     cardIndicesToGiveToOtherPlayer: number[];
 }
 

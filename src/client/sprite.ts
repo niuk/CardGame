@@ -35,29 +35,16 @@ async function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
     currentLoadingTexture = '';
 }
 
-async function load(gameState: Lib.GameState | undefined): Promise<void> {
+async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     if (Sprite.app === undefined) {
         Sprite.app = new PIXI.Application(<PIXI.IApplicationOptions>{
             view: <HTMLCanvasElement>document.getElementById('canvas')
         });
+        Sprite.app.stage.sortableChildren = true;
 
         Sprite.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
         Sprite.deckContainer.zIndex = 1;
         Sprite.deckContainer.sortableChildren = true;
-
-        Sprite.playerContainers = [
-            Sprite.app.stage.addChild(new PIXI.Container()),
-            Sprite.app.stage.addChild(new PIXI.Container()),
-            Sprite.app.stage.addChild(new PIXI.Container()),
-            Sprite.app.stage.addChild(new PIXI.Container())
-        ];
-
-        for (const playerContainer of Sprite.playerContainers) {
-            playerContainer.zIndex = 2;
-            playerContainer.sortableChildren = true;
-        }
-
-        Sprite.app.stage.sortableChildren = true;
     }
 
     if (loadedTextureCount < totalTextureCount) {
@@ -136,37 +123,6 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
         background.on('pointerdown', (event: PIXI.InteractionEvent) => Sprite.onDragStart(event.data.global, dummySprite), { passive: true });
         background.on('pointerup', (event: PIXI.InteractionEvent) => Sprite.onDragEnd(event.data.global, dummySprite), { passive: true });
 
-        // an attempt to enable pinch and zoom
-        /*
-        const forward = (event: PIXI.InteractionEvent) => {
-            if ('changedTouches' in event.data.originalEvent) {
-                const getTouches = (touchList: TouchList) => {
-                    const touches: Touch[] = [];
-                    for (let i = 0; i < touchList.length; ++i) {
-                        const touch = touchList.item(i);
-                        if (touch !== null) {
-                            touches[i] = touch;
-                        }
-                    }
-
-                    return touches;
-                }
-
-                const copiedEvent = new TouchEvent(event.data.originalEvent.type, {
-                    changedTouches: getTouches(event.data.originalEvent.changedTouches),
-                    targetTouches: getTouches(event.data.originalEvent.targetTouches),
-                    touches: getTouches(event.data.originalEvent.touches)
-                });
-                document.body.dispatchEvent(copiedEvent);
-                console.log('forwarded touch event to document body', event.data.originalEvent, copiedEvent);
-            }
-        };
-        background.on('touchstart', forward);
-        background.on('touchmove', forward);
-        background.on('touchend', forward);
-        background.on('touchcancel', forward);
-        */
-
         console.log('background set');
     }
 
@@ -194,18 +150,76 @@ async function load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 
     if (gameState) {
-        const playerContainer = Sprite.playerContainers[gameState.playerIndex];
-        if (!playerContainer) throw new Error();
-        playerContainer.zIndex = 3;
+        const playerHeight = 2 * (Sprite.height + Sprite.gap);
 
-        const leftPlayerContainer = <PIXI.Container>Sprite.playerContainers[(gameState.playerIndex + 1) % 4];
-        leftPlayerContainer.position.y = (Sprite.app.view.width + Sprite.app.view.height) / 2;
+        const leftPlayerIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
+        let leftPlayerContainer = Sprite.playerContainers[leftPlayerIndex];
+        if (!leftPlayerContainer) {
+            leftPlayerContainer = new PIXI.Container();
+            leftPlayerContainer.zIndex = 2;
+            leftPlayerContainer.sortableChildren = true;
+            Sprite.playerContainers[leftPlayerIndex] = leftPlayerContainer;
+            Sprite.app.stage.addChild(leftPlayerContainer);
+        }
+
+        leftPlayerContainer.position.set(0, Sprite.app.view.height);
         leftPlayerContainer.rotation = -Math.PI / 2;
-    
-        const rightPlayerContainer = <PIXI.Container>Sprite.playerContainers[(gameState.playerIndex + 3) % 4];
-        rightPlayerContainer.position.x = Sprite.app.view.width;
-        rightPlayerContainer.position.y = (Sprite.app.view.height - Sprite.app.view.width) / 2;
+        Sprite.playerWidths[leftPlayerIndex] = Sprite.app.view.height;
+        if (gameState.playerStates.length > 4) {
+            Sprite.playerWidths[leftPlayerIndex] -= playerHeight;
+        }
+
+        const rightPlayerIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
+        let rightPlayerContainer = Sprite.playerContainers[rightPlayerIndex];
+        if (!rightPlayerContainer) {
+            rightPlayerContainer = new PIXI.Container();
+            rightPlayerContainer.zIndex = 2;
+            rightPlayerContainer.sortableChildren = true;
+            Sprite.playerContainers[rightPlayerIndex] = rightPlayerContainer;
+            Sprite.app.stage.addChild(rightPlayerContainer);
+        }
+
         rightPlayerContainer.rotation = Math.PI / 2;
+        rightPlayerContainer.position.set(Sprite.app.view.width, 0);
+        Sprite.playerWidths[rightPlayerIndex] = Sprite.app.view.height;
+
+        if (gameState.playerStates.length > 4) {
+            rightPlayerContainer.position.y += playerHeight
+            Sprite.playerWidths[rightPlayerIndex] -= playerHeight;
+        }
+
+        for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
+            const playerIndex = (leftPlayerIndex + i + 1) % gameState.playerStates.length;
+            let playerContainer = Sprite.playerContainers[playerIndex];
+            if (!playerContainer) {
+                playerContainer = new PIXI.Container();
+                playerContainer.zIndex = 2;
+                playerContainer.sortableChildren = true;
+                Sprite.playerContainers[playerIndex] = playerContainer;
+                Sprite.app.stage.addChild(playerContainer);
+            }
+
+            if (gameState.playerStates.length > 4) {
+                const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
+                playerContainer.position.set(i * width, 0);
+                Sprite.playerWidths[playerIndex] = width;
+            } else {
+                playerContainer.position.set(playerHeight, 0);
+                Sprite.playerWidths[playerIndex] = Sprite.app.view.width - 2 * playerHeight;
+            }
+        }
+
+        let playerContainer = Sprite.playerContainers[gameState.playerIndex];
+        if (!playerContainer) {
+            playerContainer = new PIXI.Container();
+            playerContainer.zIndex = 3;
+            playerContainer.sortableChildren = true;
+            Sprite.playerContainers[gameState.playerIndex] = playerContainer;
+            Sprite.app.stage.addChild(playerContainer);
+        }
+
+        Sprite.playerWidths[gameState.playerIndex] = Sprite.app.view.width - 2 * playerHeight;
+        playerContainer.position.set(playerHeight, 0);
     }
 
     if (cachedOnTick !== Sprite.onTick) {
@@ -240,31 +254,33 @@ export default class Sprite {
     public static height = 0;
 
     public static deckContainer: PIXI.Container;
-    public static playerContainers: PIXI.Container[];
+    public static playerContainers: PIXI.Container[] = [];
+    public static playerWidths: number[] = [];
 
     // for animating the deck
     public static deckSprites: Sprite[] = [];
     // associative arrays, one for each player at their player index
     // each element corresponds to a back card by index
-    public static backSpritesForPlayer: Sprite[][] = [];
+    public static playerBackSprites: Sprite[][] = [];
     // each element corresponds to a face card by index
-    public static faceSpritesForPlayer: Sprite[][] = [];
+    public static playerFaceSprites: Sprite[][] = [];
 
     public static get currentLoadingTexture(): string {
         return currentLoadingTexture;
     }
 
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
-        if (await Lib.isDone(promise)) {
-            promise = load(gameState);
-        }
-
+        const previousPromise = promise;
+        promise = (async () => {
+            await previousPromise;
+            await _load(gameState);
+        })();
         await promise;
     }
 
     public static getTexture(textureName: string): PIXI.Texture {
         const image = textures.get(textureName);
-        if (image === undefined) {
+        if (!image) {
             throw new Error(`couldn't get sprite '${textureName}'`);
         }
 
@@ -294,15 +310,17 @@ export default class Sprite {
         Lib.setCookie('backgroundIndex', JSON.stringify(backgroundIndex));
     }
 
-    public static linkWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState): void {
+    public static async linkWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState): Promise<void> {
+        await this.load(gameState);
+
         const previousDeckSprites = this.deckSprites;
         this.deckSprites = [];
     
-        const previousBackSpritesForPlayer = this.backSpritesForPlayer;
-        this.backSpritesForPlayer = [];
+        const previousPlayerBackSprites = this.playerBackSprites;
+        this.playerBackSprites = [];
     
-        const previousFaceSpritesForPlayer = this.faceSpritesForPlayer;
-        this.faceSpritesForPlayer = [];
+        const previousPlayerFaceSprites = this.playerFaceSprites;
+        this.playerFaceSprites = [];
     
         const getSpriteWithOrigin = (origin: Lib.Origin) => {
             let sprite: Sprite | undefined;
@@ -310,14 +328,14 @@ export default class Sprite {
                 sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
             } else if (origin.origin === 'Hand') {
                 if (origin.playerIndex === gameState.playerIndex) {
-                    sprite = previousFaceSpritesForPlayer[gameState.playerIndex]?.[origin.cardIndex];
+                    sprite = previousPlayerFaceSprites[gameState.playerIndex]?.[origin.cardIndex];
                 } else {
                     const originPlayer = previousGameState?.playerStates[origin.playerIndex];
                     if (originPlayer) {
                         if (origin.cardIndex < originPlayer.revealCount) {
-                            sprite = previousFaceSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex];
+                            sprite = previousPlayerFaceSprites[origin.playerIndex]?.[origin.cardIndex];
                         } else {
-                            sprite = previousBackSpritesForPlayer[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
+                            sprite = previousPlayerBackSprites[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
                         }
                     }
                 }
@@ -328,22 +346,26 @@ export default class Sprite {
             return sprite;
         };
     
-        for (let playerIndex = 0; playerIndex < 4; ++playerIndex) {
+        for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
             const playerState = gameState.playerStates[playerIndex];
             if (!playerState) continue;
     
-            const faceSprites = this.faceSpritesForPlayer[playerIndex] ?? [];
-            this.faceSpritesForPlayer[playerIndex] = faceSprites;
-            const previousFaceSprites = previousFaceSpritesForPlayer[playerIndex] ?? [];
-            previousFaceSpritesForPlayer[playerIndex] = previousFaceSprites;
+            const faceSprites = this.playerFaceSprites[playerIndex] ?? [];
+            this.playerFaceSprites[playerIndex] = faceSprites;
+            const previousFaceSprites = previousPlayerFaceSprites[playerIndex] ?? [];
+            previousPlayerFaceSprites[playerIndex] = previousFaceSprites;
     
-            const backSprites = this.backSpritesForPlayer[playerIndex] ?? [];
-            this.backSpritesForPlayer[playerIndex] = backSprites;
-            const previousBackSprites = previousBackSpritesForPlayer[playerIndex] ?? [];
-            previousBackSpritesForPlayer[playerIndex] = previousBackSprites;
+            const backSprites = this.playerBackSprites[playerIndex] ?? [];
+            this.playerBackSprites[playerIndex] = backSprites;
+            const previousBackSprites = previousPlayerBackSprites[playerIndex] ?? [];
+            previousPlayerBackSprites[playerIndex] = previousBackSprites;
     
-            const container = Sprite.playerContainers[playerIndex];
-            if (!container) throw new Error();
+            let container = Sprite.playerContainers[playerIndex];
+            if (!container) {
+                container = new PIXI.Container();
+                Sprite.playerContainers[playerIndex] = container;
+            }
+
             const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);
             
             for (const [card, origin] of playerState.cardsWithOrigins) {
@@ -479,7 +501,7 @@ export default class Sprite {
     }
 
     public getOffsetInParentTransform(point: V.IVector2): V.IVector2 {
-        const offset = V.sub(this.position, this._sprite.parent.localTransform.applyInverse(point));
+        const offset = V.sub(this.position, this._sprite.parent.worldTransform.applyInverse(point));
         this._sprite.pivot.set(
             (offset.x - this.position.x) / Sprite.width,
             (offset.y - this.position.y) / Sprite.height
@@ -489,20 +511,25 @@ export default class Sprite {
 
     public transfer(parent: PIXI.Container, texture: PIXI.Texture): void {
         const oldParent = this._sprite.parent;
+        if (parent !== oldParent) console.log(oldParent.position);
+        if (parent !== oldParent) console.log(parent.position);
 
         // save this sprite's world transform position and rotation
-        const target = oldParent.localTransform.apply(this.target);
-        const position = oldParent.localTransform.apply(this.position);
+        const target = oldParent.worldTransform.apply(this.target);
+        const position = oldParent.worldTransform.apply(this.position);
         const rotation = oldParent.rotation;
+        if (parent !== oldParent) console.log(this.position);
 
+        oldParent.removeChild(this._sprite);
         parent.addChild(this._sprite);
         this._sprite.texture = texture;
         this._sprite.tint = 0xffffff;
 
         // reapply saved world transform position and rotation
-        this.target = parent.transform.localTransform.applyInverse(target);
-        this.position = parent.transform.localTransform.applyInverse(position);
+        this.target = parent.transform.worldTransform.applyInverse(target);
+        this.position = parent.transform.worldTransform.applyInverse(position);
         this.rotation = rotation - parent.transform.rotation;
+        if (parent !== oldParent) console.log(this.position);
     }
 
     animate(deltaTime: number): void {

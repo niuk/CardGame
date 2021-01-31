@@ -29,20 +29,18 @@ webSocket.onmessage = async e => {
 
         Lib.setCookie('gameId', gameState.gameId);
 
-        await Sprite.load(gameState);
-
         Input.linkWithCards(gameState);
-        Sprite.linkWithCards(previousGameState, gameState);
+        await Sprite.linkWithCards(previousGameState, gameState);
     }
 
     if (methodResult) {
         const callbacks = callbacksForMethodType.get(methodResult.methodName);
-        if (callbacks === undefined || callbacks.length === 0) {
+        if (!callbacks || callbacks.length === 0) {
             throw new Error(`no callbacks found for method: ${methodResult.methodName}`);
         }
 
         const callback = callbacks.shift();
-        if (callback === undefined) {
+        if (!callback) {
             throw new Error(`callback is undefined for method: ${methodResult.methodName}`);
         }
 
@@ -55,7 +53,7 @@ webSocket.onmessage = async e => {
         await Lib.delay(10);
 
         const statusElement = <HTMLDivElement | null>document.getElementById('status');
-        if (statusElement === null) continue;
+        if (!statusElement) continue;
         
         if (webSocket.readyState === WebSocket.CLOSED) {
             statusElement.innerHTML = 'WebSocket closed.';
@@ -80,7 +78,7 @@ function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (r
     console.log(`adding callback for method '${methodName}'`);
 
     let callbacks = callbacksForMethodType.get(methodName);
-    if (callbacks === undefined) {
+    if (!callbacks) {
         callbacks = [];
         callbacksForMethodType.set(methodName, callbacks);
     }
@@ -116,21 +114,23 @@ export function joinGame(gameId: string): Promise<void> {
     });
 }
 
-export function newGame(): Promise<void> {
+export function newGame(numPlayers: number, numDecks: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('NewGame', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.NewGame>{
-            methodName: 'NewGame'
+            methodName: 'NewGame',
+            numPlayers,
+            numDecks
         }));
     });
 }
 
-export function takeFromOtherPlayer(otherPlayerIndex: number, cardIndex: number): Promise<void> {
+export function takeFromOtherPlayer(playerIndex: number, cardIndex: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('TakeFromOtherPlayer', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.TakeFromOtherPlayer>{
             methodName: 'TakeFromOtherPlayer',
-            otherPlayerIndex,
+            playerIndex,
             cardIndex
         }));
     });
@@ -145,12 +145,12 @@ export function drawFromDeck(): Promise<void> {
     });
 }
 
-export function giveToOtherPlayer(otherPlayerIndex: number): Promise<void> {
+export function giveToOtherPlayer(playerIndex: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('GiveToOtherPlayer', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.GiveToOtherPlayer>{
             methodName: 'GiveToOtherPlayer',
-            otherPlayerIndex,
+            playerIndex,
             cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice()
         }));
     })
@@ -226,7 +226,7 @@ function sortCards(gameState: Lib.GameState, compareFn: (a: [Lib.Card, number], 
     const newRevealCount = player.revealCount;
     const newGroupCount = player.groupCount;
     const newCardsWithIndices: [Lib.Card, number][] = player.cardsWithOrigins.map(([card, origin], index) => {
-        if (card === null) throw new Error();
+        if (!card) throw new Error();
         return [card, index];
     });
 
