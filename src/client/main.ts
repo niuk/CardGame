@@ -62,6 +62,8 @@ window.onload = async () => {
         gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
+        numPlayersSelection.disabled = true;
+        numDecksSelection.disabled = true;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -78,6 +80,8 @@ window.onload = async () => {
             gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
+            numPlayersSelection.disabled = false;
+            numDecksSelection.disabled = false;
         }
     };
 
@@ -86,6 +90,8 @@ window.onload = async () => {
         gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
+        numPlayersSelection.disabled = true;
+        numDecksSelection.disabled = true;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -105,6 +111,8 @@ window.onload = async () => {
             gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
+            numPlayersSelection.disabled = false;
+            numDecksSelection.disabled = false;
         }
     };
 
@@ -390,11 +398,20 @@ function renderOtherPlayers(deltaTime: number) {
         let j = 0;
         for (const faceSprite of faceSprites) {
             if (j < playerState.shareCount) {
-                faceSprite.target = {
-                    x: goldenX + (playerState.shareCount - j) * Sprite.gap,
-                    y: centerY + Sprite.gap
-                };
+                if (Input.action.action === 'Take' &&
+                    Input.action.playerIndex === playerIndex &&
+                    Input.action.cardIndex === j
+                ) {
+                    faceSprite.target = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
+                } else {
+                    faceSprite.resetAnchor();
+                    faceSprite.target = {
+                        x: goldenX + (playerState.shareCount - j) * Sprite.gap,
+                        y: centerY + Sprite.gap
+                    };
+                }
             } else {
+                faceSprite.resetAnchor();
                 faceSprite.target = {
                     x: goldenX - Sprite.width - (1 + j - playerState.shareCount) * Sprite.gap,
                     y: centerY + Sprite.gap

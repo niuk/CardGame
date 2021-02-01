@@ -576,10 +576,10 @@ async function drag(): Promise<void> {
 
     const dragMinInContainer = container.transform.worldTransform.applyInverse(dragMin);
     const dragMaxInContainer = container.transform.worldTransform.applyInverse(dragMax);
-    const rightMovingCardTarget = container.transform.worldTransform.applyInverse(V.add(
+    const rightMovingCardTarget = V.add(
         container.transform.worldTransform.apply(rightMovingSprite.target),
         V.sub(rightMovingSprite.getTopLeftInWorld(), container.transform.worldTransform.apply(rightMovingSprite.position))
-    ));
+    );
 
     // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
     const goldenX = (1 - 1 / goldenRatio) * width;
@@ -648,24 +648,7 @@ async function drag(): Promise<void> {
             }
         }
     }
-    /*
-    dot.clear();
-    dot.beginFill(0xff0000, 0xff);
-    dot.drawCircle(dragMinInContainer.x, dragMinInContainer.y, 10);
-    dot.endFill();
-    dot.beginFill(0x00ff00, 0xff);
-    dot.drawCircle(dragMaxInContainer.x, dragMaxInContainer.y, 10);
-    dot.endFill();
-    dot.beginFill(0x0000ff, 0xff);
-    dot.drawCircle(rightMovingCardTarget.x, rightMovingCardTarget.y, 10);
-    dot.endFill();
-    dot.zIndex = 200;
-    container.addChild(dot);
-    text.text = `splitIndex = ${splitIndex ?? '?'}, start = ${start}, end = ${end}`;
-    text.position.set(0, 0);
-    text.zIndex = 200;
-    container.addChild(text);
-    */
+
     if (splitIndex === undefined) {
         // no overlapped sprites, so the index is the first reserved sprite to the right of the moving sprites
         for (splitIndex = start; splitIndex < end; ++splitIndex) {
