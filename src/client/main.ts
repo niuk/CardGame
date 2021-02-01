@@ -171,12 +171,14 @@ function renderDeck(deltaTime: number) {
         if (i === Sprite.deckSprites.length - 1 &&
             Input.action.action === 'Draw'
         ) {
-            deckSprite.target = V.add(Input.mouseMovePosition, Input.action.spriteOffset);
+            deckSprite.target = Input.mouseMovePosition;
+            deckSprite.rotation += 0.1 * deltaTime;
         } else if (performance.now() - deckDealTime < i * deckDealDuration / Sprite.deckSprites.length) {
             // card not yet dealt; keep top left
             deckSprite.position = { x: -Sprite.width, y: -Sprite.height };
             deckSprite.target = { x: -Sprite.width, y: -Sprite.height };
         } else {
+            deckSprite.resetAnchor();
             deckSprite.target = {
                 x: Sprite.app.view.width / 2 - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
                 y: Sprite.app.view.height / 2 - Sprite.height / 2
@@ -224,26 +226,30 @@ function renderPlayer(deltaTime: number) {
     const mouseMovePositionInContainer = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
 
     let cardIndex = 0;
-    const dragSprites: Sprite[] = [];
     for (const sprite of sprites) {
-        if (Input.selectedIndices.has(cardIndex) && (
+        if ((
             Input.action.action === 'Give' ||
             Input.action.action === 'Return' ||
             Input.action.action === 'Reorder'
-        )) {
-            if (cardIndex <= Input.action.cardIndex) {
-                for (const previousDragSprite of dragSprites) {
-                    previousDragSprite.target = V.sub(previousDragSprite.target, { x: Sprite.gap, y: 0 });
-                }
+        ) && Input.selectedIndices.has(cardIndex)) {
+            const i = Input.selectedIndices.indexOf(cardIndex);
+            const j = Input.selectedIndices.indexOf(Input.action.cardIndex);
 
-                sprite.target = V.add(mouseMovePositionInContainer, Input.action.spriteOffset);
-                dragSprites.push(sprite);
-            } else {
-                const lastDragSprite = dragSprites[dragSprites.length - 1];
-                if (!lastDragSprite) throw new Error();
-                sprite.target = V.add(lastDragSprite.target, { x: Sprite.gap, y: 0 });
-                dragSprites.push(sprite);
-            }
+            const mainSprite = sprites[Input.action.cardIndex];
+            if (!mainSprite) throw new Error();
+
+            sprite.setAnchorAt(V.add(V.add(
+                sprite.getTopLeftInWorld(),
+                V.sub(
+                    container.transform.worldTransform.apply(mainSprite.position),
+                    mainSprite.getTopLeftInWorld()
+                )), {
+                    x: (j - i) * Sprite.gap,
+                    y: 0
+                })
+            );
+
+            sprite.target = mouseMovePositionInContainer;
         } else if ((
             Input.action.action === 'ControlShiftClick' ||
             Input.action.action === 'ControlClick' ||
@@ -253,14 +259,9 @@ function renderPlayer(deltaTime: number) {
             Input.action.cardIndex === cardIndex ||
             Input.selectedIndices.has(Input.action.cardIndex) && Input.selectedIndices.has(cardIndex)
         )) {
-            if (Input.action.cardIndex === cardIndex) {
-                sprite.target = V.add(mouseMovePositionInContainer, Input.action.spriteOffset);
-            } else {
-                const offset = Input.action.selectedSpriteOffsets[cardIndex];
-                if (!offset) throw new Error();
-                sprite.target = V.add(mouseMovePositionInContainer, offset);
-            }
+            sprite.target = mouseMovePositionInContainer;
         } else {
+            sprite.resetAnchor();
             if (cardIndex < playerState.shareCount) {
                 sprite.target = {
                     x: goldenX - Sprite.width + (cardIndex - playerState.shareCount) * Sprite.gap,

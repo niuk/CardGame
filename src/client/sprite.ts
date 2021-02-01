@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js-legacy';
 import * as Lib from '../lib';
+import { drawFromDeck } from './client';
 import * as V from './vector';
 
 const decayPerSecond = 1 / 5;
@@ -500,24 +501,15 @@ export default class Sprite {
         parent.addChild(this._sprite);
     }
 
-    public getOffsetInParentTransform(worldPosition: V.IVector2): V.IVector2 {
-        const offset = V.sub(this.position, this._sprite.parent.worldTransform.applyInverse(worldPosition));
-        this._sprite.pivot.set(
-            (offset.x - this.position.x) / Sprite.width,
-            (offset.y - this.position.y) / Sprite.height
-        );
-        return offset;
-    }
-
     public transfer(parent: PIXI.Container, texture: PIXI.Texture): void {
         const oldParent = this._sprite.parent;
         if (parent !== oldParent) console.log(oldParent.position);
         if (parent !== oldParent) console.log(parent.position);
 
         // save this sprite's world transform position and rotation
-        const target = oldParent.worldTransform.apply(this.target);
-        const position = oldParent.worldTransform.apply(this.position);
-        const rotation = oldParent.rotation;
+        const targetInWorld = oldParent.worldTransform.apply(this.target);
+        const positionInWorld = oldParent.worldTransform.apply(this.position);
+        const rotationInWorld = this.rotation + oldParent.rotation;
         if (parent !== oldParent) console.log(this.position);
 
         oldParent.removeChild(this._sprite);
@@ -526,19 +518,56 @@ export default class Sprite {
         this._sprite.tint = 0xffffff;
 
         // reapply saved world transform position and rotation
-        this.target = parent.transform.worldTransform.applyInverse(target);
-        this.position = parent.transform.worldTransform.applyInverse(position);
-        this.rotation = rotation - parent.transform.rotation;
+        this.target = parent.transform.worldTransform.applyInverse(targetInWorld);
+        this.position = parent.transform.worldTransform.applyInverse(positionInWorld);
+        this.rotation = rotationInWorld - parent.transform.rotation;
         if (parent !== oldParent) console.log(this.position);
     }
 
+    /*drawWorldDot(dot: PIXI.Graphics, position: V.IVector2, color: number): void {
+        dot.zIndex = 200;
+        dot.clear();
+        dot.beginFill(color, 0xff);
+        dot.drawCircle(position.x, position.y, 10);
+        dot.endFill();
+        Sprite.app.stage.addChild(dot);
+    }*/
+
+    //targetDot = new PIXI.Graphics();
+    //positionDot = new PIXI.Graphics();
     public animate(deltaTime: number): void {
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
         this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);
+        
+        //const worldTarget = this._sprite.parent.transform.worldTransform.apply(this.target);
+        //this.drawWorldDot(this.targetDot, worldTarget, 0x00ff00);
+        //const worldPosition = this._sprite.parent.transform.worldTransform.apply(this.position);
+        //this.drawWorldDot(this.positionDot, worldPosition, 0x0000ff);
     }
 
+    //anchorDot = new PIXI.Graphics();
     public setAnchorAt(worldPosition: V.IVector2): void {
-        
+        const localPosition = this._sprite.transform.worldTransform.applyInverse(worldPosition);
+        this._sprite.anchor.set(
+            this._sprite.anchor.x + localPosition.x / this._sprite.texture.width,
+            this._sprite.anchor.y + localPosition.y / this._sprite.texture.height
+        );
+
+        this.position = this._sprite.parent.worldTransform.applyInverse(worldPosition);
+
+        //console.log('setAnchorAt', worldPosition, 'localPosition', localPosition, 'anchor', this._sprite.anchor);
+        //this.drawWorldDot(this.anchorDot, worldPosition, 0xff0000);
+    }
+
+    public resetAnchor(): void {
+        this.setAnchorAt(this.getTopLeftInWorld());
+    }
+
+    public getTopLeftInWorld(): V.IVector2 {
+        return this._sprite.transform.worldTransform.apply({
+            x: -this._sprite.anchor.x * this._sprite.texture.width,
+            y: -this._sprite.anchor.y * this._sprite.texture.height
+        });
     }
 }

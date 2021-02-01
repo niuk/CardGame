@@ -5,6 +5,8 @@ import * as Client from './client';
 import * as V from './vector';
 import Sprite from './sprite';
 
+import * as PIXI from 'pixi.js-legacy';
+
 interface None {
     action: 'None';
 }
@@ -23,12 +25,10 @@ interface Deselect {
 
 interface Draw {
     action: 'Draw';
-    spriteOffset: V.IVector2;
 }
 
 interface Take {
     action: 'Take';
-    spriteOffset: V.IVector2;
     playerIndex: number;
     cardIndex: number;
 }
@@ -37,47 +37,36 @@ interface Give {
     action: 'Give';
     playerIndex: number;
     cardIndex: number;
-    spriteOffset: V.IVector2;
 }
 
 interface Return {
     action: 'Return';
     cardIndex: number;
-    spriteOffset: V.IVector2;
 }
 
 interface Reorder {
     action: 'Reorder';
     cardIndex: number;
-    spriteOffset: V.IVector2;
 }
 
 interface ControlShiftClick {
     action: 'ControlShiftClick';
     cardIndex: number;
-    spriteOffset: V.IVector2;
-    selectedSpriteOffsets: V.IVector2[];
 }
 
 interface ControlClick {
     action: 'ControlClick';
     cardIndex: number;
-    spriteOffset: V.IVector2;
-    selectedSpriteOffsets: V.IVector2[];
 }
 
 interface ShiftClick {
     action: 'ShiftClick';
     cardIndex: number;
-    spriteOffset: V.IVector2;
-    selectedSpriteOffsets: V.IVector2[];
 }
 
 interface Click {
     action: 'Click';
     cardIndex: number;
-    spriteOffset: V.IVector2;
-    selectedSpriteOffsets: V.IVector2[];
 }
 
 export type Action =
@@ -203,12 +192,9 @@ Sprite.onDragStart = (position, sprite) => {
     if (!mySprites) throw new Error();
 
     if (Sprite.deckSprites[Sprite.deckSprites.length - 1] === sprite) {
-        action = {
-            action: 'Draw',
-            spriteOffset: sprite.getOffsetInParentTransform(position)
-        };
+        sprite.setAnchorAt(position);
+        action = { action: 'Draw' };
         drewFromDeck = true;
-        console.log(sprite.getOffsetInParentTransform(position));
     } else {
         action = { action: 'Deselect' };
 
@@ -219,22 +205,23 @@ Sprite.onDragStart = (position, sprite) => {
             const cardIndex = sprites.indexOf(sprite);
             if (cardIndex >= 0) {
                 if (playerIndex === gameState.playerIndex) {
-                    const selectedSpriteOffsets: V.IVector2[] = [];
-                    selectedIndices.forEach((selectedIndex: number) => {
-                        const selectedSprite = sprites[selectedIndex];
-                        if (!selectedSprite) throw new Error();
-                        selectedSpriteOffsets[selectedIndex] = V.sub(selectedSprite.position, position);
-                    });
-
                     // this player's own card
+                    if (selectedIndices.has(cardIndex)) {
+                        selectedIndices.forEach((selectedIndex: number) => {
+                            const selectedSprite = sprites[selectedIndex];
+                            if (!selectedSprite) throw new Error();
+                            selectedSprite.setAnchorAt(position);
+                        });
+                    } else {
+                        sprite.setAnchorAt(position);
+                    }
+
                     action = {
                         action: holdingControl && holdingShift ? 'ControlShiftClick' :
                                 holdingControl                 ? 'ControlClick' :
                                                   holdingShift ? 'ShiftClick' :
                                                                  'Click',
-                        cardIndex,
-                        spriteOffset: sprite.getOffsetInParentTransform(position),
-                        selectedSpriteOffsets
+                        cardIndex
                     };
                 } else {
                     // another player's shared card
@@ -242,9 +229,9 @@ Sprite.onDragStart = (position, sprite) => {
                     if (!playerState) throw new Error();
 
                     if (cardIndex < playerState.shareCount) {
+                        sprite.setAnchorAt(position);
                         action = {
                             action: 'Take',
-                            spriteOffset: sprite.getOffsetInParentTransform(position),
                             playerIndex,
                             cardIndex
                         };
@@ -277,7 +264,6 @@ Sprite.onDragMove = async (position, sprite) => {
     ) {
         if (exceededDragThreshold) {
             // cache because the action might have changed after await
-            const spriteOffset = action.spriteOffset;
             if (await Lib.isDone(promise)) {
                 promise = (async () => {
                     if (action.action === 'Take') {
@@ -298,16 +284,10 @@ Sprite.onDragMove = async (position, sprite) => {
                     if (!playerState) throw new Error();
 
                     // immediately select newly acquired card
-                    console.log(`selecting ${playerState.cardsWithOrigins.length - 1}`);
                     const cardIndex = playerState.cardsWithOrigins.length - 1;
                     selectedIndices.clear();
                     selectedIndices.add(cardIndex);
-
-                    action = {
-                        action: 'Reorder',
-                        cardIndex,
-                        spriteOffset
-                    };
+                    action = { action: 'Reorder', cardIndex };
                     await drag();
                 })();
             }
@@ -327,12 +307,9 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'Click'
     ) {
         if (exceededDragThreshold) {
-            // cache because the action might have changed after await
             if (await Lib.isDone(promise)) {
                 promise = (async () => {
                     // dragging a non-selected card selects it and only it
-                    // selected indices must be modified immediate before the call to drag because drag will
-                    // modify the action's card index, which must be kept consistent with selected indices
                     if (!selectedIndices.has(action.cardIndex)) {
                         selectedIndices.clear();
                         selectedIndices.add(action.cardIndex);
@@ -348,6 +325,9 @@ Sprite.onDragMove = async (position, sprite) => {
 }
 
 Sprite.onDragEnd = async (position, sprite) => {
+    const gameState = Client.gameState;
+    if (!gameState) return;
+
     try {
         let endedOnBackground = true;
         for (const deckSprite of Sprite.deckSprites) {
@@ -378,9 +358,6 @@ Sprite.onDragEnd = async (position, sprite) => {
                 }
             }
         }
-
-        const gameState = Client.gameState;
-        if (!gameState) return;
 
         if (action.action === 'None') {
             // do nothing
@@ -517,19 +494,25 @@ async function drag(): Promise<void> {
     // construct a box with which to intersect other action boxes
     // these include the deck and each player's cards (or where they would be if they have no cards)
     const cardSize = { x: Sprite.width, y: Sprite.height };
-    const dragMin = container.transform.worldTransform.apply(leftMovingSprite.target);
-    const dragMax = container.transform.worldTransform.apply(V.add(rightMovingSprite.target, cardSize));
+    const dragMin = V.add(
+        container.transform.worldTransform.apply(leftMovingSprite.target),
+        V.sub(leftMovingSprite.getTopLeftInWorld(), container.transform.worldTransform.apply(leftMovingSprite.position))
+    );
+    const dragMax = V.add(
+        V.add(container.transform.worldTransform.apply(rightMovingSprite.target), cardSize),
+        V.sub(rightMovingSprite.getTopLeftInWorld(), container.transform.worldTransform.apply(rightMovingSprite.position))
+    );
 
     let deckMin: V.IVector2;
     let deckMax: V.IVector2;
     if (Sprite.deckSprites.length > 0) {
         const top = Sprite.deckSprites[Sprite.deckSprites.length - 1];
         if (!top) throw new Error();
-        deckMin = top.target;
+        deckMin = top.getTopLeftInWorld();
         
         const bottom = Sprite.deckSprites[0];
         if (!bottom) throw new Error();
-        deckMax = V.add(bottom.target, cardSize);
+        deckMax = V.add(bottom.getTopLeftInWorld(), cardSize);
     } else {
         const center = { x: Sprite.app.view.width / 2, y: Sprite.app.view.height / 2 };
         const halfCardSize = V.scale(0.5, cardSize);
@@ -538,11 +521,10 @@ async function drag(): Promise<void> {
     }
 
     if (intersectBox(dragMin, dragMax, deckMin, deckMax)) {
-        if ('cardIndex' in action && 'spriteOffset' in action) {
+        if ('cardIndex' in action) {
             action = {
                 action: 'Return',
-                cardIndex: action.cardIndex,
-                spriteOffset: action.spriteOffset
+                cardIndex: action.cardIndex
             };
         }
 
@@ -570,14 +552,12 @@ async function drag(): Promise<void> {
 
         const dragMinInContainer = playerContainer.transform.worldTransform.applyInverse(dragMin);
         const dragMaxInContainer = playerContainer.transform.worldTransform.applyInverse(dragMax);
-
         if (intersectBox(dragMinInContainer, dragMaxInContainer, cardsMin, cardsMax)) {
-            if ('cardIndex' in action && 'spriteOffset' in action) {
+            if ('cardIndex' in action) {
                 action = {
                     action: 'Give',
                     playerIndex: playerIndex,
-                    cardIndex: action.cardIndex,
-                    spriteOffset: action.spriteOffset
+                    cardIndex: action.cardIndex
                 };
             }
 
@@ -585,28 +565,33 @@ async function drag(): Promise<void> {
         }
     }
 
-    if ('cardIndex' in action && 'spriteOffset' in action) {
+    if ('cardIndex' in action) {
         action = {
             action: 'Reorder',
-            cardIndex: action.cardIndex,
-            spriteOffset: action.spriteOffset
+            cardIndex: action.cardIndex
         };
     } else {
         return;
     }
 
+    const dragMinInContainer = container.transform.worldTransform.applyInverse(dragMin);
+    const dragMaxInContainer = container.transform.worldTransform.applyInverse(dragMax);
+    const rightMovingCardTarget = container.transform.worldTransform.applyInverse(V.add(
+        container.transform.worldTransform.apply(rightMovingSprite.target),
+        V.sub(rightMovingSprite.getTopLeftInWorld(), container.transform.worldTransform.apply(rightMovingSprite.position))
+    ));
+
     // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
     const goldenX = (1 - 1 / goldenRatio) * width;
-    const revealDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - 2 * Sprite.height));
-    const hideDistance = Math.abs(leftMovingSprite.target.y - (Sprite.app.view.height - Sprite.height));
-    
-    const splitTop = revealDistance < hideDistance;
-    const splitLeft = (leftMovingSprite.target.x + rightMovingSprite.target.x + Sprite.width) / 2 < goldenX;
+    const midY = (dragMinInContainer.y + dragMaxInContainer.y) / 2;
+
+    const splitTop = midY < Sprite.app.view.height - Sprite.height - Sprite.gap;
+    const splitLeft = (dragMinInContainer.x + dragMaxInContainer.x) / 2 < goldenX;
     let splitIndex: number | undefined = undefined;
     let start: number;
     let end: number;
     if (splitTop) {
-        if (leftMovingSprite.target.x < goldenX && goldenX < rightMovingSprite.target.x + Sprite.width) {
+        if (dragMinInContainer.x < goldenX && goldenX < dragMaxInContainer.x) {
             splitIndex = newShareCount;
         }
         
@@ -618,7 +603,7 @@ async function drag(): Promise<void> {
             end = newRevealCount;
         }
     } else {
-        if (leftMovingSprite.target.x < goldenX && goldenX < rightMovingSprite.target.x + Sprite.width) {
+        if (dragMinInContainer.x < goldenX && goldenX < dragMaxInContainer.x) {
             splitIndex = newGroupCount;
         }
 
@@ -638,8 +623,8 @@ async function drag(): Promise<void> {
             const reservedSprite = reserved[i]?.[0];
             if (!reservedSprite) throw new Error();
 
-            if (leftMovingSprite.target.x < reservedSprite.target.x &&
-                reservedSprite.target.x < rightMovingSprite.target.x
+            if (dragMinInContainer.x < reservedSprite.target.x &&
+                reservedSprite.target.x < rightMovingCardTarget.x
             ) {
                 if (leftIndex === undefined) {
                     leftIndex = i;
@@ -654,8 +639,8 @@ async function drag(): Promise<void> {
             const rightReservedSprite = reserved[rightIndex]?.[0];
             if (!leftReservedSprite || !rightReservedSprite) throw new Error();
 
-            const leftGap = leftReservedSprite.target.x - leftMovingSprite.target.x;
-            const rightGap = rightMovingSprite.target.x - rightReservedSprite.target.x;
+            const leftGap = leftReservedSprite.target.x - dragMinInContainer.x;
+            const rightGap = rightMovingCardTarget.x - rightReservedSprite.target.x;
             if (leftGap < rightGap) {
                 splitIndex = leftIndex;
             } else {
@@ -663,14 +648,31 @@ async function drag(): Promise<void> {
             }
         }
     }
-    
+    /*
+    dot.clear();
+    dot.beginFill(0xff0000, 0xff);
+    dot.drawCircle(dragMinInContainer.x, dragMinInContainer.y, 10);
+    dot.endFill();
+    dot.beginFill(0x00ff00, 0xff);
+    dot.drawCircle(dragMaxInContainer.x, dragMaxInContainer.y, 10);
+    dot.endFill();
+    dot.beginFill(0x0000ff, 0xff);
+    dot.drawCircle(rightMovingCardTarget.x, rightMovingCardTarget.y, 10);
+    dot.endFill();
+    dot.zIndex = 200;
+    container.addChild(dot);
+    text.text = `splitIndex = ${splitIndex ?? '?'}, start = ${start}, end = ${end}`;
+    text.position.set(0, 0);
+    text.zIndex = 200;
+    container.addChild(text);
+    */
     if (splitIndex === undefined) {
         // no overlapped sprites, so the index is the first reserved sprite to the right of the moving sprites
         for (splitIndex = start; splitIndex < end; ++splitIndex) {
             const reservedSprite = reserved[splitIndex]?.[0];
             if (!reservedSprite) throw new Error();
 
-            if (rightMovingSprite.target.x < reservedSprite.target.x) {
+            if (rightMovingCardTarget.x < reservedSprite.target.x) {
                 break;
             }
         }
@@ -716,6 +718,9 @@ async function drag(): Promise<void> {
         await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newOriginIndices);
     }
 }
+
+const dot = new PIXI.Graphics();
+const text = new PIXI.Text('');
 
 function getLeftExtent(playerState: Lib.PlayerState) {
     return Math.max(
