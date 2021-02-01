@@ -196,16 +196,28 @@ function renderDeck(deltaTime: number) {
         deckSprite.zIndex = i;
         deckSprite.animate(deltaTime);
     }
+
+    let i = addLabel(deckLabels, Sprite.deckContainer, 0,
+        Sprite.app.view.width / 2 - 0.75 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.height / 2 - Sprite.fixedGap - 0.75 * Sprite.pixelsPerCM,
+        '洗牌',
+        '大字',
+        26
+    );
     
+    const shuffleLabel = deckLabels[0];
+    if (!shuffleLabel) throw new Error();
+    shuffleLabel.interactive = true;
+    shuffleLabel.cursor = 'pointer';
+    shuffleLabel.on('pointerup', () => Client.shuffleDeck());
+
     if (Client.gameState) {
-        let [i, y] = 上下(deckLabels, Sprite.deckContainer, 0,
+        i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             `︵${数(Sprite.deckSprites.length)}︶`,
             '小字',
             13);
-
-        y = y;
 
         for (; i < deckLabels.length; ++i) {
             deckLabels[i]?.destroy();
@@ -586,33 +598,10 @@ function addAllLabels(
 
         return 0;
     }).reduce((a, b) => a + b, 0);
-
-    const topY = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
-    const topLeftCount = playerIsYou ? shareCount : playerState.cardsWithOrigins.length - groupCount;
-    const topLeftX = goldenX - (topLeftCount > 0 ? Sprite.width + topLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
-    let i = 0, y;
-    [i, y] = 上下(labels, container, i, topLeftX, topY, playerIsYou ? '得分' : '持牌', '中字', 19);
     
-    const topLeftRight數 = `︵${数(playerIsYou ? score : topLeftCount)}︶`;
-    [i, y] = 上下(labels, container, i, topLeftX - 0.375 * Sprite.pixelsPerCM, topY, topLeftRight數, '小字', 13);
+    let i = 0
+    let y: number;
 
-    const topRightCount = playerIsYou ? revealCount - shareCount : groupCount - revealCount;
-    const topRightX = goldenX + (topRightCount > 0 ? Sprite.width + topRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
-    [i, y] = 上下(labels, container, i, topRightX, topY, playerIsYou ? '出牌' : '底牌', '中字', 19);
-
-    const bottomY = playerIsYou ? Sprite.app.view.height - Sprite.height : Sprite.height + 2 * Sprite.gap;
-
-    const bottomLeftCount = playerIsYou ? groupCount - revealCount : revealCount - shareCount;
-    const bottomLeftX = goldenX - (bottomLeftCount > 0 ? Sprite.width + bottomLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
-    [i, y] = 上下(labels, container, i, bottomLeftX, bottomY, playerIsYou ? '底牌' : '出牌', '中字', 19);
-    
-    const bottomRightCount = playerIsYou ? totalCount - groupCount : shareCount;
-    const bottomRightX = goldenX + (bottomRightCount > 0 ? Sprite.width + bottomRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
-    [i, y] = 上下(labels, container, i, bottomRightX, bottomY, playerIsYou ? '持牌' : '得分', '中字', 19);
-
-    const bottomRight數 = `︵${数(playerIsYou ? bottomRightCount : score)}︶`;
-    [i, y] = 上下(labels, container, i, bottomRightX + 0.548 * Sprite.pixelsPerCM, bottomY, bottomRight數, '小字', 13);
-    
     const nameMetrics = PIXI.TextMetrics.measureText(playerState.name, textStyle);
     const nameY = playerIsYou ?
         Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) - 0.75 * Sprite.pixelsPerCM - Sprite.fixedGap :
@@ -624,6 +613,31 @@ function addAllLabels(
         '大字',
         26
     );
+
+    const topY = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
+    const topLeftCount = playerIsYou ? shareCount : playerState.cardsWithOrigins.length - groupCount;
+    const topLeftX = goldenX - (topLeftCount > 0 ? Sprite.width + topLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, topLeftX, topY, playerIsYou ? '得分' : '持牌', '中字', 19);
+    
+    const topLeftRight數 = `︵${数(playerIsYou ? score : topLeftCount)}︶`;
+    i = 上下(labels, container, i, topLeftX - 0.375 * Sprite.pixelsPerCM, topY, topLeftRight數, '小字', 13);
+
+    const topRightCount = playerIsYou ? revealCount - shareCount : groupCount - revealCount;
+    const topRightX = goldenX + (topRightCount > 0 ? Sprite.width + topRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
+    i = 上下(labels, container, i, topRightX, topY, playerIsYou ? '出牌' : '底牌', '中字', 19);
+
+    const bottomY = playerIsYou ? Sprite.app.view.height - Sprite.height : Sprite.height + 2 * Sprite.gap;
+
+    const bottomLeftCount = playerIsYou ? groupCount - revealCount : revealCount - shareCount;
+    const bottomLeftX = goldenX - (bottomLeftCount > 0 ? Sprite.width + bottomLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, bottomLeftX, bottomY, playerIsYou ? '底牌' : '出牌', '中字', 19);
+    
+    const bottomRightCount = playerIsYou ? totalCount - groupCount : shareCount;
+    const bottomRightX = goldenX + (bottomRightCount > 0 ? Sprite.width + bottomRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
+    i = 上下(labels, container, i, bottomRightX, bottomY, playerIsYou ? '持牌' : '得分', '中字', 19);
+
+    const bottomRight數 = `︵${数(playerIsYou ? bottomRightCount : score)}︶`;
+    i = 上下(labels, container, i, bottomRightX + 0.548 * Sprite.pixelsPerCM, bottomY, bottomRight數, '小字', 13);
 
     for (; i < labels.length; ++i) {
         labels[i]?.destroy();
@@ -642,7 +656,7 @@ function 上下(
     詞: string,
     fontName: string,
     fontSize: number
-): [number, number] {
+): number {
     for (const 字 of 詞) {
         i = addLabel(labels, container, i, x, y, 字, fontName, fontSize);
 
@@ -657,7 +671,7 @@ function 上下(
         }
     }
 
-    return [i, y];
+    return i;
 }
 
 const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];

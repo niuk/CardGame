@@ -232,6 +232,8 @@ export default class Player implements Lib.PlayerState {
                 console.log(`player '${this.name}' reordered cards: ${
                     JSON.stringify(this.cardsWithOrigins)
                 }\r\nshareCount: ${this.shareCount}, revealCount: ${this.revealCount}, groupCount: ${this.groupCount}`);
+            } else if (method.methodName === 'ShuffleDeck') {
+                this.game.shuffleDeck();
             } else {
                 const _: never = method;
             }

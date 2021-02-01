@@ -252,3 +252,12 @@ function sortSection(
     section.sort(compareFn);
     cards.splice(start, end - start, ...section);
 }
+
+export function shuffleDeck(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('ShuffleDeck', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.ShuffleDeck>{
+            methodName: 'ShuffleDeck'
+        }));
+    });
+}

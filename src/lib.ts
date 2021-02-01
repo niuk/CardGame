@@ -83,7 +83,8 @@ export type Method =
     GiveToOtherPlayer |
     DrawFromDeck |
     ReturnToDeck |
-    Reorder;
+    Reorder |
+    ShuffleDeck;
 
 export type MethodName =
     'SetPlayerName' |
@@ -93,7 +94,8 @@ export type MethodName =
     'GiveToOtherPlayer' |
     'DrawFromDeck' |
     'ReturnToDeck' |
-    'Reorder';
+    'Reorder' |
+    'ShuffleDeck';
 
 export interface Result {
     methodName: MethodName;
@@ -143,6 +145,10 @@ export interface Reorder {
     newRevealCount: number;
     newGroupCount: number;
     newOriginIndices: number[];
+}
+
+export interface ShuffleDeck {
+    methodName: 'ShuffleDeck';
 }
 
 export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
