@@ -181,6 +181,7 @@ window.onkeyup = (e: KeyboardEvent) => {
 };
 
 Sprite.onDragStart = (position, sprite) => {
+    console.log(Sprite.deckSprites.indexOf(sprite));
     mouseDownPosition = position
     mouseMovePosition = position;
     exceededDragThreshold = false;
@@ -191,7 +192,7 @@ Sprite.onDragStart = (position, sprite) => {
     const mySprites = Sprite.playerFaceSprites[gameState.playerIndex];
     if (!mySprites) throw new Error();
 
-    if (Sprite.deckSprites[Sprite.deckSprites.length - 1] === sprite) {
+    if (sprite === Sprite.deckSprites[Sprite.deckSprites.length - 1]) {
         sprite.setAnchorAt(position);
         action = { action: 'Draw' };
         drewFromDeck = true;

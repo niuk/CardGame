@@ -314,29 +314,42 @@ export default class Sprite {
     public static async linkWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState): Promise<void> {
         await this.load(gameState);
 
-        const previousDeckSprites = this.deckSprites;
+        const previousDeckSprites: (Sprite | undefined)[] = this.deckSprites;
         this.deckSprites = [];
-    
-        const previousPlayerBackSprites = this.playerBackSprites;
+
+        const previousPlayerBackSprites: (Sprite | undefined)[][] = this.playerBackSprites;
         this.playerBackSprites = [];
-    
-        const previousPlayerFaceSprites = this.playerFaceSprites;
+
+        const previousPlayerFaceSprites: (Sprite | undefined)[][] = this.playerFaceSprites;
         this.playerFaceSprites = [];
-    
+
         const getSpriteWithOrigin = (origin: Lib.Origin) => {
             let sprite: Sprite | undefined;
             if (origin.origin === 'Deck') {
-                sprite = previousDeckSprites.splice(previousDeckSprites.length - 1, 1)[0];
+                sprite = previousDeckSprites[origin.deckIndex];
+                previousDeckSprites[origin.deckIndex] = undefined;
+                console.log('consumed deck card at', origin);
             } else if (origin.origin === 'Hand') {
+                const previousFaceSprites = previousPlayerFaceSprites[origin.playerIndex];
                 if (origin.playerIndex === gameState.playerIndex) {
-                    sprite = previousPlayerFaceSprites[gameState.playerIndex]?.[origin.cardIndex];
+                    if (previousFaceSprites) {
+                        sprite = previousFaceSprites[origin.cardIndex];
+                        previousFaceSprites[origin.cardIndex] = undefined;
+                    }
                 } else {
                     const originPlayer = previousGameState?.playerStates[origin.playerIndex];
                     if (originPlayer) {
                         if (origin.cardIndex < originPlayer.revealCount) {
-                            sprite = previousPlayerFaceSprites[origin.playerIndex]?.[origin.cardIndex];
+                            if (previousFaceSprites) {
+                                sprite = previousFaceSprites[origin.cardIndex];
+                                previousFaceSprites[origin.cardIndex] = undefined;
+                            }
                         } else {
-                            sprite = previousPlayerBackSprites[origin.playerIndex]?.[origin.cardIndex - originPlayer.revealCount];
+                            const previousBackSprites = previousPlayerBackSprites[origin.playerIndex];
+                            if (previousBackSprites) {
+                                sprite = previousBackSprites[origin.cardIndex - originPlayer.revealCount];
+                                previousBackSprites[origin.cardIndex - originPlayer.revealCount] = undefined;
+                            }
                         }
                     }
                 }
@@ -376,6 +389,7 @@ export default class Sprite {
                     if (sprite) {
                         sprite.transfer(container, faceTexture);
                     } else {
+                        console.log('new face card');
                         sprite = new Sprite(container, faceTexture);
                     }
     
@@ -384,6 +398,7 @@ export default class Sprite {
                     if (sprite) {
                         sprite.transfer(container, backTexture);
                     } else {
+                        console.log('new back card');
                         sprite = new Sprite(container, backTexture);
                     }
     
@@ -392,17 +407,20 @@ export default class Sprite {
             }
         }
     
-        for (const origin of gameState.deckOrigins.reverse()) {
+        for (const origin of gameState.deckOrigins) {
             let sprite = getSpriteWithOrigin(origin);
             const deckTexture = Sprite.getTexture('Back0');
             if (sprite) {
                 sprite.transfer(Sprite.deckContainer, deckTexture);
             } else {
+                console.log(`new deck card ${this.deckSprites.length} due to missing card at origin:`, origin, previousDeckSprites);
                 sprite = new Sprite(Sprite.deckContainer, deckTexture);
             }
     
-            this.deckSprites.unshift(sprite);
+            this.deckSprites.push(sprite);
         }
+
+        console.log(this.deckSprites);
     }
 
     private _sprite: PIXI.Sprite;
@@ -486,7 +504,6 @@ export default class Sprite {
         };
 
         const onPointerUp = (event: PIXI.InteractionEvent) => {
-            console.log(event.type, dragging);
             if (dragging) {
                 dragging = false;
                 Sprite.onDragEnd?.(event.data.global.clone(), this);
@@ -503,14 +520,14 @@ export default class Sprite {
 
     public transfer(parent: PIXI.Container, texture: PIXI.Texture): void {
         const oldParent = this._sprite.parent;
-        if (parent !== oldParent) console.log(oldParent.position);
-        if (parent !== oldParent) console.log(parent.position);
+        //if (parent !== oldParent) console.log(oldParent.position);
+        //if (parent !== oldParent) console.log(parent.position);
 
         // save this sprite's world transform position and rotation
         const targetInWorld = oldParent.worldTransform.apply(this.target);
         const positionInWorld = oldParent.worldTransform.apply(this.position);
         const rotationInWorld = this.rotation + oldParent.rotation;
-        if (parent !== oldParent) console.log(this.position);
+        //if (parent !== oldParent) console.log(this.position);
 
         oldParent.removeChild(this._sprite);
         parent.addChild(this._sprite);
@@ -521,7 +538,7 @@ export default class Sprite {
         this.target = parent.transform.worldTransform.applyInverse(targetInWorld);
         this.position = parent.transform.worldTransform.applyInverse(positionInWorld);
         this.rotation = rotationInWorld - parent.transform.rotation;
-        if (parent !== oldParent) console.log(this.position);
+        //if (parent !== oldParent) console.log(this.position);
     }
 
     /*drawWorldDot(dot: PIXI.Graphics, position: V.IVector2, color: number): void {

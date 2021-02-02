@@ -5,6 +5,7 @@ import * as Client from './client';
 import * as Input from './input';
 import * as V from './vector';
 import Sprite from './sprite';
+import { Spritesheet } from 'pixi.js-legacy';
 
 const labelsUsingCurrentFonts = new Set<PIXI.BitmapText>();
 
@@ -197,19 +198,17 @@ function renderDeck(deltaTime: number) {
         deckSprite.animate(deltaTime);
     }
 
-    let i = addLabel(deckLabels, Sprite.deckContainer, 0,
-        Sprite.app.view.width / 2 - 0.75 * Sprite.pixelsPerCM,
-        Sprite.app.view.height / 2 - Sprite.height / 2 - Sprite.fixedGap - 0.75 * Sprite.pixelsPerCM,
-        '洗牌',
-        '大字',
-        26
-    );
-    
-    const shuffleLabel = deckLabels[0];
-    if (!shuffleLabel) throw new Error();
-    shuffleLabel.interactive = true;
-    shuffleLabel.cursor = 'pointer';
-    shuffleLabel.on('pointerup', () => Client.shuffleDeck());
+    let i = 0;
+    if (Sprite.deckSprites.length > 0) {
+        i = addLabel(deckLabels, Sprite.deckContainer, i,
+            Sprite.app.view.width / 2 - 0.75 * Sprite.pixelsPerCM,
+            Sprite.app.view.height / 2 - Sprite.height / 2 - Sprite.fixedGap - 0.75 * Sprite.pixelsPerCM,
+            '洗牌',
+            '大字',
+            26,
+            Client.shuffleDeck
+        );
+    }
 
     if (Client.gameState) {
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -363,27 +362,18 @@ function renderPlayer(deltaTime: number) {
         Sprite.app.view.height - 1.5 * Sprite.pixelsPerCM - 2 * Sprite.fixedGap,
         '分类(大小)',
         '大字',
-        26
+        26,
+        () => Client.sortByRank(gameState)
     );
+
     addLabel(playerLabels, container, k,
         Sprite.fixedGap,
         Sprite.app.view.height - 0.75 * Sprite.pixelsPerCM - Sprite.fixedGap,
         '分类(花色)',
         '大字',
-        26
+        26,
+        () => Client.sortBySuit(gameState)
     );
-
-    const sortByRankLabel = playerLabels[j];
-    if (!sortByRankLabel) throw new Error();
-    sortByRankLabel.interactive = true;
-    sortByRankLabel.cursor = 'pointer';
-    sortByRankLabel.on('pointerup', () => Client.sortByRank(gameState));
-
-    const sortBySuitLabel = playerLabels[k];
-    if (!sortBySuitLabel) throw new Error();
-    sortBySuitLabel.interactive = true;
-    sortBySuitLabel.cursor = 'pointer';
-    sortBySuitLabel.on('pointerup', () => Client.sortBySuit(gameState));
 }
 
 const otherPlayerLines: (PIXI.Graphics | undefined)[][] = [];
@@ -529,7 +519,8 @@ function addLabel(
     positionX: number, positionY: number,
     text: string,
     fontName: string,
-    fontSize: number
+    fontSize: number,
+    onClick?: () => void
 ): number {
     addCharsFromText(text);
 
@@ -554,6 +545,11 @@ function addLabel(
         label.zIndex = 1;
         labels[i] = label;
         labelsUsingCurrentFonts.add(label);
+        if (onClick) {
+            label.on('click', onClick);
+            label.interactive = true;
+            label.cursor = 'pointer';
+        }
     }
     
     if (label.text !== text) {

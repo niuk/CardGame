@@ -19,8 +19,8 @@ export default class Player implements Lib.PlayerState {
     constructor(ws: WebSocket) {
         this.ws = ws;
 
-        ws.onmessage = async message => {
-            const method = <Lib.Method>JSON.parse(message.data.toString());
+        ws.onmessage = async messageEvent => {
+            const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
             let errorDescription: string | undefined = undefined
             try {
                 this.game?.resetCardOrigins();
@@ -38,8 +38,8 @@ export default class Player implements Lib.PlayerState {
             this.game?.broadcastStateExceptToPlayerAt(this.index);
         };
         
-        ws.onclose = async event => {
-            console.log('closed websocket connection');
+        ws.onclose = async closeEvent => {
+            console.log('closed websocket connection', closeEvent);
         };
     }
 

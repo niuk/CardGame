@@ -64,7 +64,7 @@ export default class Game {
     public shuffleDeck(): void {
         for (let i = this.deckCardsWithOrigins.length - 1; i >= 1; --i) {
             const j = Math.floor(Math.random() * i);
-            console.log(`${i} <-> ${j}`);
+            //console.log(`${i} <-> ${j}`);
 
             const iCardWithOrigin = this.deckCardsWithOrigins[i];
             if (!iCardWithOrigin) throw new Error();
