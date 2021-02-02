@@ -1,11 +1,10 @@
 import SortedSet from 'collections/sorted-set';
+import * as PIXI from 'pixi.js-legacy';
 
 import * as Lib from '../lib';
 import * as Client from './client';
 import * as V from './vector';
 import Sprite from './sprite';
-
-import * as PIXI from 'pixi.js-legacy';
 
 interface None {
     action: 'None';
@@ -577,16 +576,16 @@ async function drag(): Promise<void> {
 
     const dragMinInContainer = container.transform.worldTransform.applyInverse(dragMin);
     const dragMaxInContainer = container.transform.worldTransform.applyInverse(dragMax);
-    const rightMovingCardTarget = V.add(
+    const rightMovingCardTarget =  container.transform.worldTransform.applyInverse(V.add(
         container.transform.worldTransform.apply(rightMovingSprite.target),
         V.sub(rightMovingSprite.getTopLeftInWorld(), container.transform.worldTransform.apply(rightMovingSprite.position))
-    );
+    ));
 
     // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
     const goldenX = (1 - 1 / goldenRatio) * width;
     const midY = (dragMinInContainer.y + dragMaxInContainer.y) / 2;
 
-    const splitTop = midY < Sprite.app.view.height - Sprite.height - Sprite.gap;
+    const splitTop = !drewFromDeck && midY < Sprite.app.view.height - Sprite.height - Sprite.gap;
     const splitLeft = (dragMinInContainer.x + dragMaxInContainer.x) / 2 < goldenX;
     let splitIndex: number | undefined = undefined;
     let start: number;
@@ -649,6 +648,19 @@ async function drag(): Promise<void> {
             }
         }
     }
+
+    dot.clear();
+    dot.beginFill(0xff0000, 0x80);
+    dot.drawCircle(dragMinInContainer.x, dragMinInContainer.y, 3);
+    dot.endFill();
+    dot.beginFill(0x00ff00, 0x80);
+    dot.drawCircle(dragMaxInContainer.x, dragMaxInContainer.y, 3);
+    dot.endFill();
+    dot.beginFill(0x0000ff, 0x80);
+    dot.drawCircle(rightMovingCardTarget.x, rightMovingCardTarget.y, 3);
+    dot.endFill();
+    dot.zIndex = 300;
+    container.addChild(dot);
 
     if (splitIndex === undefined) {
         // no overlapped sprites, so the index is the first reserved sprite to the right of the moving sprites

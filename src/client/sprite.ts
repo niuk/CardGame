@@ -328,7 +328,6 @@ export default class Sprite {
             if (origin.origin === 'Deck') {
                 sprite = previousDeckSprites[origin.deckIndex];
                 previousDeckSprites[origin.deckIndex] = undefined;
-                console.log('consumed deck card at', origin);
             } else if (origin.origin === 'Hand') {
                 const previousFaceSprites = previousPlayerFaceSprites[origin.playerIndex];
                 if (origin.playerIndex === gameState.playerIndex) {
@@ -389,7 +388,6 @@ export default class Sprite {
                     if (sprite) {
                         sprite.transfer(container, faceTexture);
                     } else {
-                        console.log('new face card');
                         sprite = new Sprite(container, faceTexture);
                     }
     
@@ -398,7 +396,6 @@ export default class Sprite {
                     if (sprite) {
                         sprite.transfer(container, backTexture);
                     } else {
-                        console.log('new back card');
                         sprite = new Sprite(container, backTexture);
                     }
     
@@ -413,14 +410,11 @@ export default class Sprite {
             if (sprite) {
                 sprite.transfer(Sprite.deckContainer, deckTexture);
             } else {
-                console.log(`new deck card ${this.deckSprites.length} due to missing card at origin:`, origin, previousDeckSprites);
                 sprite = new Sprite(Sprite.deckContainer, deckTexture);
             }
     
             this.deckSprites.push(sprite);
         }
-
-        console.log(this.deckSprites);
     }
 
     private _sprite: PIXI.Sprite;
