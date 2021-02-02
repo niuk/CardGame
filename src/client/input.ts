@@ -649,19 +649,6 @@ async function drag(): Promise<void> {
         }
     }
 
-    dot.clear();
-    dot.beginFill(0xff0000, 0x80);
-    dot.drawCircle(dragMinInContainer.x, dragMinInContainer.y, 3);
-    dot.endFill();
-    dot.beginFill(0x00ff00, 0x80);
-    dot.drawCircle(dragMaxInContainer.x, dragMaxInContainer.y, 3);
-    dot.endFill();
-    dot.beginFill(0x0000ff, 0x80);
-    dot.drawCircle(rightMovingCardTarget.x, rightMovingCardTarget.y, 3);
-    dot.endFill();
-    dot.zIndex = 300;
-    container.addChild(dot);
-
     if (splitIndex === undefined) {
         // no overlapped sprites, so the index is the first reserved sprite to the right of the moving sprites
         for (splitIndex = start; splitIndex < end; ++splitIndex) {
@@ -714,9 +701,6 @@ async function drag(): Promise<void> {
         await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newOriginIndices);
     }
 }
-
-const dot = new PIXI.Graphics();
-const text = new PIXI.Text('');
 
 function getLeftExtent(playerState: Lib.PlayerState) {
     return Math.max(
