@@ -5,7 +5,6 @@ import * as Client from './client';
 import * as Input from './input';
 import * as V from './vector';
 import Sprite from './sprite';
-import { Spritesheet } from 'pixi.js-legacy';
 
 const labelsUsingCurrentFonts = new Set<PIXI.BitmapText>();
 
@@ -117,10 +116,9 @@ window.onload = async () => {
         }
     };
 
-    Sprite.onTick = deltaTime => {
+    Sprite.onTick = (deltaTime: number) => {
         renderDeck(deltaTime);
-        renderPlayer(deltaTime);
-        renderOtherPlayers(deltaTime);
+        renderPlayers(deltaTime);
     };
 
     const spriteLoad = Sprite.load(undefined);
@@ -135,7 +133,7 @@ window.onload = async () => {
         gameId = '';
     }
 
-    playerNameElement.value = decodeURI(playerName);
+    playerNameElement.value = playerName;
     gameIdElement.value = gameId;
 
     await Client.connect();
@@ -181,7 +179,6 @@ function renderDeck(deltaTime: number) {
             Input.action.action === 'Draw'
         ) {
             deckSprite.target = Input.mouseMovePosition;
-            deckSprite.rotation += 0.1 * deltaTime;
         } else if (performance.now() - deckDealTime < i * deckDealDuration / Sprite.deckSprites.length) {
             // card not yet dealt; keep top left
             deckSprite.position = { x: -Sprite.width, y: -Sprite.height };
@@ -226,17 +223,14 @@ function renderDeck(deltaTime: number) {
 }
 
 const goldenRatio = (1 + Math.sqrt(5)) / 2;
-
-const playerLines: (PIXI.Graphics | undefined)[] = [];
-const playerLabels: (PIXI.BitmapText | undefined)[] = [];
-
+/*
 function renderPlayer(deltaTime: number) {
     const gameState = Client.gameState;
     if (!gameState) return;
 
     const playerState = gameState.playerStates[gameState.playerIndex];
-    const container = Sprite.playerContainers[gameState.playerIndex];
-    const width = Sprite.playerWidths[gameState.playerIndex];
+    const container = Sprite.containers[gameState.playerIndex];
+    const width = Sprite.widths[gameState.playerIndex];
     const sprites = Sprite.playerFaceSprites[gameState.playerIndex];
     if (!playerState || !container || width === undefined || !sprites) throw new Error();
 
@@ -319,7 +313,7 @@ function renderPlayer(deltaTime: number) {
         sprite.animate(deltaTime);
     }
 
-    addAllLines(playerLines, goldenX, container, width, true);
+    addAllLines(playerLines, 0, goldenX, container, width, true);
 
     let shareCount = playerState.shareCount;
     let revealCount = playerState.revealCount;
@@ -375,93 +369,94 @@ function renderPlayer(deltaTime: number) {
         () => Client.sortBySuit(gameState)
     );
 }
+*/
+const playerLines: (PIXI.Graphics | undefined)[][] = [];
+const playerLabels: (PIXI.BitmapText | undefined)[][] = [];
 
-const otherPlayerLines: (PIXI.Graphics | undefined)[][] = [];
-const otherPlayerLabels: (PIXI.BitmapText | undefined)[][] = [];
-
-function renderOtherPlayers(deltaTime: number) {
+function renderPlayers(deltaTime: number) {
     const gameState = Client.gameState;
     if (!gameState) return;
 
-    for (let i = 1; i < gameState.playerStates.length; ++i) {
-        const playerIndex = (gameState.playerIndex + i) % gameState.playerStates.length;
-
+    for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
         const playerState = gameState.playerStates[playerIndex];
         if (!playerState) continue;
 
-        const container = Sprite.playerContainers[playerIndex];
-        const width = Sprite.playerWidths[playerIndex];
+        const width = Sprite.widths[playerIndex];
+        const container = Sprite.containers[playerIndex];
         const faceSprites = Sprite.playerFaceSprites[playerIndex];
-        if (!container || width === undefined || !faceSprites) throw new Error();
+        const backSprites = Sprite.playerBackSprites[playerIndex];
+        if (width === undefined || !container || !faceSprites || !backSprites) throw new Error();
 
         const goldenX = width / goldenRatio;
         const centerY = Sprite.height + Sprite.gap;
 
-        let j = 0;
-        for (const faceSprite of faceSprites) {
-            if (j < playerState.shareCount) {
-                if (Input.action.action === 'Take' &&
-                    Input.action.playerIndex === playerIndex &&
-                    Input.action.cardIndex === j
-                ) {
-                    faceSprite.target = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
-                } else {
-                    faceSprite.resetAnchor();
-                    faceSprite.target = {
-                        x: goldenX + (playerState.shareCount - j) * Sprite.gap,
-                        y: centerY + Sprite.gap
-                    };
+        for (let cardIndex = 0; cardIndex < playerState.cardsWithOrigins.length; ++cardIndex) {
+            let sprite: Sprite | undefined;
+            if (cardIndex < playerState.revealCount || playerIndex === gameState.playerIndex) {
+                sprite = faceSprites[cardIndex];
+            } else {
+                sprite = backSprites[cardIndex - playerState.revealCount];
+            }
+
+            if (!sprite) throw new Error();
+
+            if (Input.action.action === 'Take' &&
+                Input.action.playerIndex === playerIndex &&
+                Input.action.cardIndex === cardIndex ||
+                playerIndex === gameState.playerIndex && ((
+                    Input.action.action === 'ControlShiftClick' ||
+                    Input.action.action === 'ControlClick' ||
+                    Input.action.action === 'ShiftClick' ||
+                    Input.action.action === 'Click'
+                ) && (
+                    Input.action.cardIndex === cardIndex ||
+                    Input.selectedIndices.has(Input.action.cardIndex) && Input.selectedIndices.has(cardIndex)
+                ) || (
+                    Input.action.action === 'Give' ||
+                    Input.action.action === 'Return' ||
+                    Input.action.action === 'Reorder'
+                ) && (
+                    Input.selectedIndices.has(cardIndex)
+                )
+            )) {
+                sprite.target = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
+            } else {
+                sprite.target.x = cardIndex < playerState.revealCount ?
+                    cardIndex - playerState.shareCount :
+                    cardIndex - playerState.groupCount ;
+    
+                const above = container.position.y < Sprite.app.view.height / 2;
+                if (above) {
+                    sprite.target.x *= -1;
                 }
-            } else {
-                faceSprite.resetAnchor();
-                faceSprite.target = {
-                    x: goldenX - Sprite.width - (1 + j - playerState.shareCount) * Sprite.gap,
-                    y: centerY + Sprite.gap
-                };
+    
+                if (sprite.target.x < 0) {
+                    sprite.target.x = -Sprite.gap * sprite.target.x - Sprite.width;
+                } else {
+                    sprite.target.x *= Sprite.gap;
+                }
+    
+                sprite.target.y = (cardIndex < playerState.revealCount) === above ? Sprite.height : 0;    
+
+                sprite.resetAnchor();
             }
 
-            faceSprite.zIndex = j;
-            faceSprite.animate(deltaTime);
-
-            ++j;
+            sprite.zIndex = cardIndex;
+            sprite.animate(deltaTime);
         }
 
-        const backSprites = Sprite.playerBackSprites[playerIndex];
-        if (!backSprites) throw new Error();
-
-        j = 0;
-        for (const backSprite of backSprites) {
-            const localGroupCount = playerState.groupCount - playerState.revealCount;
-            if (j < localGroupCount) {
-                backSprite.target = {
-                    x: goldenX + (localGroupCount - j) * Sprite.gap,
-                    y: 0
-                };
-            } else {
-                backSprite.target = {
-                    x: goldenX - Sprite.width - (1 + j - localGroupCount) * Sprite.gap,
-                    y: 0
-                };
-            }
-
-            backSprite.zIndex = j;
-            backSprite.animate(deltaTime);
-
-            ++j;
-        }
-
-        let lines = otherPlayerLines[playerIndex];
+        let lines = playerLines[playerIndex];
         if (!lines) {
             lines = [];
-            otherPlayerLines[playerIndex] = lines;
+            playerLines[playerIndex] = lines;
         }
 
-        addAllLines(lines, goldenX, container, width, false);
+        addAllLines(lines, 0, goldenX, container, width, false);
 
-        let labels = otherPlayerLabels[playerIndex];
+        let labels = playerLabels[playerIndex];
         if (!labels) {
             labels = [];
-            otherPlayerLabels[playerIndex] = labels;
+            playerLabels[playerIndex] = labels;
         }
 
         addAllLabels(
@@ -484,7 +479,7 @@ function addLine(
     i: number,
     moveX: number, moveY: number,
     lineX: number, lineY: number
-) {
+): number {
     let line = lines[i];
     if (!line) {
         line = container.addChild(new PIXI.Graphics());
@@ -496,20 +491,28 @@ function addLine(
     line.moveTo(moveX, moveY);
     line.lineTo(lineX, lineY);
     line.zIndex = 0;
+
+    return i + 1;
 }
 
 function addAllLines(
     lines: (PIXI.Graphics | undefined)[],
+    i: number,
     goldenX: number,
     container: PIXI.Container,
     width: number,
     playerIsYou: boolean
 ) {
-    const centerY = playerIsYou ? Sprite.app.view.height - Sprite.height - Sprite.gap : Sprite.height + Sprite.gap;
-    addLine(lines, container, 0, 1.25 * Sprite.pixelsPerCM, centerY, width - 1.25 * Sprite.pixelsPerCM, centerY);
-    const top = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
-    const bottom = playerIsYou ? Sprite.app.view.height : 2 * (Sprite.height + Sprite.gap);
-    addLine(lines, container, 1, goldenX, top, goldenX, bottom);
+    const playerHeight = 2 * Sprite.height;
+    const topY = playerIsYou ? Sprite.app.view.height - playerHeight : 0;
+    const centerY = playerIsYou ? Sprite.app.view.height - playerHeight / 2 : playerHeight / 2;
+    const bottomY = playerIsYou ? Sprite.app.view.height : playerHeight;
+    i = addLine(lines, container, i, 0, topY, 0, bottomY);
+    i = addLine(lines, container, i, 0, topY, width, topY);
+    i = addLine(lines, container, i, width, topY, width, bottomY);
+    i = addLine(lines, container, i, 0, bottomY, width, bottomY);
+    i = addLine(lines, container, i, 1.25 * Sprite.pixelsPerCM, centerY, width - 1.25 * Sprite.pixelsPerCM, centerY);
+    i = addLine(lines, container, i, goldenX, topY, goldenX, bottomY);
 }
 
 function addLabel(

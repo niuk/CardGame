@@ -36,6 +36,8 @@ async function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
     currentLoadingTexture = '';
 }
 
+const debugLine = new PIXI.Graphics();
+
 async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     if (Sprite.app === undefined) {
         Sprite.app = new PIXI.Application(<PIXI.IApplicationOptions>{
@@ -151,76 +153,179 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 
     if (gameState) {
-        const playerHeight = 2 * (Sprite.height + Sprite.gap);
-
-        const leftPlayerIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
-        let leftPlayerContainer = Sprite.playerContainers[leftPlayerIndex];
-        if (!leftPlayerContainer) {
-            leftPlayerContainer = new PIXI.Container();
-            leftPlayerContainer.zIndex = 2;
-            leftPlayerContainer.sortableChildren = true;
-            Sprite.playerContainers[leftPlayerIndex] = leftPlayerContainer;
-            Sprite.app.stage.addChild(leftPlayerContainer);
-        }
-
-        leftPlayerContainer.position.set(0, Sprite.app.view.height);
-        leftPlayerContainer.rotation = -Math.PI / 2;
-        Sprite.playerWidths[leftPlayerIndex] = Sprite.app.view.height;
-        if (gameState.playerStates.length > 4) {
-            Sprite.playerWidths[leftPlayerIndex] -= playerHeight;
-        }
-
-        const rightPlayerIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
-        let rightPlayerContainer = Sprite.playerContainers[rightPlayerIndex];
-        if (!rightPlayerContainer) {
-            rightPlayerContainer = new PIXI.Container();
-            rightPlayerContainer.zIndex = 2;
-            rightPlayerContainer.sortableChildren = true;
-            Sprite.playerContainers[rightPlayerIndex] = rightPlayerContainer;
-            Sprite.app.stage.addChild(rightPlayerContainer);
-        }
-
-        rightPlayerContainer.rotation = Math.PI / 2;
-        rightPlayerContainer.position.set(Sprite.app.view.width, 0);
-        Sprite.playerWidths[rightPlayerIndex] = Sprite.app.view.height;
-
-        if (gameState.playerStates.length > 4) {
-            rightPlayerContainer.position.y += playerHeight
-            Sprite.playerWidths[rightPlayerIndex] -= playerHeight;
-        }
-
-        for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
-            const playerIndex = (leftPlayerIndex + i + 1) % gameState.playerStates.length;
-            let playerContainer = Sprite.playerContainers[playerIndex];
-            if (!playerContainer) {
-                playerContainer = new PIXI.Container();
-                playerContainer.zIndex = 2;
-                playerContainer.sortableChildren = true;
-                Sprite.playerContainers[playerIndex] = playerContainer;
-                Sprite.app.stage.addChild(playerContainer);
-            }
-
-            if (gameState.playerStates.length > 4) {
-                const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
-                playerContainer.position.set(i * width, 0);
-                Sprite.playerWidths[playerIndex] = width;
-            } else {
-                playerContainer.position.set(playerHeight, 0);
-                Sprite.playerWidths[playerIndex] = Sprite.app.view.width - 2 * playerHeight;
-            }
-        }
-
-        let playerContainer = Sprite.playerContainers[gameState.playerIndex];
+        let playerContainer = Sprite.containers[gameState.playerIndex];
         if (!playerContainer) {
             playerContainer = new PIXI.Container();
             playerContainer.zIndex = 3;
             playerContainer.sortableChildren = true;
-            Sprite.playerContainers[gameState.playerIndex] = playerContainer;
+            Sprite.containers[gameState.playerIndex] = playerContainer;
             Sprite.app.stage.addChild(playerContainer);
         }
 
-        Sprite.playerWidths[gameState.playerIndex] = Sprite.app.view.width - 2 * playerHeight;
-        playerContainer.position.set(playerHeight, 0);
+        for (let i = 1; i < gameState.playerStates.length; ++i) {
+            const playerIndex = (gameState.playerIndex + i) % gameState.playerStates.length;
+            let playerContainer = Sprite.containers[playerIndex];
+            if (!playerContainer) {
+                playerContainer = new PIXI.Container();
+                playerContainer.zIndex = 2;
+                playerContainer.sortableChildren = true;
+                Sprite.containers[playerIndex] = playerContainer;
+                Sprite.app.stage.addChild(playerContainer);
+            }
+        }
+
+        let layout = Lib.getCookie('layout');
+        if (layout === undefined) {
+            layout = 'polygonal';
+        }
+
+        if (layout === 'polygonal' && gameState.playerStates.length === 6) {
+            //    \______/
+            //    /      \
+            // __/        \__
+            //   \        /
+            //    \______/
+            //    /      \
+
+            // |<-arm->|<-leg->|
+            // |_|     \     |_|<-hand
+            // |\       \w     |t
+            // | \       \i    |o
+            // |  \       \d   |r
+            // |   \       \t  |s
+            // |    \       \h |o
+            // |     \       \ |
+            // |      \       \|_________width_________
+            // |       \       |he
+            // |               |ig
+            // |_______________|ht_____________________
+
+            const height = 2 * Sprite.height;
+            const torso = Sprite.app.view.height / 2 - height;
+
+            // let h = height, t = torso, and w = width
+            // using the pythagorean:
+            // w^2 = leg^2 + t^2
+            // leg = sqrt(w^2 - t^2)
+            // we also have two similar triangles, with hypothenuses at height and width:
+            // arm/t = h/w
+            // arm = t*h/w
+            // the top center and bottom center players take up width amount of screen space, so
+            // W = 2*arm + 2*leg + w
+            // where W is the width of the screen
+            // substituting arm and leg using formulas from above,
+            // W = 2*(t*h/w) + 2*sqrt(w^2 - t^2) + w
+            // W - 2*(t*h/w) - w = 2*sqrt(w^2 - t^2)
+            // W/2 - t*h/w - w/2 = sqrt(w^2 - t^2)
+            // h^2*t^2/w^2 - h*t*W/w + h*t + w^2/4 - w*W/2 + W^2/4 = w^2 - t^2
+            // we have to solve for the zeros of the polynomial:
+            // 0 = h^2*t^2/w^2 - h*t*W/w + h*t + t^2 - 3*w^2/4 - w*W/2 + W^2/4
+            // derivative w.r.t. w, so that we can apply newton's method:
+            // -2*h^2*t^2/w^3 + h*t*W/w^2 - 3*w/2 - W/2
+            const W = Sprite.app.view.width;
+            const h = height;
+            const t = torso;
+            const f = (w: number) => h*h*t*t/(w*w) - h*t*W/w + h*t + t*t - 3*w*w/4 - w*W/2 + W*W/4;
+            const df = (w: number) => -2*h*h*t*t/(w*w*w) + h*t*W/(w*w) - 3*w/2 - W/2;
+            let w = Sprite.app.view.width / 6; // an arbitrary starting point
+            for (let i = 0; i < 10; ++i) {
+                w = w - f(w)/df(w);
+                console.log(w);
+            }
+
+            const width = w;
+            const arm = torso*height/width;
+            const leg = Math.sqrt(width*width - torso*torso);
+            const hand = Math.sqrt(height*height - arm*arm);
+
+            playerContainer.position.set(arm + leg, Sprite.app.view.height - 2 * Sprite.height);
+            Sprite.widths[gameState.playerIndex] = width;
+
+            const bottomLeftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
+            Sprite.widths[bottomLeftIndex] = width;
+            const bottomLeftContainer = Sprite.containers[bottomLeftIndex];
+            if (!bottomLeftContainer) throw new Error();
+            bottomLeftContainer.position.set(arm, Sprite.app.view.height / 2);
+            bottomLeftContainer.rotation = Math.acos(leg / width);
+
+            const topLeftIndex = (gameState.playerIndex + 2) % gameState.playerStates.length;
+            Sprite.widths[topLeftIndex] = width;
+            const topLeftContainer = Sprite.containers[topLeftIndex];
+            if (!topLeftContainer) throw new Error();
+            topLeftContainer.position.set(0, Sprite.app.view.height / 2 - hand);
+            topLeftContainer.rotation = -Math.acos(leg / width);
+
+            const topIndex = (gameState.playerIndex + 3) % gameState.playerStates.length;
+            Sprite.widths[topIndex] = width;
+            const topContainer = Sprite.containers[topIndex];
+            if (!topContainer) throw new Error();
+            topContainer.position.set(arm + leg, 0);
+            topContainer.rotation = 0;
+
+            const topRightIndex = (gameState.playerIndex + 4) % gameState.playerStates.length;
+            Sprite.widths[topRightIndex] = width;
+            const topRightContainer = Sprite.containers[topRightIndex];
+            if (!topRightContainer) throw new Error();
+            const topRightPosition = V.sub({
+                x: Sprite.app.view.width - arm - leg,
+                y: 2 * hand
+            }, V.rotateClockwise(Math.acos(leg / width), { x: 0, y: 2 * hand }));
+            topRightContainer.position.set(topRightPosition.x, topRightPosition.y);
+            topRightContainer.rotation = Math.acos(leg / width);
+
+            const bottomRightIndex = (gameState.playerIndex + 5) % gameState.playerStates.length;
+            Sprite.widths[bottomRightIndex] = width;
+            const bottomRightContainer = Sprite.containers[bottomRightIndex];
+            if (!bottomRightContainer) throw new Error();
+            const bottomRightPosition = V.add({
+                x: Sprite.app.view.width - arm,
+                y: Sprite.app.view.height / 2
+            }, V.rotateCounterclockwise(Math.acos(leg / width), { x: 0, y: 2 * hand }));
+            bottomRightContainer.position.set(bottomRightPosition.x, bottomRightPosition.y);
+            bottomRightContainer.rotation = Math.PI - Math.acos(leg / width);
+        } else {
+            const playerHeight = 2 * (Sprite.height + Sprite.gap);
+            Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * playerHeight;
+            playerContainer.position.set(playerHeight, 0);
+
+            const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
+            const leftContainer = Sprite.containers[leftIndex];
+            if (!leftContainer) throw new Error();
+
+            leftContainer.position.set(0, Sprite.app.view.height);
+            leftContainer.rotation = -Math.PI / 2;
+            Sprite.widths[leftIndex] = Sprite.app.view.height;
+            if (gameState.playerStates.length > 4) {
+                Sprite.widths[leftIndex] -= playerHeight;
+            }
+
+            const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
+            const rightContainer = Sprite.containers[rightIndex];
+            if (!rightContainer) throw new Error();
+
+            rightContainer.rotation = Math.PI / 2;
+            rightContainer.position.set(Sprite.app.view.width, 0);
+            Sprite.widths[rightIndex] = Sprite.app.view.height;
+            if (gameState.playerStates.length > 4) {
+                rightContainer.position.y += playerHeight
+                Sprite.widths[rightIndex] -= playerHeight;
+            }
+
+            for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
+                const playerIndex = (leftIndex + i + 1) % gameState.playerStates.length;
+                const playerContainer = Sprite.containers[playerIndex];
+                if (!playerContainer) throw new Error();
+
+                if (gameState.playerStates.length > 4) {
+                    const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
+                    playerContainer.position.set(i * width, 0);
+                    Sprite.widths[playerIndex] = width;
+                } else {
+                    playerContainer.position.set(playerHeight, 0);
+                    Sprite.widths[playerIndex] = Sprite.app.view.width - 2 * playerHeight;
+                }
+            }
+        }
     }
 
     if (cachedOnTick !== Sprite.onTick) {
@@ -255,8 +360,8 @@ export default class Sprite {
     public static height = 0;
 
     public static deckContainer: PIXI.Container;
-    public static playerContainers: PIXI.Container[] = [];
-    public static playerWidths: number[] = [];
+    public static containers: PIXI.Container[] = [];
+    public static widths: number[] = [];
 
     // for animating the deck
     public static deckSprites: Sprite[] = [];
@@ -373,10 +478,10 @@ export default class Sprite {
             const previousBackSprites = previousPlayerBackSprites[playerIndex] ?? [];
             previousPlayerBackSprites[playerIndex] = previousBackSprites;
     
-            let container = Sprite.playerContainers[playerIndex];
+            let container = Sprite.containers[playerIndex];
             if (!container) {
                 container = new PIXI.Container();
-                Sprite.playerContainers[playerIndex] = container;
+                Sprite.containers[playerIndex] = container;
             }
 
             const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);

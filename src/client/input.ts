@@ -85,7 +85,6 @@ export type Action =
 
 export let action: Action = { action: 'None' };
 let drewFromDeck = false;
-let tookFromPlayer = -1;
 
 // indices of cards for drag & drop
 export const selectedIndices = new SortedSet<number>();
@@ -188,9 +187,6 @@ Sprite.onDragStart = (position, sprite) => {
     const gameState = Client.gameState;
     if (!gameState) return;
 
-    const mySprites = Sprite.playerFaceSprites[gameState.playerIndex];
-    if (!mySprites) throw new Error();
-
     if (sprite === Sprite.deckSprites[Sprite.deckSprites.length - 1]) {
         sprite.setAnchorAt(position);
         action = { action: 'Draw' };
@@ -235,7 +231,6 @@ Sprite.onDragStart = (position, sprite) => {
                             playerIndex,
                             cardIndex
                         };
-                        tookFromPlayer = playerIndex;
                     }
                 }
             }
@@ -309,8 +304,35 @@ Sprite.onDragMove = async (position, sprite) => {
         if (exceededDragThreshold) {
             if (await Lib.isDone(promise)) {
                 promise = (async () => {
-                    // dragging a non-selected card selects it and only it
-                    if (!selectedIndices.has(action.cardIndex)) {
+                    const gameState = Client.gameState;
+                    if (!gameState) return;
+
+                    if (selectedIndices.has(action.cardIndex)) {
+                        const container = Sprite.containers[gameState.playerIndex];
+                        const faceSprites = Sprite.playerFaceSprites[gameState.playerIndex];
+                        if (!container || !faceSprites) throw new Error();
+
+                        // dragging a selected card causes other selected cards to "gather" around it
+                        const i = selectedIndices.indexOf(action.cardIndex);
+                        let j = 0;
+                        selectedIndices.forEach((selectedIndex: number) => {
+                            const selectedSprite = faceSprites[selectedIndex];
+                            if (!selectedSprite) throw new Error();
+                            selectedSprite.setAnchorAt(V.add(V.add(
+                                selectedSprite.getTopLeftInWorld(),
+                                V.sub(
+                                    container.transform.worldTransform.apply(sprite.position),
+                                    sprite.getTopLeftInWorld()
+                                )), {
+                                    x: (j - i) * Sprite.gap,
+                                    y: 0
+                                })
+                            );
+
+                            ++j;
+                        });
+                    } else {
+                        // dragging a non-selected card selects it and only it
                         selectedIndices.clear();
                         selectedIndices.add(action.cardIndex);
                     }
@@ -373,15 +395,11 @@ Sprite.onDragEnd = async (position, sprite) => {
             // reordering happens in onDragMove
             previousClickIndex = action.cardIndex;
         } else if (action.action === 'Give') {
-            if (tookFromPlayer === action.playerIndex) {
-                previousClickIndex = action.cardIndex;
-            } else {
-                previousClickIndex = -1;
-                if (!endedOnBackground) {
-                    const playerIndex = action.playerIndex;
-                    await promise;
-                    promise = Client.giveToOtherPlayer(playerIndex);
-                }
+            previousClickIndex = -1;
+            if (!endedOnBackground) {
+                const playerIndex = action.playerIndex;
+                await promise;
+                promise = Client.giveToOtherPlayer(playerIndex);
             }
         } else if (action.action === 'Return') {
             if (drewFromDeck) {
@@ -433,7 +451,6 @@ Sprite.onDragEnd = async (position, sprite) => {
     } finally {
         action = { action: 'None' };
         drewFromDeck = false;
-        tookFromPlayer = -1;
     }
 }
 
@@ -442,9 +459,9 @@ async function drag(): Promise<void> {
     if (!gameState) throw new Error();
 
     const player = gameState.playerStates[gameState.playerIndex];
-    const container = Sprite.playerContainers[gameState.playerIndex];
+    const container = Sprite.containers[gameState.playerIndex];
     const sprites = Sprite.playerFaceSprites[gameState.playerIndex];
-    const width = Sprite.playerWidths[gameState.playerIndex];
+    const width = Sprite.widths[gameState.playerIndex];
     if (!player || !container || !sprites || width === undefined) throw new Error();
 
     const moving: [Sprite, [Lib.Card, Lib.Origin]][] = [];
@@ -537,16 +554,16 @@ async function drag(): Promise<void> {
         const playerState = gameState.playerStates[playerIndex];
         if (!playerState) continue;
 
-        const playerContainer = Sprite.playerContainers[playerIndex];
-        const playerWidth = Sprite.playerWidths[playerIndex];
+        const playerContainer = Sprite.containers[playerIndex];
+        const playerWidth = Sprite.widths[playerIndex];
         if (!playerContainer || playerWidth === undefined) throw new Error();
 
         const cardsMin = {
-            x: playerWidth / goldenRatio - getLeftExtent(playerState) * Sprite.gap - Sprite.width,
-            y: 0
+            x: playerWidth / goldenRatio,
+            y: Sprite.height + Sprite.gap
         };
         const cardsMax = {
-            x: playerWidth / goldenRatio + getRightExtent(playerState) * Sprite.gap + Sprite.width,
+            x: playerWidth,
             y: 2 * (Sprite.height + Sprite.gap)
         };
 
@@ -700,20 +717,6 @@ async function drag(): Promise<void> {
     ) {
         await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newOriginIndices);
     }
-}
-
-function getLeftExtent(playerState: Lib.PlayerState) {
-    return Math.max(
-        playerState.shareCount,
-        playerState.groupCount - playerState.revealCount
-    );
-}
-
-function getRightExtent(playerState: Lib.PlayerState) {
-    return Math.max(
-        playerState.revealCount - playerState.shareCount,
-        playerState.cardsWithOrigins.length - playerState.groupCount
-    );
 }
 
 function intersectBox(u0: V.IVector2, u1: V.IVector2, v0: V.IVector2, v1: V.IVector2) {

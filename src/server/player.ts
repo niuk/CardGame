@@ -39,7 +39,7 @@ export default class Player implements Lib.PlayerState {
         };
         
         ws.onclose = async closeEvent => {
-            console.log('closed websocket connection', closeEvent);
+            console.log('closed websocket connection');
         };
     }
 
