@@ -546,7 +546,7 @@ function addLabel(
         labels[i] = label;
         labelsUsingCurrentFonts.add(label);
         if (onClick) {
-            label.on('click', onClick);
+            label.on('pointerup', onClick);
             label.interactive = true;
             label.cursor = 'pointer';
         }
