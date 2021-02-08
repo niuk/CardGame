@@ -324,7 +324,7 @@ Sprite.onDragMove = async (position, sprite) => {
                                     container.transform.worldTransform.apply(sprite.position),
                                     sprite.getTopLeftInWorld()
                                 )), {
-                                    x: (j - i) * Sprite.gap,
+                                    x: (i - j) * Sprite.gap,
                                     y: 0
                                 })
                             );
