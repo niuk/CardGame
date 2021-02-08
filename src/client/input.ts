@@ -558,13 +558,15 @@ async function drag(): Promise<void> {
         const playerWidth = Sprite.widths[playerIndex];
         if (!playerContainer || playerWidth === undefined) throw new Error();
 
+        const above = playerContainer.y < Sprite.app.view.height / 2;
+
         const cardsMin = {
-            x: playerWidth / goldenRatio,
-            y: Sprite.height + Sprite.gap
+            x: above ? playerWidth / goldenRatio : 0,
+            y: above ? Sprite.height : 0
         };
         const cardsMax = {
-            x: playerWidth,
-            y: 2 * (Sprite.height + Sprite.gap)
+            x: above ? playerWidth : playerWidth * (1 - 1 / goldenRatio),
+            y: above ? 2 * Sprite.height : Sprite.height
         };
 
         const dragMinInContainer = playerContainer.transform.worldTransform.applyInverse(dragMin);
@@ -602,7 +604,7 @@ async function drag(): Promise<void> {
     const goldenX = (1 - 1 / goldenRatio) * width;
     const midY = (dragMinInContainer.y + dragMaxInContainer.y) / 2;
 
-    const splitTop = !drewFromDeck && midY < Sprite.app.view.height - Sprite.height - Sprite.gap;
+    const splitTop = !drewFromDeck && midY < Sprite.height;
     const splitLeft = (dragMinInContainer.x + dragMaxInContainer.x) / 2 < goldenX;
     let splitIndex: number | undefined = undefined;
     let start: number;

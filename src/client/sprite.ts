@@ -228,7 +228,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const f = (w: number) => h*h*t*t/(w*w) - h*t*W/w + h*t + t*t - 3*w*w/4 - w*W/2 + W*W/4;
             const df = (w: number) => -2*h*h*t*t/(w*w*w) + h*t*W/(w*w) - 3*w/2 - W/2;
             let w = Sprite.app.view.width / 6; // an arbitrary starting point
-            for (let i = 0; i < 10; ++i) {
+            for (let i = 0; i < 5; ++i) {
                 w = w - f(w)/df(w);
                 console.log(w);
             }
@@ -237,6 +237,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const arm = torso*height/width;
             const leg = Math.sqrt(width*width - torso*torso);
             const hand = Math.sqrt(height*height - arm*arm);
+            const tilt = Math.acos(leg / width);
 
             playerContainer.position.set(arm + leg, Sprite.app.view.height - 2 * Sprite.height);
             Sprite.widths[gameState.playerIndex] = width;
@@ -246,14 +247,14 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const bottomLeftContainer = Sprite.containers[bottomLeftIndex];
             if (!bottomLeftContainer) throw new Error();
             bottomLeftContainer.position.set(arm, Sprite.app.view.height / 2);
-            bottomLeftContainer.rotation = Math.acos(leg / width);
+            bottomLeftContainer.rotation = tilt;
 
             const topLeftIndex = (gameState.playerIndex + 2) % gameState.playerStates.length;
             Sprite.widths[topLeftIndex] = width;
             const topLeftContainer = Sprite.containers[topLeftIndex];
             if (!topLeftContainer) throw new Error();
             topLeftContainer.position.set(0, Sprite.app.view.height / 2 - hand);
-            topLeftContainer.rotation = -Math.acos(leg / width);
+            topLeftContainer.rotation = -tilt;
 
             const topIndex = (gameState.playerIndex + 3) % gameState.playerStates.length;
             Sprite.widths[topIndex] = width;
@@ -267,22 +268,18 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const topRightContainer = Sprite.containers[topRightIndex];
             if (!topRightContainer) throw new Error();
             const topRightPosition = V.sub({
-                x: Sprite.app.view.width - arm - leg,
-                y: 2 * hand
-            }, V.rotateClockwise(Math.acos(leg / width), { x: 0, y: 2 * hand }));
+                x: arm + leg + width,
+                y: height
+            }, V.rotateClockwise(tilt, { x: 0, y: height }));
             topRightContainer.position.set(topRightPosition.x, topRightPosition.y);
-            topRightContainer.rotation = Math.acos(leg / width);
+            topRightContainer.rotation = tilt;
 
             const bottomRightIndex = (gameState.playerIndex + 5) % gameState.playerStates.length;
             Sprite.widths[bottomRightIndex] = width;
             const bottomRightContainer = Sprite.containers[bottomRightIndex];
             if (!bottomRightContainer) throw new Error();
-            const bottomRightPosition = V.add({
-                x: Sprite.app.view.width - arm,
-                y: Sprite.app.view.height / 2
-            }, V.rotateCounterclockwise(Math.acos(leg / width), { x: 0, y: 2 * hand }));
-            bottomRightContainer.position.set(bottomRightPosition.x, bottomRightPosition.y);
-            bottomRightContainer.rotation = Math.PI - Math.acos(leg / width);
+            bottomRightContainer.position.set(arm + leg + width, Sprite.app.view.height - height);
+            bottomRightContainer.rotation = -tilt;
         } else {
             const playerHeight = 2 * (Sprite.height + Sprite.gap);
             Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * playerHeight;

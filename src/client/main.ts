@@ -387,8 +387,8 @@ function renderPlayers(deltaTime: number) {
         const backSprites = Sprite.playerBackSprites[playerIndex];
         if (width === undefined || !container || !faceSprites || !backSprites) throw new Error();
 
-        const goldenX = width / goldenRatio;
-        const centerY = Sprite.height + Sprite.gap;
+        const above = container.position.y < Sprite.app.view.height / 2;
+        const goldenX = above ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
         for (let cardIndex = 0; cardIndex < playerState.cardsWithOrigins.length; ++cardIndex) {
             let sprite: Sprite | undefined;
@@ -421,19 +421,22 @@ function renderPlayers(deltaTime: number) {
             )) {
                 sprite.target = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
             } else {
-                sprite.target.x = cardIndex < playerState.revealCount ?
+                const count = cardIndex < playerState.revealCount ?
                     cardIndex - playerState.shareCount :
-                    cardIndex - playerState.groupCount ;
-    
-                const above = container.position.y < Sprite.app.view.height / 2;
+                    cardIndex - playerState.groupCount;
+
                 if (above) {
-                    sprite.target.x *= -1;
-                }
-    
-                if (sprite.target.x < 0) {
-                    sprite.target.x = -Sprite.gap * sprite.target.x - Sprite.width;
+                    if (count < 0) {
+                        sprite.target.x = goldenX - (count + 1) * Sprite.gap;
+                    } else {
+                        sprite.target.x = goldenX - count * Sprite.gap - Sprite.width;
+                    }
                 } else {
-                    sprite.target.x *= Sprite.gap;
+                    if (count < 0) {
+                        sprite.target.x = goldenX + (count + 1) * Sprite.gap - Sprite.width;
+                    } else {
+                        sprite.target.x = goldenX + count * Sprite.gap;
+                    }
                 }
     
                 sprite.target.y = (cardIndex < playerState.revealCount) === above ? Sprite.height : 0;    
@@ -451,7 +454,7 @@ function renderPlayers(deltaTime: number) {
             playerLines[playerIndex] = lines;
         }
 
-        addAllLines(lines, 0, goldenX, container, width, false);
+        addAllLines(lines, 0, container, width);
 
         let labels = playerLabels[playerIndex];
         if (!labels) {
@@ -461,10 +464,9 @@ function renderPlayers(deltaTime: number) {
 
         addAllLabels(
             labels,
-            goldenX,
             container,
+            width,
             playerState,
-            false,
             playerState.shareCount,
             playerState.revealCount,
             playerState.groupCount,
@@ -498,21 +500,18 @@ function addLine(
 function addAllLines(
     lines: (PIXI.Graphics | undefined)[],
     i: number,
-    goldenX: number,
     container: PIXI.Container,
-    width: number,
-    playerIsYou: boolean
+    width: number
 ) {
-    const playerHeight = 2 * Sprite.height;
-    const topY = playerIsYou ? Sprite.app.view.height - playerHeight : 0;
-    const centerY = playerIsYou ? Sprite.app.view.height - playerHeight / 2 : playerHeight / 2;
-    const bottomY = playerIsYou ? Sprite.app.view.height : playerHeight;
-    i = addLine(lines, container, i, 0, topY, 0, bottomY);
-    i = addLine(lines, container, i, 0, topY, width, topY);
-    i = addLine(lines, container, i, width, topY, width, bottomY);
-    i = addLine(lines, container, i, 0, bottomY, width, bottomY);
-    i = addLine(lines, container, i, 1.25 * Sprite.pixelsPerCM, centerY, width - 1.25 * Sprite.pixelsPerCM, centerY);
-    i = addLine(lines, container, i, goldenX, topY, goldenX, bottomY);
+    const goldenX = container.position.y < Sprite.app.view.height / 2 ?
+        width / goldenRatio :
+        width * (1 - 1 / goldenRatio);
+    i = addLine(lines, container, i, 0, 0, width, 0);
+    i = addLine(lines, container, i, 0, 0, 0, 2 * Sprite.height);
+    i = addLine(lines, container, i, width, 0, width, 2 * Sprite.height);
+    i = addLine(lines, container, i, 0, 2 * Sprite.height, width, 2 * Sprite.height);
+    i = addLine(lines, container, i, 0, Sprite.height, width, Sprite.height);
+    i = addLine(lines, container, i, goldenX, 0, goldenX, 2 * Sprite.height);
 }
 
 function addLabel(
@@ -549,7 +548,7 @@ function addLabel(
         labels[i] = label;
         labelsUsingCurrentFonts.add(label);
         if (onClick) {
-            label.on('click', onClick);
+            label.on('pointerup', onClick);
             label.interactive = true;
             label.cursor = 'pointer';
         }
@@ -580,10 +579,9 @@ function addLabel(
 
 function addAllLabels(
     labels: (PIXI.BitmapText | undefined)[],
-    goldenX: number,
     container: PIXI.Container,
+    width: number,
     playerState: Lib.PlayerState,
-    playerIsYou: boolean,
     shareCount: number,
     revealCount: number,
     groupCount: number,
@@ -598,45 +596,54 @@ function addAllLabels(
         return 0;
     }).reduce((a, b) => a + b, 0);
     
-    let i = 0
-    let y: number;
+    const above = container.position.y < Sprite.app.view.height / 2;
+    let i = 0;
+    const goldenX = above ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
     const nameMetrics = PIXI.TextMetrics.measureText(playerState.name, textStyle);
-    const nameY = playerIsYou ?
-        Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) - 0.75 * Sprite.pixelsPerCM - Sprite.fixedGap :
-        2 * (Sprite.height + Sprite.gap) + Sprite.fixedGap;
+    const nameX = goldenX - nameMetrics.width / 2;
+    const nameY = above ? 2 * Sprite.height : -nameMetrics.height;
     i = addLabel(labels, container, i,
-        goldenX - nameMetrics.width / 2,
+        nameX,
         nameY,
         playerState.name,
         '大字',
         26
     );
 
-    const topY = playerIsYou ? Sprite.app.view.height - 2 * (Sprite.height + Sprite.gap) : 0;
-    const topLeftCount = playerIsYou ? shareCount : playerState.cardsWithOrigins.length - groupCount;
-    const topLeftX = goldenX - (topLeftCount > 0 ? Sprite.width + topLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
-    i = 上下(labels, container, i, topLeftX, topY, playerIsYou ? '得分' : '持牌', '中字', 19);
-    
-    const topLeftRight數 = `︵${数(playerIsYou ? score : topLeftCount)}︶`;
-    i = 上下(labels, container, i, topLeftX - 0.375 * Sprite.pixelsPerCM, topY, topLeftRight數, '小字', 13);
+    const getOffset = (x: number) => x > 0 ? (x - 1) * Sprite.gap + Sprite.width : 0;
 
-    const topRightCount = playerIsYou ? revealCount - shareCount : groupCount - revealCount;
-    const topRightX = goldenX + (topRightCount > 0 ? Sprite.width + topRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
-    i = 上下(labels, container, i, topRightX, topY, playerIsYou ? '出牌' : '底牌', '中字', 19);
+    const outerY = above ? Sprite.height : 0;
+    const shareX = above ?
+        goldenX + getOffset(shareCount) :
+        goldenX - getOffset(shareCount) - 0.548 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, shareX, outerY, '得分', '中字', 19);
 
-    const bottomY = playerIsYou ? Sprite.app.view.height - Sprite.height : Sprite.height + 2 * Sprite.gap;
+    const 得分X = above ?
+        shareX + 0.548 * Sprite.pixelsPerCM :
+        shareX - 0.375 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, 得分X, outerY, `︵${数(score)}︶`, '小字', 13);
 
-    const bottomLeftCount = playerIsYou ? groupCount - revealCount : revealCount - shareCount;
-    const bottomLeftX = goldenX - (bottomLeftCount > 0 ? Sprite.width + bottomLeftCount * Sprite.gap + Sprite.fixedGap : Sprite.gap) - 0.548 * Sprite.pixelsPerCM;
-    i = 上下(labels, container, i, bottomLeftX, bottomY, playerIsYou ? '底牌' : '出牌', '中字', 19);
-    
-    const bottomRightCount = playerIsYou ? totalCount - groupCount : shareCount;
-    const bottomRightX = goldenX + (bottomRightCount > 0 ? Sprite.width + bottomRightCount * Sprite.gap + Sprite.fixedGap : Sprite.gap);
-    i = 上下(labels, container, i, bottomRightX, bottomY, playerIsYou ? '持牌' : '得分', '中字', 19);
+    const 出牌X = above ?
+        goldenX - getOffset(revealCount - shareCount) - 0.548 * Sprite.pixelsPerCM :
+        goldenX + getOffset(revealCount - shareCount);
+    i = 上下(labels, container, i, 出牌X, outerY, '出牌', '中字', 19);
 
-    const bottomRight數 = `︵${数(playerIsYou ? bottomRightCount : score)}︶`;
-    i = 上下(labels, container, i, bottomRightX + 0.548 * Sprite.pixelsPerCM, bottomY, bottomRight數, '小字', 13);
+    const innerY = above ? 0 : Sprite.height;
+    const 底牌X = above ?
+        goldenX + getOffset(groupCount - revealCount) :
+        goldenX - getOffset(groupCount - revealCount) - 0.548 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, 底牌X, innerY, '底牌', '中字', 19);
+
+    const 持牌X = above ?
+        goldenX - getOffset(totalCount - groupCount) -  0.548 * Sprite.pixelsPerCM :
+        goldenX + getOffset(totalCount - groupCount);
+    i = 上下(labels, container, i, 持牌X, innerY, '持牌', '中字', 19);
+
+    const hiddenX = above ?
+        持牌X - 0.375 * Sprite.pixelsPerCM :
+        持牌X + 0.548 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, hiddenX, innerY, `︵${数(totalCount - groupCount)}︶`, '小字', 13);
 
     for (; i < labels.length; ++i) {
         labels[i]?.destroy();
