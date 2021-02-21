@@ -1,11 +1,11 @@
 import * as PIXI from 'pixi.js-legacy';
 import * as Lib from '../lib';
-import { drawFromDeck } from './client';
 import * as V from './vector';
 
 const decayPerSecond = 1 / 5;
 
-const colors = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
+const colors = [0x000000, 0x0000ff, 0xff0000, 0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
+const colorNames = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
 const suits = ['Club', 'Diamond', 'Heart', 'Spade', 'Joker'];
 
 const textures = new Map<string, PIXI.Texture>();
@@ -24,7 +24,7 @@ const backgroundTextureNames = [
 ];
 
 let loadedTextureCount = 0;
-const totalTextureCount = backgroundTextureNames.length + 4 * 13 + 2 + colors.length;
+const totalTextureCount = backgroundTextureNames.length + 4 * 13 + 2 + colorNames.length;
 
 let currentLoadingTexture = '';
 async function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
@@ -90,7 +90,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
 
         // load textures for card backs
         let i = 0;
-        for (const color of colors) {
+        for (const color of colorNames) {
             await loadTexture(
                 `Back${i++}`,
                 `PlayingCards/BackColor_${color}.png`,
@@ -142,12 +142,12 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 
     Sprite.dragThreshold = 0.5 * Sprite.pixelsPerCM;
-    Sprite.pixelsPerPercent = Math.min(Sprite.app.view.width / 100, Sprite.app.view.height / 100);
+    Sprite.pixelsPerPercent = Math.sqrt(Sprite.app.view.width * Sprite.app.view.height) / 100;
     Sprite.fixedGap = 0.15 * Sprite.pixelsPerCM;
     Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
-    Sprite.gap = 1.8 * Sprite.pixelsPerPercent;
-    Sprite.width = 10 * Sprite.pixelsPerPercent;
-    Sprite.height = 16 * Sprite.pixelsPerPercent;
+    Sprite.gap = 4/3 * Sprite.pixelsPerPercent;
+    Sprite.width = 7 * Sprite.pixelsPerPercent;
+    Sprite.height = 11 * Sprite.pixelsPerPercent;
     for (const sprite of sprites) {
         sprite.updateSize();
     }
@@ -227,13 +227,18 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const t = torso;
             const f = (w: number) => h*h*t*t/(w*w) - h*t*W/w + h*t + t*t - 3*w*w/4 - w*W/2 + W*W/4;
             const df = (w: number) => -2*h*h*t*t/(w*w*w) + h*t*W/(w*w) - 3*w/2 - W/2;
-            let w = Sprite.app.view.width / 6; // an arbitrary starting point
-            for (let i = 0; i < 5; ++i) {
-                w = w - f(w)/df(w);
-                console.log(w);
+            let w0 = Sprite.app.view.width / 2; // an arbitrary starting point
+            let width = w0;
+            for (let i = 0; i < 100; ++i) {
+                //console.log(w0, '->', width);
+                width = w0 - f(w0)/df(w0);
+                if (Math.abs(width - w0) < 1) {
+                    break;
+                }
+
+                w0 = width;
             }
 
-            const width = w;
             const arm = torso*height/width;
             const leg = Math.sqrt(width*width - torso*torso);
             const hand = Math.sqrt(height*height - arm*arm);
@@ -281,9 +286,9 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             bottomRightContainer.position.set(arm + leg + width, Sprite.app.view.height - height);
             bottomRightContainer.rotation = -tilt;
         } else {
-            const playerHeight = 2 * (Sprite.height + Sprite.gap);
-            Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * playerHeight;
-            playerContainer.position.set(playerHeight, 0);
+            const height = 2 * Sprite.height;
+            Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * height;
+            playerContainer.position.set(height, Sprite.app.view.height - height);
 
             const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
             const leftContainer = Sprite.containers[leftIndex];
@@ -293,7 +298,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             leftContainer.rotation = -Math.PI / 2;
             Sprite.widths[leftIndex] = Sprite.app.view.height;
             if (gameState.playerStates.length > 4) {
-                Sprite.widths[leftIndex] -= playerHeight;
+                Sprite.widths[leftIndex] -= height;
             }
 
             const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
@@ -304,8 +309,8 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             rightContainer.position.set(Sprite.app.view.width, 0);
             Sprite.widths[rightIndex] = Sprite.app.view.height;
             if (gameState.playerStates.length > 4) {
-                rightContainer.position.y += playerHeight
-                Sprite.widths[rightIndex] -= playerHeight;
+                rightContainer.position.y += height
+                Sprite.widths[rightIndex] -= height;
             }
 
             for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
@@ -318,8 +323,8 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                     playerContainer.position.set(i * width, 0);
                     Sprite.widths[playerIndex] = width;
                 } else {
-                    playerContainer.position.set(playerHeight, 0);
-                    Sprite.widths[playerIndex] = Sprite.app.view.width - 2 * playerHeight;
+                    playerContainer.position.set(height, 0);
+                    Sprite.widths[playerIndex] = Sprite.app.view.width - 2 * height;
                 }
             }
         }
@@ -624,6 +629,7 @@ export default class Sprite {
         const positionInWorld = oldParent.worldTransform.apply(this.position);
         const rotationInWorld = this.rotation + oldParent.rotation;
         //if (parent !== oldParent) console.log(this.position);
+        //if (parent !== oldParent) console.log('old rotation', this.rotation);
 
         oldParent.removeChild(this._sprite);
         parent.addChild(this._sprite);
@@ -634,7 +640,15 @@ export default class Sprite {
         this.target = parent.transform.worldTransform.applyInverse(targetInWorld);
         this.position = parent.transform.worldTransform.applyInverse(positionInWorld);
         this.rotation = rotationInWorld - parent.transform.rotation;
+
+        if (parent !== oldParent) {
+            this.easePositionStart = this.position;
+            this.easeRotationStart = this.rotation;
+            this.easePositionTime = 0;
+            this.easeRotationTime = 0;
+        }
         //if (parent !== oldParent) console.log(this.position);
+        //if (parent !== oldParent) console.log('new rotation', this.rotation);
     }
 
     /*drawWorldDot(dot: PIXI.Graphics, position: V.IVector2, color: number): void {
@@ -645,18 +659,60 @@ export default class Sprite {
         dot.endFill();
         Sprite.app.stage.addChild(dot);
     }*/
-
     //targetDot = new PIXI.Graphics();
     //positionDot = new PIXI.Graphics();
+
+    private easePositionTime = 0;
+    private easePositionDuration = 0;
+    private easePositionStart = { x: 0, y: 0 };
+
+    private easeRotationTime = 0;
+    private easeRotationDuration = 0;
+    private easeRotationStart = 0;
+
     public animate(deltaTime: number): void {
+        const distance = V.distance(this.target, this.position);
+        if (distance < 1) {
+            this.position = this.target;
+            this.easePositionTime = 0;
+            this.easePositionStart = this.position;
+        } else {
+            if (this.easePositionTime === 0) {
+                this.easePositionDuration = 500;
+            }
+
+            this.easePositionTime += deltaTime;
+            this.position = V.add(this.easePositionStart, V.scale(this.easeInOut(this.easePositionTime / this.easePositionDuration), V.sub(this.target, this.easePositionStart)));
+        }
+
+        const delta = Math.abs(this.rotation);
+        if (delta === 0) {
+            this.rotation = 0;
+            this.easeRotationTime = 0;
+            this.easeRotationStart = this.rotation;
+        } else {
+            if (this.easeRotationTime === 0) {
+                this.easeRotationDuration = 200;
+            }
+            
+            this.easeRotationTime += deltaTime;
+            this.rotation = this.easeRotationStart - this.easeInOut(this.easeRotationTime / this.easeRotationDuration) * this.easeRotationStart;
+        }
+
+        /*
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
         this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);
-        
+        */
+
         //const worldTarget = this._sprite.parent.transform.worldTransform.apply(this.target);
         //this.drawWorldDot(this.targetDot, worldTarget, 0x00ff00);
         //const worldPosition = this._sprite.parent.transform.worldTransform.apply(this.position);
         //this.drawWorldDot(this.positionDot, worldPosition, 0x0000ff);
+    }
+
+    private easeInOut(x: number): number {
+        return 10 * Math.atan(2 * Math.PI * (x - 0.5)) / (9 * Math.PI) + 0.4466;
     }
 
     //anchorDot = new PIXI.Graphics();
