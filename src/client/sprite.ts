@@ -1,6 +1,5 @@
 import * as PIXI from 'pixi.js-legacy';
 import * as Lib from '../lib';
-import { drawFromDeck } from './client';
 import * as V from './vector';
 
 const decayPerSecond = 1 / 5;
@@ -144,8 +143,8 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     Sprite.fixedGap = 0.15 * Sprite.pixelsPerCM;
     Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
     Sprite.gap = 1.8 * Sprite.pixelsPerPercent;
-    Sprite.width = 10 * Sprite.pixelsPerPercent;
-    Sprite.height = 16 * Sprite.pixelsPerPercent;
+    Sprite.width = 7 * Sprite.pixelsPerPercent;
+    Sprite.height = 11 * Sprite.pixelsPerPercent;
     for (const sprite of sprites) {
         sprite.updateSize();
     }
