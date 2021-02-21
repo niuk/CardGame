@@ -142,7 +142,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     Sprite.pixelsPerPercent = Math.min(Sprite.app.view.width / 100, Sprite.app.view.height / 100);
     Sprite.fixedGap = 0.15 * Sprite.pixelsPerCM;
     Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
-    Sprite.gap = 1.8 * Sprite.pixelsPerPercent;
+    Sprite.gap = 1.2 * Sprite.pixelsPerPercent;
     Sprite.width = 7 * Sprite.pixelsPerPercent;
     Sprite.height = 11 * Sprite.pixelsPerPercent;
     for (const sprite of sprites) {
