@@ -21,8 +21,8 @@ export function delay(ms: number): Promise<void> {
 
 export enum Suit {
     Club, // 0
-    Diamond,
     Heart,
+    Diamond,
     Spade,
     Joker, // 4
 }

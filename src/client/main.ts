@@ -195,17 +195,14 @@ function renderDeck(deltaTime: number) {
         deckSprite.animate(deltaTime);
     }
 
-    let i = 0;
-    if (Sprite.deckSprites.length > 0) {
-        i = addLabel(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width / 2 - 0.75 * Sprite.pixelsPerCM,
-            Sprite.app.view.height / 2 - Sprite.height / 2 - Sprite.fixedGap - 0.75 * Sprite.pixelsPerCM,
-            '洗牌',
-            '大字',
-            26,
-            Client.shuffleDeck
-        );
-    }
+    let i = 上下(deckLabels, Sprite.deckContainer, 0,
+        Sprite.app.view.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - Sprite.width / 2 - 0.75 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.height / 2,
+        '洗牌',
+        '大字',
+        26,
+        Client.shuffleDeck
+    );
 
     if (Client.gameState) {
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -273,7 +270,6 @@ function renderPlayers(deltaTime: number) {
                 )
             )) {
                 sprite.target = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
-                sprite.position = sprite.target;
             } else {
                 const count = cardIndex < playerState.revealCount ?
                     cardIndex - playerState.shareCount :
@@ -298,6 +294,7 @@ function renderPlayers(deltaTime: number) {
                 sprite.resetAnchor();
             }
 
+            sprite.selected = gameState.playerIndex === playerIndex && Input.selectedIndices.has(cardIndex);
             sprite.zIndex = cardIndex;
             sprite.animate(deltaTime);
         }
@@ -515,10 +512,11 @@ function 上下(
     y: number,
     詞: string,
     fontName: string,
-    fontSize: number
+    fontSize: number,
+    onClick?: () => void
 ): number {
     for (const 字 of 詞) {
-        i = addLabel(labels, container, i, x, y, 字, fontName, fontSize);
+        i = addLabel(labels, container, i, x, y, 字, fontName, fontSize, onClick);
 
         if (fontName === '大字') {
             y += 0.75 * Sprite.pixelsPerCM;

@@ -6,7 +6,7 @@ const decayPerSecond = 1 / 5;
 
 const colors = [0x000000, 0x0000ff, 0xff0000, 0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
 const colorNames = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
-const suits = ['Club', 'Diamond', 'Heart', 'Spade', 'Joker'];
+const suits = ['Club', 'Heart', 'Diamond', 'Spade', 'Joker'];
 
 const textures = new Map<string, PIXI.Texture>();
 const sprites = new Set<Sprite>();
@@ -145,9 +145,9 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     Sprite.pixelsPerPercent = Math.sqrt(Sprite.app.view.width * Sprite.app.view.height) / 100;
     Sprite.fixedGap = 0.15 * Sprite.pixelsPerCM;
     Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
-    Sprite.gap = 4/3 * Sprite.pixelsPerPercent;
-    Sprite.width = 7 * Sprite.pixelsPerPercent;
-    Sprite.height = 11 * Sprite.pixelsPerPercent;
+    Sprite.gap = 0.8 * Sprite.pixelsPerPercent;
+    Sprite.width = 5 * Sprite.pixelsPerPercent;
+    Sprite.height = 8 * Sprite.pixelsPerPercent;
     for (const sprite of sprites) {
         sprite.updateSize();
     }
@@ -556,7 +556,7 @@ export default class Sprite {
 
     public set selected(value: boolean) {
         if (value) {
-            this._sprite.tint = 0xd0d0d0;
+            this._sprite.tint = 0xd0d0ff;
         } else {
             this._sprite.tint = 0xffffff;
         }
@@ -671,6 +671,7 @@ export default class Sprite {
     private easeRotationStart = 0;
 
     public animate(deltaTime: number): void {
+        /*
         const distance = V.distance(this.target, this.position);
         if (distance < 1) {
             this.position = this.target;
@@ -698,12 +699,11 @@ export default class Sprite {
             this.easeRotationTime += deltaTime;
             this.rotation = this.easeRotationStart - this.easeInOut(this.easeRotationTime / this.easeRotationDuration) * this.easeRotationStart;
         }
+        */
 
-        /*
         const scale = 1 - Math.pow(1 - decayPerSecond, deltaTime);
         this.position = V.add(this.position, V.scale(scale, V.sub(this.target, this.position)));
         this.rotation = this.rotation + scale * (0 - this.rotation);
-        */
 
         //const worldTarget = this._sprite.parent.transform.worldTransform.apply(this.target);
         //this.drawWorldDot(this.targetDot, worldTarget, 0x00ff00);
