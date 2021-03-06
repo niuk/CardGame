@@ -116,7 +116,7 @@ export interface SetPlayerName extends MethodBase {
 export interface NewGame extends MethodBase {
     methodName: 'NewGame';
     numPlayers: 4 | 5 | 6;
-    numDecks: number;
+    numDecks: 1 | 2 | 3;
 }
 
 export interface JoinGame extends MethodBase {

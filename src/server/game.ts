@@ -25,16 +25,18 @@ export default class Game {
     }
 
     public numPlayers: 4 | 5 | 6;
+    public numDecks: 1 | 2 | 3;
     public players: (Player | undefined)[] = []
     public deckCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
 
-    public constructor(numPlayers: 4 | 5 | 6, numDecks: number) {
+    public constructor(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3) {
         do {
             this._gameId = nanoid();
         } while (Game.gamesById.has(this.gameId));
         Game.gamesById.set(this.gameId, this);
 
         this.numPlayers = numPlayers;
+        this.numDecks = numDecks;
 
         for (let i = 0; i < numPlayers; ++i) {
             this.players[i] = undefined;
@@ -80,8 +82,47 @@ export default class Game {
     }
 
     public async dispense(): Promise<void> {
+        let remainder: number;
+        if (this.numPlayers === 4) {
+            if (this.numDecks === 1) {
+                remainder = 0;
+            } else if (this.numDecks === 2) {
+                remainder = 8;
+            } else if (this.numDecks === 3) {
+                remainder = 0;
+            } else {
+                const _: never = this.numDecks;
+                throw new Error();
+            }
+        } else if (this.numPlayers === 5) {
+            if (this.numDecks === 1) {
+                remainder = 0;
+            } else if (this.numDecks === 2) {
+                remainder = 8;
+            } else if (this.numDecks === 3) {
+                remainder = 7;
+            } else {
+                const _: never = this.numDecks;
+                throw new Error();
+            }
+        } else if (this.numPlayers === 6) {
+            if (this.numDecks === 1) {
+                remainder = 0;
+            } else if (this.numDecks === 2) {
+                remainder = 6;
+            } else if (this.numDecks === 3) {
+                remainder = 6;
+            } else {
+                const _: never = this.numDecks;
+                throw new Error();
+            }
+        } else {
+            const _: never = this.numPlayers;
+            throw new Error();
+        }
+
         let playerIndex = 0;
-        while (this.deckCardsWithOrigins.length > 8) {
+        while (this.deckCardsWithOrigins.length > remainder) {
             const player = this.players[playerIndex % this.numPlayers];
             if (player) {
                 const release = await Game.mutex.acquire();
@@ -99,7 +140,7 @@ export default class Game {
                     release();
                 }
 
-                await Lib.delay(500);
+                await Lib.delay(250);
             }
 
             ++playerIndex;

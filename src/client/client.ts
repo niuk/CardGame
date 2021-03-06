@@ -114,7 +114,7 @@ export function joinGame(gameId: string): Promise<void> {
     });
 }
 
-export function newGame(numPlayers: number, numDecks: number): Promise<void> {
+export function newGame(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('NewGame', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.NewGame>{
