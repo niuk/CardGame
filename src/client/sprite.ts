@@ -1,8 +1,6 @@
 import * as PIXI from 'pixi.js-legacy';
-import { Resource } from 'pixi.js-legacy';
 import * as Lib from '../lib';
 import * as V from './vector';
-import Loader from "resource-loader";
 
 const decayPerSecond = 1 / 5;
 
@@ -33,8 +31,6 @@ function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
         textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
     });
 }
-
-const debugLine = new PIXI.Graphics();
 
 async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     if (Sprite.app === undefined) {
@@ -80,7 +76,6 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                     `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
                     cardTextureFrame
                 );
-                bar.value = ++loadedTextureCount;
             }
         }
 
@@ -92,11 +87,10 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                 `PlayingCards/BackColor_${color}.png`,
                 cardTextureFrame
             );
-            bar.value = ++loadedTextureCount;
         }
 
         Sprite.app.loader.onProgress.add(() => {
-            ++loadedTextureCount;
+            bar.value = ++loadedTextureCount;
         });
 
         await new Promise(resolve => Sprite.app.loader.load(resolve));
