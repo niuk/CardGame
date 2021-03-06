@@ -84,7 +84,8 @@ export type Method =
     DrawFromDeck |
     ReturnToDeck |
     Reorder |
-    ShuffleDeck;
+    ShuffleDeck |
+    Dispense;
 
 export type MethodName =
     'SetPlayerName' |
@@ -95,51 +96,56 @@ export type MethodName =
     'DrawFromDeck' |
     'ReturnToDeck' |
     'Reorder' |
-    'ShuffleDeck';
+    'ShuffleDeck' |
+    'Dispense';
 
 export interface Result {
     methodName: MethodName;
     errorDescription?: string;
 }
 
-export interface SetPlayerName {
+interface MethodBase {
+    methodName: MethodName
+}
+
+export interface SetPlayerName extends MethodBase {
     methodName: 'SetPlayerName';
     playerName: string;
 }
 
-export interface NewGame {
+export interface NewGame extends MethodBase {
     methodName: 'NewGame';
     numPlayers: 4 | 5 | 6;
     numDecks: number;
 }
 
-export interface JoinGame {
+export interface JoinGame extends MethodBase {
     methodName: 'JoinGame';
     gameId: string;
 }
 
-export interface TakeFromOtherPlayer {
+export interface TakeFromOtherPlayer extends MethodBase {
     methodName: 'TakeFromOtherPlayer';
     playerIndex: number;
     cardIndex: number;
 }
 
-export interface GiveToOtherPlayer {
+export interface GiveToOtherPlayer extends MethodBase {
     methodName: 'GiveToOtherPlayer';
     playerIndex: number;
     cardIndicesToGiveToOtherPlayer: number[];
 }
 
-export interface DrawFromDeck {
+export interface DrawFromDeck extends MethodBase {
     methodName: 'DrawFromDeck';
 }
 
-export interface ReturnToDeck {
+export interface ReturnToDeck extends MethodBase {
     methodName: 'ReturnToDeck';
     cardIndicesToReturnToDeck: number[];
 }
 
-export interface Reorder {
+export interface Reorder extends MethodBase {
     methodName: 'Reorder';
     newShareCount: number;
     newRevealCount: number;
@@ -147,8 +153,12 @@ export interface Reorder {
     newOriginIndices: number[];
 }
 
-export interface ShuffleDeck {
+export interface ShuffleDeck extends MethodBase {
     methodName: 'ShuffleDeck';
+}
+
+export interface Dispense extends MethodBase {
+    methodName: 'Dispense';
 }
 
 export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {

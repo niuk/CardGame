@@ -205,6 +205,15 @@ function renderDeck(deltaTime: number) {
             26,
             Client.shuffleDeck
         );
+
+        i = 上下(deckLabels, Sprite.deckContainer, i,
+            Sprite.app.view.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - Sprite.width / 2 - 1.5 * Sprite.pixelsPerCM,
+            Sprite.app.view.height / 2 - Sprite.height / 2,
+            '发牌',
+            '大字',
+            26,
+            Client.dispense
+        );
     
         i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,

@@ -262,3 +262,12 @@ export function shuffleDeck(): Promise<void> {
         }));
     });
 }
+
+export function dispense(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('Dispense', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.Dispense>{
+            methodName: 'Dispense'
+        }));
+    });
+}

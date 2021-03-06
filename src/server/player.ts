@@ -22,20 +22,23 @@ export default class Player implements Lib.PlayerState {
         ws.onmessage = async messageEvent => {
             const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
             let errorDescription: string | undefined = undefined
+            const release = await Game.mutex.acquire();
             try {
                 this.game?.resetCardOrigins();
                 await this.invoke(method);
             } catch (e) {
                 console.error(e);
                 errorDescription = JSON.stringify(e);
+            } finally {
+                ws.send(JSON.stringify({
+                    newGameState: this.game?.getStateForPlayerAt(this.index),
+                    methodResult: { methodName: method.methodName, errorDescription }
+                }));
+    
+                this.game?.broadcastStateExceptToPlayerAt(this.index);
+
+                release();
             }
-
-            ws.send(JSON.stringify({
-                newGameState: this.game?.getStateForPlayerAt(this.index),
-                methodResult: { methodName: method.methodName, errorDescription }
-            }));
-
-            this.game?.broadcastStateExceptToPlayerAt(this.index);
         };
         
         ws.onclose = async closeEvent => {
@@ -238,6 +241,8 @@ export default class Player implements Lib.PlayerState {
                 }\r\nshareCount: ${this.shareCount}, revealCount: ${this.revealCount}, groupCount: ${this.groupCount}`);
             } else if (method.methodName === 'ShuffleDeck') {
                 this.game.shuffleDeck();
+            } else if (method.methodName === 'Dispense') {
+                this.game.dispense();
             } else {
                 const _: never = method;
             }

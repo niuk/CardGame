@@ -1,3 +1,4 @@
+import { Mutex } from 'async-mutex';
 import { customAlphabet } from 'nanoid';
 const nanoid = customAlphabet('0123456789', 5);
 
@@ -5,6 +6,7 @@ import * as Lib from '../lib.js';
 import Player from './player';
 
 export default class Game {
+    public static mutex = new Mutex();
     private static gamesById = new Map<string, Game>();
 
     public static get(gameId: string): Game {
@@ -74,6 +76,33 @@ export default class Game {
 
             this.deckCardsWithOrigins[i] = jCardWithOrigin;
             this.deckCardsWithOrigins[j] = iCardWithOrigin;
+        }
+    }
+
+    public async dispense(): Promise<void> {
+        let playerIndex = 0;
+        while (this.deckCardsWithOrigins.length > 8) {
+            const player = this.players[playerIndex % this.numPlayers];
+            if (player) {
+                const release = await Game.mutex.acquire();
+                try {
+                    this.resetCardOrigins();
+                    const deckIndex = this.deckCardsWithOrigins.length - 1;
+                    const card = this.deckCardsWithOrigins.splice(deckIndex, 1)[0]?.[0];
+                    if (!card) {
+                        throw new Error(`deck ran out of cards!`);
+                    }
+                    
+                    player.cardsWithOrigins.push([card, { origin: 'Deck', deckIndex }]);
+                    this.broadcastStateExceptToPlayerAt(-1);
+                } finally {
+                    release();
+                }
+
+                await Lib.delay(500);
+            }
+
+            ++playerIndex;
         }
     }
 
