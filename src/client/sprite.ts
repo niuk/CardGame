@@ -1,12 +1,14 @@
 import * as PIXI from 'pixi.js-legacy';
+import { Resource } from 'pixi.js-legacy';
 import * as Lib from '../lib';
 import * as V from './vector';
+import Loader from "resource-loader";
 
 const decayPerSecond = 1 / 5;
 
 const colors = [0x000000, 0x0000ff, 0xff0000, 0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
 const colorNames = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
-const suits = ['Club', 'Heart', 'Diamond', 'Spade', 'Joker'];
+const suits = ['Club', 'Heart', 'Spade', 'Diamond', 'Joker'];
 
 const textures = new Map<string, PIXI.Texture>();
 const sprites = new Set<Sprite>();
@@ -26,14 +28,10 @@ const backgroundTextureNames = [
 let loadedTextureCount = 0;
 const totalTextureCount = backgroundTextureNames.length + 4 * 13 + 2 + colorNames.length;
 
-let currentLoadingTexture = '';
-async function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
-    currentLoadingTexture = src;
-    await new Promise(resolve => {
-        Sprite.app.loader.add(src).load(resolve);
+function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
+    Sprite.app.loader.add(src, resource => {
+        textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
     });
-    textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
-    currentLoadingTexture = '';
 }
 
 const debugLine = new PIXI.Graphics();
@@ -53,13 +51,11 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     if (loadedTextureCount < totalTextureCount) {
         const bar = <HTMLProgressElement>document.getElementById('loadingBar');
         bar.style.visibility = 'visible';
-        bar.value = loadedTextureCount;
         bar.max = totalTextureCount;
 
         // load background textures
         for (const backgroundTextureName of backgroundTextureNames) {
-            await loadTexture(backgroundTextureName, `${backgroundTextureName}.jpg`);
-            bar.value = ++loadedTextureCount;
+            loadTexture(backgroundTextureName, `${backgroundTextureName}.jpg`);
         }
 
         // load textures for card faces
@@ -79,7 +75,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                     }
                 }
 
-                await loadTexture(
+                loadTexture(
                     JSON.stringify([suit, rank]),
                     `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
                     cardTextureFrame
@@ -91,13 +87,19 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
         // load textures for card backs
         let i = 0;
         for (const color of colorNames) {
-            await loadTexture(
+            loadTexture(
                 `Back${i++}`,
                 `PlayingCards/BackColor_${color}.png`,
                 cardTextureFrame
             );
             bar.value = ++loadedTextureCount;
         }
+
+        Sprite.app.loader.onProgress.add(() => {
+            ++loadedTextureCount;
+        });
+
+        await new Promise(resolve => Sprite.app.loader.load(resolve));
 
         bar.style.visibility = 'hidden';
         console.log('all textures loaded');
@@ -372,10 +374,6 @@ export default class Sprite {
     public static playerBackSprites: Sprite[][] = [];
     // each element corresponds to a face card by index
     public static playerFaceSprites: Sprite[][] = [];
-
-    public static get currentLoadingTexture(): string {
-        return currentLoadingTexture;
-    }
 
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
         const previousPromise = promise;

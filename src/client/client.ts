@@ -22,7 +22,7 @@ webSocket.onmessage = async e => {
           { newGameState: Lib.GameState | null, methodResult: Lib.Result | null } = JSON.parse(e.data);
 
     if (newGameState) {
-        console.log(newGameState);
+        console.log('newGameState', newGameState);
 
         const previousGameState = gameState;
         gameState = newGameState;
@@ -50,7 +50,7 @@ webSocket.onmessage = async e => {
 
 (async () => {
     while (true) {
-        await Lib.delay(10);
+        await Lib.delay(100);
 
         const statusElement = <HTMLDivElement | null>document.getElementById('status');
         if (!statusElement) continue;
@@ -63,9 +63,9 @@ webSocket.onmessage = async e => {
             statusElement.innerHTML = 'WebSocket connecting...';
         } else if (webSocket.readyState === WebSocket.OPEN) {
             if (gameState !== undefined) {
-                statusElement.innerHTML = `Game: ${gameState.gameId}<br>${Sprite.currentLoadingTexture}`;
+                statusElement.innerHTML = `Game: ${gameState.gameId}`;
             } else {
-                statusElement.innerHTML = Sprite.currentLoadingTexture;
+                statusElement.innerHTML = `WebSocket connected.`;
             }
         } else {
             throw new Error();
@@ -194,8 +194,8 @@ function adjust(rank: number): number {
     }
 }
 
-export function sortBySuit(gameState: Lib.GameState): Promise<void> {
-    return sortCards(gameState, ([[aSuit, aRank], aIndex], [[bSuit, bRank], bIndex]) => {
+export function sortBySuit(): Promise<void> {
+    return sortCards(([[aSuit, aRank], aIndex], [[bSuit, bRank], bIndex]) => {
         if (aSuit !== bSuit) {
             return aSuit - bSuit;
         } else {
@@ -206,8 +206,8 @@ export function sortBySuit(gameState: Lib.GameState): Promise<void> {
     });
 }
 
-export function sortByRank(gameState: Lib.GameState): Promise<void> {
-    return sortCards(gameState, ([[aSuit, aRank], aIndex], [[bSuit, bRank], bIndex]) => {
+export function sortByRank(): Promise<void> {
+    return sortCards(([[aSuit, aRank], aIndex], [[bSuit, bRank], bIndex]) => {
         if (aRank !== bRank) {
             aRank = adjust(aRank);
             bRank = adjust(bRank);
@@ -218,27 +218,28 @@ export function sortByRank(gameState: Lib.GameState): Promise<void> {
     });
 }
 
-function sortCards(gameState: Lib.GameState, compareFn: (a: [Lib.Card, number], b: [Lib.Card, number]) => number) {
+async function sortCards(compareFn: (a: [Lib.Card, number], b: [Lib.Card, number]) => number): Promise<void> {
+    if (!gameState) {
+        return;
+    }
+
     const player = gameState.playerStates[gameState.playerIndex];
     if (!player) throw new Error();
 
-    const newShareCount = player.shareCount;
-    const newRevealCount = player.revealCount;
-    const newGroupCount = player.groupCount;
-    const newCardsWithIndices: [Lib.Card, number][] = player.cardsWithOrigins.map(([card, origin], index) => {
+    const cardsWithOriginIndices: [Lib.Card, number][] = player.cardsWithOrigins.map(([card, origin], index) => {
         if (!card) throw new Error();
         return [card, index];
     });
 
-    sortSection(newCardsWithIndices, 0, player.shareCount, compareFn);
-    sortSection(newCardsWithIndices, player.shareCount, player.revealCount, compareFn);
-    sortSection(newCardsWithIndices, player.revealCount, player.groupCount, compareFn);
-    sortSection(newCardsWithIndices, player.groupCount, player.cardsWithOrigins.length, compareFn);
-    return reorderCards(
-        newShareCount,
-        newRevealCount,
-        newGroupCount,
-        newCardsWithIndices.map(([card, index]) => index)
+    sortSection(cardsWithOriginIndices, 0, player.shareCount, compareFn);
+    sortSection(cardsWithOriginIndices, player.shareCount, player.revealCount, compareFn);
+    sortSection(cardsWithOriginIndices, player.revealCount, player.groupCount, compareFn);
+    sortSection(cardsWithOriginIndices, player.groupCount, player.cardsWithOrigins.length, compareFn);
+    await reorderCards(
+        player.shareCount,
+        player.revealCount,
+        player.groupCount,
+        cardsWithOriginIndices.map(([card, index]) => index)
     );
 }
 
@@ -247,7 +248,7 @@ function sortSection(
     start: number,
     end: number,
     compareFn: (a: [Lib.Card, number], b: [Lib.Card, number]) => number
-) {
+): void {
     const section = cards.slice(start, end);
     section.sort(compareFn);
     cards.splice(start, end - start, ...section);

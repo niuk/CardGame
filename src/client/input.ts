@@ -10,14 +10,6 @@ interface None {
     action: 'None';
 }
 
-interface SortBySuit {
-    action: 'SortBySuit';
-}
-
-interface SortByRank {
-    action: 'SortByRank';
-}
-
 interface Deselect {
     action: 'Deselect';
 }
@@ -70,8 +62,6 @@ interface Click {
 
 export type Action =
     None |
-    SortBySuit |
-    SortByRank |
     Deselect |
     Draw |
     Take |
@@ -179,7 +169,6 @@ window.onkeyup = (e: KeyboardEvent) => {
 };
 
 Sprite.onDragStart = (position, sprite) => {
-    console.log(Sprite.deckSprites.indexOf(sprite));
     mouseDownPosition = position
     mouseMovePosition = position;
     exceededDragThreshold = false;
@@ -247,10 +236,6 @@ Sprite.onDragMove = async (position, sprite) => {
 
     if (action.action === 'None') {
         // do nothing
-    } else if (action.action === 'SortBySuit') {
-        // TODO: check whether mouse position has left button bounds
-    } else if (action.action === 'SortByRank') {
-        // TODO: check whether mouse position has left button bounds
     } else if (action.action === 'Deselect') {
         // TODO: box selection?
     } else if (
@@ -383,10 +368,6 @@ Sprite.onDragEnd = async (position, sprite) => {
 
         if (action.action === 'None') {
             // do nothing
-        } else if (action.action === 'SortByRank') {
-            Client.sortByRank(gameState);
-        } else if (action.action === 'SortBySuit') {
-            Client.sortBySuit(gameState);
         } else if (action.action === 'Deselect') {
             selectedIndices.clear();
         } else if (action.action === 'Draw' || action.action === 'Take') {

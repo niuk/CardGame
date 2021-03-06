@@ -224,6 +224,10 @@ export default class Player implements Lib.PlayerState {
                     }]);
                 }
 
+                console.log('cardsWithOrigins', this.cardsWithOrigins);
+                console.log('newOriginIndices', method.newOriginIndices);
+                console.log('newCardsWithOrigins', newCardsWithOrigins);
+
                 this.cardsWithOrigins = newCardsWithOrigins;
                 this.shareCount = method.newShareCount;
                 this.revealCount = method.newRevealCount;

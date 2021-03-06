@@ -3,10 +3,11 @@ import * as PIXI from 'pixi.js-legacy';
 import * as Lib from '../lib';
 import * as Client from './client';
 import * as Input from './input';
-import * as V from './vector';
 import Sprite from './sprite';
 
-const labelsUsingCurrentFonts = new Set<PIXI.BitmapText>();
+// because we can't get the callback from the label, we need to record it in a dictionary
+// otherwise, this would just be a set
+const labelsUsingCurrentFontsWithCallbacks = new Map<PIXI.BitmapText, (() => void) | undefined>();
 
 let 大字: PIXI.BitmapFont | undefined;
 let 中字: PIXI.BitmapFont | undefined;
@@ -44,7 +45,7 @@ function addCharsFromText(text: string) {
         小字?.destroy();
         小字 = PIXI.BitmapFont.from('小字', { ...textStyle, fontSize: 13 }, { chars });
 
-        labelsUsingCurrentFonts.clear();
+        labelsUsingCurrentFontsWithCallbacks.clear();
     }
 }
 
@@ -195,16 +196,16 @@ function renderDeck(deltaTime: number) {
         deckSprite.animate(deltaTime);
     }
 
-    let i = 上下(deckLabels, Sprite.deckContainer, 0,
-        Sprite.app.view.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - Sprite.width / 2 - 0.75 * Sprite.pixelsPerCM,
-        Sprite.app.view.height / 2 - Sprite.height / 2,
-        '洗牌',
-        '大字',
-        26,
-        Client.shuffleDeck
-    );
-
     if (Client.gameState) {
+        let i = 上下(deckLabels, Sprite.deckContainer, 0,
+            Sprite.app.view.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - Sprite.width / 2 - 0.75 * Sprite.pixelsPerCM,
+            Sprite.app.view.height / 2 - Sprite.height / 2,
+            '洗牌',
+            '大字',
+            26,
+            Client.shuffleDeck
+        );
+    
         i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,
             Sprite.app.view.height / 2 - Sprite.height / 2,
@@ -317,6 +318,7 @@ function renderPlayers(deltaTime: number) {
             labels,
             container,
             width,
+            playerIndex,
             playerState,
             playerState.shareCount,
             playerState.revealCount,
@@ -379,30 +381,31 @@ function addLabel(
 
     let label = labels[i];
 
-    if (label && !labelsUsingCurrentFonts.has(label)) {
+    if (label && !labelsUsingCurrentFontsWithCallbacks.has(label)) {
         label.destroy();
         label = undefined;
         labels[i] = undefined;
+        console.log(`destroyed ${text} at ${i} because fonts changed`);
     }
 
     // workaround for a bug
     if (label && label.transform === null) {
-        labelsUsingCurrentFonts.delete(label);
+        labelsUsingCurrentFontsWithCallbacks.delete(label);
         label.destroy();
         label = undefined;
         labels[i] = undefined;
+        console.log(`destroyed ${text} at ${i} because of bug`);
     }
 
     if (!label) {
+        console.log(`creating ${text} at ${i} because of null or undefined label`, label, labelsUsingCurrentFontsWithCallbacks);
         label = container.addChild(new PIXI.BitmapText(text, { fontName }));
-        label.zIndex = 1;
         labels[i] = label;
-        labelsUsingCurrentFonts.add(label);
-        if (onClick) {
-            label.on('pointerup', onClick);
-            label.interactive = true;
-            label.cursor = 'pointer';
-        }
+        labelsUsingCurrentFontsWithCallbacks.set(label, undefined);
+    }
+
+    if (label.zIndex !== 1) {
+        label.zIndex = 1;
     }
     
     if (label.text !== text) {
@@ -415,6 +418,24 @@ function addLabel(
 
     if (label.fontSize !== fontSize) {
         label.fontSize = fontSize;
+    }
+
+    if (labelsUsingCurrentFontsWithCallbacks.get(label) !== onClick) {
+        labelsUsingCurrentFontsWithCallbacks.set(label, onClick);
+
+        // remove previous callback
+        label.off('pointerup');
+
+        if (onClick) {
+            label.on('pointerup', onClick);
+            label.interactive = true;
+            label.cursor = 'pointer';
+            console.log(`${text} at ${i} has onClick`, onClick);
+        } else {
+            label.interactive = false;
+            label.cursor = 'auto';
+            console.log(`${text} at ${i} has no onClick`);
+        }
     }
 
     // check for valid transform to work around a bug
@@ -432,6 +453,7 @@ function addAllLabels(
     labels: (PIXI.BitmapText | undefined)[],
     container: PIXI.Container,
     width: number,
+    playerIndex: number,
     playerState: Lib.PlayerState,
     shareCount: number,
     revealCount: number,
@@ -495,6 +517,27 @@ function addAllLabels(
         持牌X - 0.375 * Sprite.pixelsPerCM :
         持牌X + 0.548 * Sprite.pixelsPerCM;
     i = 上下(labels, container, i, hiddenX, innerY, `︵${数(totalCount - groupCount)}︶`, '小字', 13);
+
+    const gameState = Client.gameState;
+    if (gameState && gameState.playerIndex == playerIndex) {
+        i = addLabel(labels, container, i,
+            -3.25 * Sprite.pixelsPerCM,
+            2 * Sprite.height - 1.5 * Sprite.pixelsPerCM,
+            '分类(大小)',
+            '大字',
+            26,
+            Client.sortByRank
+        );
+
+        i = addLabel(labels, container, i,
+            -3.25 * Sprite.pixelsPerCM,
+            2 * Sprite.height - 0.75 * Sprite.pixelsPerCM,
+            '分类(花色)',
+            '大字',
+            26,
+            Client.sortBySuit
+        );
+    }
 
     for (; i < labels.length; ++i) {
         labels[i]?.destroy();
