@@ -27,8 +27,8 @@ export default class Player implements Lib.PlayerState {
                 this.game?.resetCardOrigins();
                 await this.invoke(method);
             } catch (e) {
-                console.error(e);
-                errorDescription = JSON.stringify(e);
+                errorDescription = e.message;
+                console.error(errorDescription);
             } finally {
                 ws.send(JSON.stringify({
                     newGameState: this.game?.getStateForPlayerAt(this.index),
