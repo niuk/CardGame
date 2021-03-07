@@ -240,10 +240,12 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const hand = Math.sqrt(height*height - arm*arm);
             const tilt = Math.acos(leg / width);
 
-            playerContainer.position.set(arm + leg, Sprite.app.view.height - 2 * Sprite.height);
+            Sprite.reverse[gameState.playerIndex] = false;
             Sprite.widths[gameState.playerIndex] = width;
+            playerContainer.position.set(arm + leg, Sprite.app.view.height - 2 * Sprite.height);
 
             const bottomLeftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
+            Sprite.reverse[bottomLeftIndex] = false;
             Sprite.widths[bottomLeftIndex] = width;
             const bottomLeftContainer = Sprite.containers[bottomLeftIndex];
             if (!bottomLeftContainer) throw new Error();
@@ -251,6 +253,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             bottomLeftContainer.rotation = tilt;
 
             const topLeftIndex = (gameState.playerIndex + 2) % gameState.playerStates.length;
+            Sprite.reverse[topLeftIndex] = true;
             Sprite.widths[topLeftIndex] = width;
             const topLeftContainer = Sprite.containers[topLeftIndex];
             if (!topLeftContainer) throw new Error();
@@ -258,6 +261,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             topLeftContainer.rotation = -tilt;
 
             const topIndex = (gameState.playerIndex + 3) % gameState.playerStates.length;
+            Sprite.reverse[topIndex] = true;
             Sprite.widths[topIndex] = width;
             const topContainer = Sprite.containers[topIndex];
             if (!topContainer) throw new Error();
@@ -265,6 +269,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             topContainer.rotation = 0;
 
             const topRightIndex = (gameState.playerIndex + 4) % gameState.playerStates.length;
+            Sprite.reverse[topRightIndex] = true;
             Sprite.widths[topRightIndex] = width;
             const topRightContainer = Sprite.containers[topRightIndex];
             if (!topRightContainer) throw new Error();
@@ -276,6 +281,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             topRightContainer.rotation = tilt;
 
             const bottomRightIndex = (gameState.playerIndex + 5) % gameState.playerStates.length;
+            Sprite.reverse[bottomRightIndex] = false;
             Sprite.widths[bottomRightIndex] = width;
             const bottomRightContainer = Sprite.containers[bottomRightIndex];
             if (!bottomRightContainer) throw new Error();
@@ -283,15 +289,16 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             bottomRightContainer.rotation = -tilt;
         } else {
             const height = 2 * Sprite.height;
+            Sprite.reverse[gameState.playerIndex] = false;
             Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * height;
             playerContainer.position.set(height, Sprite.app.view.height - height);
 
             const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
             const leftContainer = Sprite.containers[leftIndex];
             if (!leftContainer) throw new Error();
-
             leftContainer.position.set(0, Sprite.app.view.height);
             leftContainer.rotation = -Math.PI / 2;
+            Sprite.reverse[leftIndex] = true;
             Sprite.widths[leftIndex] = Sprite.app.view.height;
             if (gameState.playerStates.length > 4) {
                 Sprite.widths[leftIndex] -= height;
@@ -300,9 +307,9 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
             const rightContainer = Sprite.containers[rightIndex];
             if (!rightContainer) throw new Error();
-
             rightContainer.rotation = Math.PI / 2;
             rightContainer.position.set(Sprite.app.view.width, 0);
+            Sprite.reverse[rightIndex] = true;
             Sprite.widths[rightIndex] = Sprite.app.view.height;
             if (gameState.playerStates.length > 4) {
                 rightContainer.position.y += height
@@ -313,6 +320,8 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                 const playerIndex = (leftIndex + i + 1) % gameState.playerStates.length;
                 const playerContainer = Sprite.containers[playerIndex];
                 if (!playerContainer) throw new Error();
+
+                Sprite.reverse[playerIndex] = true;
 
                 if (gameState.playerStates.length > 4) {
                     const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
@@ -359,6 +368,7 @@ export default class Sprite {
 
     public static deckContainer: PIXI.Container;
     public static containers: PIXI.Container[] = [];
+    public static reverse: boolean[] = [];
     public static widths: number[] = [];
 
     // for animating the deck
