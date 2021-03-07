@@ -8,7 +8,7 @@ const b = browserify({ cache: {}, packageCache: {}, debug: true })
     .plugin(tsify, { project: 'tsconfig.client.json' })
     .plugin(watchify);
 
-const bundle = 'static/client.js';
+const bundle = 'www/script.js';
 
 function onUpdate() {
     let error = null;
