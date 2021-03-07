@@ -82,7 +82,7 @@ export default class Game {
         }
     }
 
-    public async dispense(): Promise<void> {
+    public async dispense(playerIndex: number): Promise<void> {
         let remainder: number;
         if (this.numPlayers === 4) {
             if (this.numDecks === 1) {
@@ -122,7 +122,6 @@ export default class Game {
             throw new Error();
         }
 
-        let playerIndex = 0;
         while (this.deckCardsWithOrigins.length > remainder) {
             const player = this.players[playerIndex % this.numPlayers];
             if (player) {

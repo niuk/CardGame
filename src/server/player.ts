@@ -249,7 +249,7 @@ export default class Player implements Lib.PlayerState {
             } else if (method.methodName === 'ShuffleDeck') {
                 this.game.shuffleDeck();
             } else if (method.methodName === 'Dispense') {
-                this.game.dispense();
+                this.game.dispense(this.index);
             } else {
                 const _: never = method;
             }
