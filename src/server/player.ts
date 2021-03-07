@@ -128,6 +128,7 @@ export default class Player implements Lib.PlayerState {
                 throw new Error(`could not join game '${this.game.gameId}'`);
             }
 
+            ++this.game.tick;
             console.log(`player '${this.name}' joined game '${this.game.gameId}' at ${this.index}`);
         } else {
             if (!this.game) {
