@@ -24,13 +24,15 @@ webSocket.onmessage = async e => {
     if (newGameState) {
         console.log('newGameState', newGameState);
 
-        const previousGameState = gameState;
-        gameState = newGameState;
-
-        Lib.setCookie('gameId', gameState.gameId);
-
-        Input.linkWithCards(gameState);
-        await Sprite.linkWithCards(previousGameState, gameState);
+        if (!gameState || gameState.tick === newGameState.tick - 1) {
+            const previousGameState = gameState;
+            gameState = newGameState;
+    
+            Lib.setCookie('gameId', gameState.gameId);
+    
+            Input.linkWithCards(gameState);
+            await Sprite.linkWithCards(previousGameState, gameState);
+        }
     }
 
     if (methodResult) {
@@ -131,7 +133,8 @@ export function takeFromOtherPlayer(playerIndex: number, cardIndex: number): Pro
         webSocket.send(JSON.stringify(<Lib.TakeFromOtherPlayer>{
             methodName: 'TakeFromOtherPlayer',
             playerIndex,
-            cardIndex
+            cardIndex,
+            tick: gameState?.tick
         }));
     });
 }
@@ -140,7 +143,8 @@ export function drawFromDeck(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         addCallback('DrawFromDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.DrawFromDeck>{
-            methodName: 'DrawFromDeck'
+            methodName: 'DrawFromDeck',
+            tick: gameState?.tick
         }));
     });
 }
@@ -151,7 +155,8 @@ export function giveToOtherPlayer(playerIndex: number): Promise<void> {
         webSocket.send(JSON.stringify(<Lib.GiveToOtherPlayer>{
             methodName: 'GiveToOtherPlayer',
             playerIndex,
-            cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice()
+            cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice(),
+            tick: gameState?.tick
         }));
     })
 }
@@ -161,7 +166,28 @@ export function returnToDeck(): Promise<void> {
         addCallback('ReturnToDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.ReturnToDeck>{
             methodName: 'ReturnToDeck',
-            cardIndicesToReturnToDeck: Input.selectedIndices.slice()
+            cardIndicesToReturnToDeck: Input.selectedIndices.slice(),
+            tick: gameState?.tick
+        }));
+    });
+}
+
+export function shuffleDeck(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('ShuffleDeck', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.ShuffleDeck>{
+            methodName: 'ShuffleDeck',
+            tick: gameState?.tick
+        }));
+    });
+}
+
+export function dispense(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('Dispense', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.Dispense>{
+            methodName: 'Dispense',
+            tick: gameState?.tick
         }));
     });
 }
@@ -179,7 +205,8 @@ export function reorderCards(
             newShareCount,
             newRevealCount,
             newGroupCount,
-            newOriginIndices
+            newOriginIndices,
+            tick: gameState?.tick
         }));
     });
 }
@@ -252,22 +279,4 @@ function sortSection(
     const section = cards.slice(start, end);
     section.sort(compareFn);
     cards.splice(start, end - start, ...section);
-}
-
-export function shuffleDeck(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('ShuffleDeck', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.ShuffleDeck>{
-            methodName: 'ShuffleDeck'
-        }));
-    });
-}
-
-export function dispense(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('Dispense', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.Dispense>{
-            methodName: 'Dispense'
-        }));
-    });
 }

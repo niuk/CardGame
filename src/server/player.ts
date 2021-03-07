@@ -20,9 +20,9 @@ export default class Player implements Lib.PlayerState {
         this.ws = ws;
 
         ws.onmessage = async messageEvent => {
-            const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
-            let errorDescription: string | undefined = undefined
             const release = await Game.mutex.acquire();
+            let errorDescription: string | undefined = undefined;
+            const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
             try {
                 this.game?.resetCardOrigins();
                 await this.invoke(method);
@@ -130,7 +130,13 @@ export default class Player implements Lib.PlayerState {
 
             console.log(`player '${this.name}' joined game '${this.game.gameId}' at ${this.index}`);
         } else {
-            if (!this.game) throw new Error('you are not in a game');
+            if (!this.game) {
+                throw new Error('you are not in a game');
+            }
+
+            if (method.tick !== this.game.tick) {
+                throw new Error(`method.tick ${method.tick} != game.tick ${this.game.tick}`);
+            }
 
             if (method.methodName === 'TakeFromOtherPlayer') {
                 const otherPlayer = this.game.players[method.playerIndex];
@@ -246,6 +252,8 @@ export default class Player implements Lib.PlayerState {
             } else {
                 const _: never = method;
             }
+
+            ++this.game.tick;
         }
     }
 

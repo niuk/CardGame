@@ -24,6 +24,7 @@ export default class Game {
         return this._gameId;
     }
 
+    public tick = 0;
     public numPlayers: 4 | 5 | 6;
     public numDecks: 1 | 2 | 3;
     public players: (Player | undefined)[] = []
@@ -85,18 +86,18 @@ export default class Game {
         let remainder: number;
         if (this.numPlayers === 4) {
             if (this.numDecks === 1) {
-                remainder = 0;
+                remainder = 6;
             } else if (this.numDecks === 2) {
                 remainder = 8;
             } else if (this.numDecks === 3) {
-                remainder = 0;
+                remainder = 8;
             } else {
                 const _: never = this.numDecks;
                 throw new Error();
             }
         } else if (this.numPlayers === 5) {
             if (this.numDecks === 1) {
-                remainder = 0;
+                remainder = 9;
             } else if (this.numDecks === 2) {
                 remainder = 8;
             } else if (this.numDecks === 3) {
@@ -107,7 +108,7 @@ export default class Game {
             }
         } else if (this.numPlayers === 6) {
             if (this.numDecks === 1) {
-                remainder = 0;
+                remainder = 6;
             } else if (this.numDecks === 2) {
                 remainder = 6;
             } else if (this.numDecks === 3) {
@@ -140,7 +141,7 @@ export default class Game {
                     release();
                 }
 
-                await Lib.delay(250);
+                await Lib.delay(1000);
             }
 
             ++playerIndex;
@@ -191,7 +192,8 @@ export default class Game {
             gameId: this.gameId,
             deckOrigins: this.deckCardsWithOrigins.map(([_, origin]) => origin),
             playerIndex,
-            playerStates
+            playerStates,
+            tick: this.tick
         };
     }
 

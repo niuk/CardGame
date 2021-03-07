@@ -73,6 +73,7 @@ export interface GameState {
     deckOrigins: Origin[];
     playerIndex: number;
     playerStates: (PlayerState | null)[];
+    tick: number;
 }
 
 export type Method =
@@ -105,7 +106,7 @@ export interface Result {
 }
 
 interface MethodBase {
-    methodName: MethodName
+    methodName: MethodName;
 }
 
 export interface SetPlayerName extends MethodBase {
@@ -128,21 +129,25 @@ export interface TakeFromOtherPlayer extends MethodBase {
     methodName: 'TakeFromOtherPlayer';
     playerIndex: number;
     cardIndex: number;
+    tick: number;
 }
 
 export interface GiveToOtherPlayer extends MethodBase {
     methodName: 'GiveToOtherPlayer';
     playerIndex: number;
     cardIndicesToGiveToOtherPlayer: number[];
+    tick: number;
 }
 
 export interface DrawFromDeck extends MethodBase {
     methodName: 'DrawFromDeck';
+    tick: number;
 }
 
 export interface ReturnToDeck extends MethodBase {
     methodName: 'ReturnToDeck';
     cardIndicesToReturnToDeck: number[];
+    tick: number;
 }
 
 export interface Reorder extends MethodBase {
@@ -151,14 +156,17 @@ export interface Reorder extends MethodBase {
     newRevealCount: number;
     newGroupCount: number;
     newOriginIndices: number[];
+    tick: number;
 }
 
 export interface ShuffleDeck extends MethodBase {
     methodName: 'ShuffleDeck';
+    tick: number;
 }
 
 export interface Dispense extends MethodBase {
     methodName: 'Dispense';
+    tick: number;
 }
 
 export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
