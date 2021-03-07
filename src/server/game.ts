@@ -136,6 +136,7 @@ export default class Game {
                     }
                     
                     player.cardsWithOrigins.push([card, { origin: 'Deck', deckIndex }]);
+                    ++this.tick;
                     this.broadcastStateExceptToPlayerAt(-1);
                 } finally {
                     release();
