@@ -49,14 +49,11 @@ function addCharsFromText(text: string) {
     }
 }
 
-console.log("HUEHUEHUE");
+window.onload = entryPoint;
 
-document.addEventListener('deviceready', start);
+async function entryPoint() {
+    screen.orientation.lock('landscape');
 
-window.onload = start;
-
-async function start() {
-    console.log('asdf');
     // connected; now we can activate buttons
     const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
     const gameIdElement = <HTMLInputElement>document.getElementById('gameId');
@@ -154,7 +151,9 @@ async function start() {
 let resizeTime = Infinity;
 let resizePromise = Promise.resolve();
 
-window.onresize = async () => {
+window.onresize = onResize;
+
+async function onResize() {
     resizeTime = performance.now() + 500;
 
     if (await Lib.isDone(resizePromise)) {
