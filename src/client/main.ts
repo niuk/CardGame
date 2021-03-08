@@ -49,7 +49,13 @@ function addCharsFromText(text: string) {
     }
 }
 
-window.onload = async () => {
+console.log("HUEHUEHUE");
+
+document.addEventListener('deviceready', start);
+
+window.onload = start;
+
+async function start() {
     console.log('asdf');
     // connected; now we can activate buttons
     const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
@@ -162,7 +168,7 @@ window.onresize = async () => {
     }
 
     await resizePromise;
-};
+}
 
 const deckLabels: (PIXI.BitmapText | undefined)[] = [];
 
