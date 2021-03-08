@@ -7,10 +7,10 @@ import Player from './player.js';
 
 const app = express();
 
-app.use(express.static('static'));
+app.use(express.static('www'));
 
 app.get('/', async (_, response) => {
-    response.contentType('text/html').send(await fs.readFile('static/client.html'));
+    response.contentType('text/html').send(await fs.readFile('www/index.html'));
 });
 
 (async () => {
