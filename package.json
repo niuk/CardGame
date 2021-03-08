@@ -13,7 +13,8 @@
     "tsify": "^5.0.2",
     "typescript": "^4.1.3",
     "typescript-eslint": "^0.0.1-alpha.0",
-    "watchify": "^3.11.1"
+    "watchify": "^3.11.1",
+    "cordova-plugin-whitelist": "^1.3.4"
   },
   "dependencies": {
     "@types/collections": "^5.1.0",
@@ -36,5 +37,13 @@
     "lint-client": "eslint -c src/client/.eslintrc.json src/client/*.ts"
   },
   "type": "module",
-  "name": "cardgame"
+  "name": "com.karl.cardgame",
+  "displayName": "CardGame",
+  "version": "1.0.0",
+  "main": "index.js",
+  "cordova": {
+    "plugins": {
+      "cordova-plugin-whitelist": {}
+    }
+  }
 }
