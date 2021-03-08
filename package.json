@@ -37,7 +37,6 @@
     "lint-server": "eslint -c src/server/.eslintrc.json src/server/*.ts",
     "lint-client": "eslint -c src/client/.eslintrc.json src/client/*.ts"
   },
-  "type": "module",
   "name": "com.karl.cardgame",
   "displayName": "CardGame",
   "version": "1.0.0",
@@ -45,6 +44,9 @@
   "cordova": {
     "plugins": {
       "cordova-plugin-whitelist": {}
-    }
+    },
+    "platforms": [
+      "ios"
+    ]
   }
 }
