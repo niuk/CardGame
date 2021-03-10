@@ -1,12 +1,13 @@
 import * as Lib from '../lib';
 import * as Input from './input';
 import Sprite from './sprite';
+import { Capacitor } from '@capacitor/core';
 
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
 
 // open websocket connection to get game state updates
-const webSocket = new WebSocket(`wss://${window.location.hostname}/`);
+const webSocket = new WebSocket(`wss://${Capacitor.isNative ? window.location.hostname : 'haruspex.io'}/`);
 
 export async function connect(): Promise<void> {
     // wait for connection
