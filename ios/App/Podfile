@@ -1,5 +1,4 @@
 platform :ios, '11.0'
-source 'https://github.com/CocoaPods/Specs.git'
 use_frameworks!
 
 # workaround to avoid Xcode caching of Pods that requires
@@ -11,6 +10,7 @@ def capacitor_pods
   # Automatic Capacitor Pod dependencies, do not delete
   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
   pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+  
   # Do not delete
 end
 
