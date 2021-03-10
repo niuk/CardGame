@@ -50,7 +50,8 @@ function addCharsFromText(text: string) {
 }
 
 window.onload = async () => {
-    console.log('asdf');
+    console.log('Page loaded.');
+
     // connected; now we can activate buttons
     const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
     const gameIdElement = <HTMLInputElement>document.getElementById('gameId');

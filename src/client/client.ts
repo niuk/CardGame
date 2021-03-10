@@ -7,12 +7,14 @@ import { Capacitor } from '@capacitor/core';
 export let gameState: Lib.GameState | undefined;
 
 // open websocket connection to get game state updates
-const webSocket = new WebSocket(`wss://${Capacitor.isNative ? window.location.hostname : 'haruspex.io'}/`);
+const webSocket = new WebSocket(`wss://${Capacitor.isNative ? 'haruspex.io': window.location.hostname}/`);
 
 export async function connect(): Promise<void> {
+    console.log(`webSocket.url = ${webSocket.url}, ${Capacitor.isNative}`);
+
     // wait for connection
     while (webSocket.readyState != WebSocket.OPEN) {
-        console.log(`webSocket.readyState: ${webSocket.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
+        //console.log(`webSocket.readyState: ${webSocket.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
 
         await Lib.delay(100);
     }
