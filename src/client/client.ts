@@ -10,7 +10,7 @@ export let gameState: Lib.GameState | undefined;
 const webSocket = new WebSocket(`wss://${Capacitor.isNative ? 'haruspex.io': window.location.hostname}/`);
 
 export async function connect(): Promise<void> {
-    console.log(`webSocket.url = ${webSocket.url}, ${Capacitor.isNative}`);
+    console.log(`webSocket.url = ${webSocket.url}, isNative = ${Capacitor.isNative}`);
 
     // wait for connection
     while (webSocket.readyState != WebSocket.OPEN) {
