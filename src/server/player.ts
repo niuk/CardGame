@@ -250,6 +250,20 @@ export default class Player implements Lib.PlayerState {
                 this.game.shuffleDeck();
             } else if (method.methodName === 'Dispense') {
                 this.game.dispense(this.index);
+            } else if (method.methodName === 'Reset') {
+                for (const player of this.game.players) {
+                    if (!player) continue;
+
+                    const disownedCardsWithOrigins = player.disownCardsWithOrigins(Array(player.cardsWithOrigins.length).fill(null).map((_, i) => i));
+
+                    this.game.deckCardsWithOrigins.push(...disownedCardsWithOrigins);
+                    
+                    console.log(`'${player.name}' returned cards (reset): ${
+                        JSON.stringify(disownedCardsWithOrigins)
+                    }, cards: ${
+                        JSON.stringify(player.cardsWithOrigins)
+                    }`);
+                }
             } else {
                 const _: never = method;
             }

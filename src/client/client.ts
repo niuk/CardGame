@@ -192,6 +192,16 @@ export function dispense(): Promise<void> {
     });
 }
 
+export function reset(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('Reset', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.Reset>{
+            methodName: 'Reset',
+            tick: gameState?.tick
+        }));
+    });
+}
+
 export function reorderCards(
     newShareCount: number,
     newRevealCount: number,

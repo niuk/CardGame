@@ -86,7 +86,8 @@ export type Method =
     ReturnToDeck |
     Reorder |
     ShuffleDeck |
-    Dispense;
+    Dispense |
+    Reset;
 
 export type MethodName =
     'SetPlayerName' |
@@ -98,7 +99,8 @@ export type MethodName =
     'ReturnToDeck' |
     'Reorder' |
     'ShuffleDeck' |
-    'Dispense';
+    'Dispense' |
+    'Reset';
 
 export interface Result {
     methodName: MethodName;
@@ -166,6 +168,11 @@ export interface ShuffleDeck extends MethodBase {
 
 export interface Dispense extends MethodBase {
     methodName: 'Dispense';
+    tick: number;
+}
+
+export interface Reset extends MethodBase {
+    methodName: 'Reset';
     tick: number;
 }
 
