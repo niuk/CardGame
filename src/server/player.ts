@@ -20,7 +20,7 @@ export default class Player implements Lib.PlayerState {
         this.ws = ws;
 
         ws.onmessage = async messageEvent => {
-            const release = await Game.mutex.acquire();
+            const release = await this.game?.mutex.acquire();
             let errorDescription: string | undefined = undefined;
             const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
             try {
@@ -37,7 +37,7 @@ export default class Player implements Lib.PlayerState {
     
                 this.game?.broadcastStateExceptToPlayerAt(this.index);
 
-                release();
+                release?.();
             }
         };
         

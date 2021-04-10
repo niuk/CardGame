@@ -6,7 +6,6 @@ import * as Lib from '../lib.js';
 import Player from './player';
 
 export default class Game {
-    public static mutex = new Mutex();
     private static gamesById = new Map<string, Game>();
 
     public static get(gameId: string): Game {
@@ -24,6 +23,7 @@ export default class Game {
         return this._gameId;
     }
 
+    public mutex = new Mutex();
     public tick = 0;
     public numPlayers: 4 | 5 | 6;
     public numDecks: 1 | 2 | 3;
@@ -126,10 +126,10 @@ export default class Game {
             if (playerIndex < 0) {
                 playerIndex = this.numPlayers + playerIndex;
             }
-            
+
             const player = this.players[playerIndex % this.numPlayers];
             if (player) {
-                const release = await Game.mutex.acquire();
+                const release = await this.mutex.acquire();
                 try {
                     this.resetCardOrigins();
                     const deckIndex = this.deckCardsWithOrigins.length - 1;
