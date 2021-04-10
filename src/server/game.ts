@@ -123,6 +123,10 @@ export default class Game {
         }
 
         while (this.deckCardsWithOrigins.length > remainder) {
+            if (playerIndex < 0) {
+                playerIndex = this.numPlayers + playerIndex;
+            }
+            
             const player = this.players[playerIndex % this.numPlayers];
             if (player) {
                 const release = await Game.mutex.acquire();
@@ -144,7 +148,7 @@ export default class Game {
                 await Lib.delay(1000);
             }
 
-            ++playerIndex;
+            --playerIndex;
         }
     }
 
