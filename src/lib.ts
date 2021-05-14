@@ -74,6 +74,7 @@ export interface GameState {
     playerIndex: number;
     playerStates: (PlayerState | null)[];
     tick: number;
+    dispensing: boolean;
 }
 
 export type Method =

@@ -29,6 +29,7 @@ export default class Game {
     public numDecks: 1 | 2 | 3;
     public players: (Player | undefined)[] = []
     public deckCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
+    public dispensing = false;
 
     public constructor(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3) {
         do {
@@ -83,6 +84,13 @@ export default class Game {
     }
 
     public async dispense(playerIndex: number): Promise<void> {
+        if (this.dispensing) {
+            this.dispensing = false;
+            return;
+        }
+
+        this.dispensing = true;
+
         let remainder: number;
         if (this.numPlayers === 4) {
             if (this.numDecks === 1) {
@@ -122,7 +130,7 @@ export default class Game {
             throw new Error();
         }
 
-        while (this.deckCardsWithOrigins.length > remainder) {
+        while (this.dispensing && this.deckCardsWithOrigins.length > remainder) {
             if (playerIndex < 0) {
                 playerIndex = this.numPlayers + playerIndex;
             }
@@ -145,7 +153,7 @@ export default class Game {
                     release();
                 }
 
-                await Lib.delay(1000);
+                await Lib.delay(500);
             }
 
             --playerIndex;
@@ -197,7 +205,8 @@ export default class Game {
             deckOrigins: this.deckCardsWithOrigins.map(([_, origin]) => origin),
             playerIndex,
             playerStates,
-            tick: this.tick
+            tick: this.tick,
+            dispensing: this.dispensing
         };
     }
 

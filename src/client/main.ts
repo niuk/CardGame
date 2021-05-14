@@ -211,7 +211,7 @@ function renderDeck(deltaTime: number) {
         i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 1.5 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
-            '发牌',
+            Client.gameState.dispensing ? '停牌' : '发牌',
             '大字',
             26,
             Client.dispense
