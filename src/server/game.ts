@@ -162,6 +162,7 @@ export default class Game {
             this.dispensing = false;
         }
 
+        ++this.tick;
         this.broadcastStateExceptToPlayerAt(-1);
     }
 
