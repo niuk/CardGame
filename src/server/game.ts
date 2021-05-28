@@ -90,73 +90,76 @@ export default class Game {
         }
 
         this.dispensing = true;
-
-        let remainder: number;
-        if (this.numPlayers === 4) {
-            if (this.numDecks === 1) {
-                remainder = 6;
-            } else if (this.numDecks === 2) {
-                remainder = 8;
-            } else if (this.numDecks === 3) {
-                remainder = 8;
+        try {
+            let remainder: number;
+            if (this.numPlayers === 4) {
+                if (this.numDecks === 1) {
+                    remainder = 6;
+                } else if (this.numDecks === 2) {
+                    remainder = 8;
+                } else if (this.numDecks === 3) {
+                    remainder = 8;
+                } else {
+                    const _: never = this.numDecks;
+                    throw new Error();
+                }
+            } else if (this.numPlayers === 5) {
+                if (this.numDecks === 1) {
+                    remainder = 9;
+                } else if (this.numDecks === 2) {
+                    remainder = 8;
+                } else if (this.numDecks === 3) {
+                    remainder = 7;
+                } else {
+                    const _: never = this.numDecks;
+                    throw new Error();
+                }
+            } else if (this.numPlayers === 6) {
+                if (this.numDecks === 1) {
+                    remainder = 6;
+                } else if (this.numDecks === 2) {
+                    remainder = 6;
+                } else if (this.numDecks === 3) {
+                    remainder = 6;
+                } else {
+                    const _: never = this.numDecks;
+                    throw new Error();
+                }
             } else {
-                const _: never = this.numDecks;
+                const _: never = this.numPlayers;
                 throw new Error();
             }
-        } else if (this.numPlayers === 5) {
-            if (this.numDecks === 1) {
-                remainder = 9;
-            } else if (this.numDecks === 2) {
-                remainder = 8;
-            } else if (this.numDecks === 3) {
-                remainder = 7;
-            } else {
-                const _: never = this.numDecks;
-                throw new Error();
-            }
-        } else if (this.numPlayers === 6) {
-            if (this.numDecks === 1) {
-                remainder = 6;
-            } else if (this.numDecks === 2) {
-                remainder = 6;
-            } else if (this.numDecks === 3) {
-                remainder = 6;
-            } else {
-                const _: never = this.numDecks;
-                throw new Error();
-            }
-        } else {
-            const _: never = this.numPlayers;
-            throw new Error();
-        }
 
-        while (this.dispensing && this.deckCardsWithOrigins.length > remainder) {
-            if (playerIndex < 0) {
-                playerIndex = this.numPlayers + playerIndex;
-            }
-
-            const player = this.players[playerIndex % this.numPlayers];
-            if (player) {
-                const release = await this.mutex.acquire();
-                try {
-                    this.resetCardOrigins();
-                    const deckIndex = this.deckCardsWithOrigins.length - 1;
-                    const card = this.deckCardsWithOrigins.splice(deckIndex, 1)[0]?.[0];
-                    if (!card) {
-                        throw new Error(`deck ran out of cards!`);
-                    }
-                    
-                    player.cardsWithOrigins.push([card, { origin: 'Deck', deckIndex }]);
-                    ++this.tick;
-                    this.broadcastStateExceptToPlayerAt(-1);
-                } finally {
-                    release();
+            while (this.dispensing && this.deckCardsWithOrigins.length > remainder) {
+                if (playerIndex < 0) {
+                    playerIndex = this.numPlayers + playerIndex;
                 }
 
-                await Lib.delay(500);
-            }
+                const player = this.players[playerIndex % this.numPlayers];
+                if (player) {
+                    const release = await this.mutex.acquire();
+                    try {
+                        this.resetCardOrigins();
+                        const deckIndex = this.deckCardsWithOrigins.length - 1;
+                        const card = this.deckCardsWithOrigins.splice(deckIndex, 1)[0]?.[0];
+                        if (!card) {
+                            throw new Error(`deck ran out of cards!`);
+                        }
+                        
+                        player.cardsWithOrigins.push([card, { origin: 'Deck', deckIndex }]);
+                        ++this.tick;
+                        this.broadcastStateExceptToPlayerAt(-1);
+                    } finally {
+                        release();
+                    }
 
-            --playerIndex;
+                    await Lib.delay(200);
+                }
+
+                --playerIndex;
+            }
+        } finally {
+            this.dispensing = false;
         }
     }
 
