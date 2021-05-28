@@ -161,6 +161,8 @@ export default class Game {
         } finally {
             this.dispensing = false;
         }
+
+        this.broadcastStateExceptToPlayerAt(-1);
     }
 
     public resetCardOrigins(): void {
