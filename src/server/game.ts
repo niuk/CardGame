@@ -160,6 +160,7 @@ export default class Game {
             }
         } finally {
             this.dispensing = false;
+            this.resetCardOrigins();
             ++this.tick;
             this.broadcastStateExceptToPlayerAt(-1);
         }
