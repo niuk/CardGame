@@ -153,7 +153,7 @@ export default class Game {
                         release();
                     }
 
-                    await Lib.delay(200);
+                    await Lib.delay(500);
                 }
 
                 --playerIndex;
