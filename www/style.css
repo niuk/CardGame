@@ -43,7 +43,7 @@ a {
     color: cyan;
 }
 
-#showCredits {
+#bottomRight {
     position: absolute;
     cursor: help;
     bottom: 0px;

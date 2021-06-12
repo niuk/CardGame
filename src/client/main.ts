@@ -53,6 +53,12 @@ window.onload = async () => {
     console.log('Page loaded.');
 
     // connected; now we can activate buttons
+    const backgroundLeftElement = <HTMLInputElement>document.getElementById('backgroundLeft');
+    backgroundLeftElement.onclick = () => Sprite.backgroundBackward();
+
+    const backgroundRightElement = <HTMLInputElement>document.getElementById('backgroundRight');
+    backgroundRightElement.onclick = () => Sprite.backgroundForward();
+
     const playerNameElement = <HTMLInputElement>document.getElementById('playerName');
     const gameIdElement = <HTMLInputElement>document.getElementById('gameId');
     const formElement = <HTMLDivElement>document.getElementById('form');
