@@ -537,9 +537,9 @@ async function drag(): Promise<void> {
 
         const playerContainer = Sprite.containers[playerIndex];
         const playerWidth = Sprite.widths[playerIndex];
-        if (!playerContainer || playerWidth === undefined) throw new Error();
+        const above = Sprite.reverse[playerIndex];
 
-        const above = playerContainer.y < Sprite.app.view.height / 2;
+        if (!playerContainer || playerWidth === undefined || above == undefined) throw new Error();
 
         const cardsMin = {
             x: above ? playerWidth / goldenRatio : 0,
