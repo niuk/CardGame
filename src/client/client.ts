@@ -205,6 +205,17 @@ export function reset(): Promise<void> {
     });
 }
 
+export function kickPlayer(playerIndex: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('Kick', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.Kick>{
+            methodName: 'Kick',
+            playerIndex,
+            tick: gameState?.tick
+        }));
+    });
+}
+
 export function reorderCards(
     newShareCount: number,
     newRevealCount: number,

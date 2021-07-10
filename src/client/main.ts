@@ -249,6 +249,7 @@ function renderDeck(deltaTime: number) {
 const goldenRatio = (1 + Math.sqrt(5)) / 2;
 const playerLines: (PIXI.Graphics | undefined)[][] = [];
 const playerLabels: (PIXI.BitmapText | undefined)[][] = [];
+const playerKickers: ((() => void) | undefined)[] = [];
 
 function renderPlayers(deltaTime: number) {
     const gameState = Client.gameState;
@@ -256,7 +257,20 @@ function renderPlayers(deltaTime: number) {
 
     for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
         const playerState = gameState.playerStates[playerIndex];
-        if (!playerState) continue;
+
+        if (playerState && !playerState.present) {
+            if (!playerKickers[playerIndex]) {
+                playerKickers[playerIndex] = () => Client.kickPlayer(playerIndex);
+            }
+        } else {
+            if (playerKickers[playerIndex]) {
+                playerKickers[playerIndex] = undefined;
+            }
+        }
+
+        if (!playerState) {
+            continue;
+        }
 
         const width = Sprite.widths[playerIndex];
         const container = Sprite.containers[playerIndex];
@@ -501,15 +515,17 @@ function addAllLabels(
     let i = 0;
     const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
-    const nameMetrics = PIXI.TextMetrics.measureText(playerState.name, textStyle);
+    let name = playerState.name + (playerState.present ? '' : '(踢?)');
+    const nameMetrics = PIXI.TextMetrics.measureText(name, textStyle);
     const nameX = goldenX - nameMetrics.width / 2;
     const nameY = reverse ? 2 * Sprite.height : -nameMetrics.height;
     i = addLabel(labels, container, i,
         nameX,
         nameY,
-        playerState.name,
+        name,
         '大字',
-        26
+        26,
+        playerKickers[playerIndex]
     );
 
     const getOffset = (x: number) => x > 0 ? (x - 1) * Sprite.gap + Sprite.width : 0;

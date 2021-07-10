@@ -15,6 +15,7 @@ export default class Player implements Lib.PlayerState {
     revealCount = 0;
     groupCount = 0;
     cardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
+    present = true;
 
     constructor(ws: WebSocket) {
         this.ws = ws;
@@ -42,7 +43,13 @@ export default class Player implements Lib.PlayerState {
         };
         
         ws.onclose = async closeEvent => {
-            console.log('closed websocket connection');
+            console.log('closed websocket connection: ', closeEvent.reason);
+            this.present = false;
+            if (this.game) {
+                this.game.resetCardOrigins();
+                this.game.tick++;
+                this.game.broadcastStateExceptToPlayerAt(this.index);
+            }
         };
     }
 
@@ -254,7 +261,9 @@ export default class Player implements Lib.PlayerState {
                 for (const player of this.game.players) {
                     if (!player) continue;
 
-                    const disownedCardsWithOrigins = player.disownCardsWithOrigins(Array(player.cardsWithOrigins.length).fill(null).map((_, i) => i));
+                    const disownedCardsWithOrigins = player.disownCardsWithOrigins(
+                        Array(player.cardsWithOrigins.length).fill(null).map((_, i) => i)
+                    );
 
                     this.game.deckCardsWithOrigins.push(...disownedCardsWithOrigins);
                     
@@ -264,6 +273,21 @@ export default class Player implements Lib.PlayerState {
                         JSON.stringify(player.cardsWithOrigins)
                     }`);
                 }
+            } else if (method.methodName === 'Kick') {
+                const player = this.game.players[method.playerIndex];
+                if (!player) return;
+
+                const disownedCardsWithOrigins = player.disownCardsWithOrigins(
+                    Array(player.cardsWithOrigins.length).fill(null).map((_, i) => i)
+                );
+
+                this.game.deckCardsWithOrigins.push(...disownedCardsWithOrigins);
+                
+                this.game.players[method.playerIndex] = undefined;
+
+                console.log(`'${this.name}' kicked player '${player.name}', returning cards: ${
+                    JSON.stringify(disownedCardsWithOrigins)
+                }`);
             } else {
                 const _: never = method;
             }

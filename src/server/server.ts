@@ -24,6 +24,9 @@ app.get('/', async (_, response) => {
         console.log(`new websocket connection`);
         new Player(ws);
     });
+    webSocketServer.on('close', (ws: WebSocket.Server) => {
+        console.log(`closed websocket connection`);
+    });
 
     const port = 443;
     console.log(`listening on port ${port}...`);

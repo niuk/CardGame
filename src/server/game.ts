@@ -189,7 +189,8 @@ export default class Game {
                     shareCount: player.shareCount,
                     revealCount: player.revealCount,
                     groupCount: player.groupCount,
-                    cardsWithOrigins: player.cardsWithOrigins
+                    cardsWithOrigins: player.cardsWithOrigins,
+                    present: player.present
                 });
             } else {
                 playerStates.push({
@@ -201,7 +202,8 @@ export default class Game {
                         .slice(0, player.revealCount)
                         .concat(player.cardsWithOrigins
                             .slice(player.revealCount)
-                            .map(([_, previousLocation]) => [null, previousLocation]))
+                            .map(([_, previousLocation]) => [null, previousLocation])),
+                    present: player.present
                 });
             }
         }
