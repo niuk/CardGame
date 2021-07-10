@@ -269,6 +269,16 @@ function renderPlayers(deltaTime: number) {
         }
 
         if (!playerState) {
+            const lines = playerLines[playerIndex];
+            if (lines) {
+                removeAllLines(lines);
+            }
+
+            const labels = playerLabels[playerIndex];
+            if (labels) {
+                removeAllLabels(labels);
+            }
+
             continue;
         }
 
@@ -409,6 +419,14 @@ function addAllLines(
     i = addLine(lines, container, i, goldenX, 0, goldenX, 2 * Sprite.height);
 }
 
+function removeAllLines(lines: (PIXI.Graphics | undefined)[]) {
+    for (const line of lines) {
+        line?.destroy();
+    }
+
+    lines.fill(undefined);
+}
+
 function addLabel(
     labels: (PIXI.BitmapText | undefined)[],
     container: PIXI.Container,
@@ -489,6 +507,61 @@ function addLabel(
     }
 
     return i + 1;
+}
+
+function 上下(
+    labels: (PIXI.BitmapText | undefined)[],
+    container: PIXI.Container,
+    i: number,
+    x: number,
+    y: number,
+    詞: string,
+    fontName: string,
+    fontSize: number,
+    onClick?: () => void
+): number {
+    for (const 字 of 詞) {
+        i = addLabel(labels, container, i, x, y, 字, fontName, fontSize, onClick);
+
+        if (fontName === '大字') {
+            y += 0.75 * Sprite.pixelsPerCM;
+        } else if (fontName === '中字') {
+            y += 0.548 * Sprite.pixelsPerCM;
+        } else if (fontName === '小字') {
+            y += 0.375 * Sprite.pixelsPerCM;
+        } else {
+            throw new Error(`unknown font '${fontName}'`);
+        }
+    }
+
+    return i;
+}
+
+const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+function 数(n: number): string {
+    if (n < 0) {
+        return `负${数(-n)}`;
+    } else if (n <= 10) {
+        const digit = digits[n];
+        if (digit === undefined) throw new Error(`no digit character found for ${n}`);
+        return digit;
+    } else if (n <= 19) {
+        return `十${digits[n % 10]}`;
+    } else if (n <= 99) {
+        const m = n % 10;
+        return `${digits[Math.floor(n / 10)]}十${m > 0 ? digits[m] : ''}`;
+    } else if (n % 100 === 0) {
+        return `${digits[Math.floor(n / 100)]}百`;
+    } else {
+        const c = Math.floor(n / 100);
+        n = n % 100;
+        if (n <= 9) {
+            return `${digits[c]}百零${digits[n]}`;
+        } else {
+            const m = n % 10;
+            return `${digits[c]}百${digits[Math.floor(n / 10)]}十${m > 0 ? digits[m] : ''}`;
+        }
+    }
 }
 
 function addAllLabels(
@@ -591,57 +664,10 @@ function addAllLabels(
     return i;
 }
 
-function 上下(
-    labels: (PIXI.BitmapText | undefined)[],
-    container: PIXI.Container,
-    i: number,
-    x: number,
-    y: number,
-    詞: string,
-    fontName: string,
-    fontSize: number,
-    onClick?: () => void
-): number {
-    for (const 字 of 詞) {
-        i = addLabel(labels, container, i, x, y, 字, fontName, fontSize, onClick);
-
-        if (fontName === '大字') {
-            y += 0.75 * Sprite.pixelsPerCM;
-        } else if (fontName === '中字') {
-            y += 0.548 * Sprite.pixelsPerCM;
-        } else if (fontName === '小字') {
-            y += 0.375 * Sprite.pixelsPerCM;
-        } else {
-            throw new Error(`unknown font '${fontName}'`);
-        }
+function removeAllLabels(labels: (PIXI.BitmapText | undefined)[]) {
+    for (const label of labels) {
+        label?.destroy();
     }
 
-    return i;
-}
-
-const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-function 数(n: number): string {
-    if (n < 0) {
-        return `负${数(-n)}`;
-    } else if (n <= 10) {
-        const digit = digits[n];
-        if (digit === undefined) throw new Error(`no digit character found for ${n}`);
-        return digit;
-    } else if (n <= 19) {
-        return `十${digits[n % 10]}`;
-    } else if (n <= 99) {
-        const m = n % 10;
-        return `${digits[Math.floor(n / 10)]}十${m > 0 ? digits[m] : ''}`;
-    } else if (n % 100 === 0) {
-        return `${digits[Math.floor(n / 100)]}百`;
-    } else {
-        const c = Math.floor(n / 100);
-        n = n % 100;
-        if (n <= 9) {
-            return `${digits[c]}百零${digits[n]}`;
-        } else {
-            const m = n % 10;
-            return `${digits[c]}百${digits[Math.floor(n / 10)]}十${m > 0 ? digits[m] : ''}`;
-        }
-    }
+    labels.fill(undefined);
 }
