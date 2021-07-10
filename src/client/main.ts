@@ -592,7 +592,7 @@ function addAllLabels(
     let i = 0;
     const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
-    let name = playerState.name + (playerState.present ? '' : '(踢?)');
+    let name = playerState.name + (playerState.present ? '' : '(撤?)');
     const nameMetrics = PIXI.TextMetrics.measureText(name, textStyle);
     const nameX = goldenX - nameMetrics.width - Sprite.gap;
     const nameY = reverse ? 2 * Sprite.height : -nameMetrics.height;
