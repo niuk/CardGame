@@ -216,6 +216,17 @@ export function kickPlayer(playerIndex: number): Promise<void> {
     });
 }
 
+export function setPlayerNotes(notes: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('SetPlayerNotes', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.SetPlayerNotes>{
+            methodName: 'SetPlayerNotes',
+            notes,
+            tick: gameState?.tick
+        }));
+    });
+}
+
 export function reorderCards(
     newShareCount: number,
     newRevealCount: number,

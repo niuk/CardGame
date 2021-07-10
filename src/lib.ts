@@ -67,6 +67,7 @@ export interface PlayerState {
     groupCount: number;
     cardsWithOrigins: [Card | null, Origin][];
     present: boolean;
+    notes: string;
 }
 
 export interface GameState {
@@ -90,7 +91,8 @@ export type Method =
     ShuffleDeck |
     Dispense |
     Reset |
-    Kick;
+    Kick |
+    SetPlayerNotes;
 
 export type MethodName =
     'SetPlayerName' |
@@ -104,7 +106,8 @@ export type MethodName =
     'ShuffleDeck' |
     'Dispense' |
     'Reset' |
-    'Kick';
+    'Kick' |
+    'SetPlayerNotes';
 
 export interface Result {
     methodName: MethodName;
@@ -183,6 +186,12 @@ export interface Reset extends MethodBase {
 export interface Kick extends MethodBase {
     methodName: 'Kick';
     playerIndex: number;
+    tick: number;
+}
+
+export interface SetPlayerNotes extends MethodBase {
+    methodName: 'SetPlayerNotes';
+    notes: string;
     tick: number;
 }
 

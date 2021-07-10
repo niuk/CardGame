@@ -66,6 +66,7 @@ window.onload = async () => {
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
     const numPlayersSelection = <HTMLSelectElement>document.getElementById('numPlayers');
     const numDecksSelection = <HTMLSelectElement>document.getElementById('numDecks');
+
     joinGameButton.onclick = async e => {
         playerNameElement.disabled = true;
         gameIdElement.disabled = true;
@@ -251,6 +252,10 @@ const playerLines: (PIXI.Graphics | undefined)[][] = [];
 const playerLabels: (PIXI.BitmapText | undefined)[][] = [];
 const playerKickers: ((() => void) | undefined)[] = [];
 
+let playerNotesElement: HTMLInputElement | undefined = undefined;
+let playerNotesPosition = new PIXI.Point();
+let previousNotes = '';
+
 function renderPlayers(deltaTime: number) {
     const gameState = Client.gameState;
     if (!gameState) return;
@@ -374,7 +379,8 @@ function renderPlayers(deltaTime: number) {
             playerState.shareCount,
             playerState.revealCount,
             playerState.groupCount,
-            playerState.cardsWithOrigins.length
+            playerState.cardsWithOrigins.length,
+            playerIndex === gameState.playerIndex
         );
     }
 }
@@ -420,10 +426,7 @@ function addAllLines(
 }
 
 function removeAllLines(lines: (PIXI.Graphics | undefined)[]) {
-    for (const line of lines) {
-        line?.destroy();
-    }
-
+    lines.map(line => line?.destroy());
     lines.fill(undefined);
 }
 
@@ -574,7 +577,8 @@ function addAllLabels(
     shareCount: number,
     revealCount: number,
     groupCount: number,
-    totalCount: number
+    totalCount: number,
+    playerIsMe: boolean
 ) {
     const score = playerState.cardsWithOrigins.slice(0, shareCount).map(([card, origin]) => {
         if (card) {
@@ -590,7 +594,7 @@ function addAllLabels(
 
     let name = playerState.name + (playerState.present ? '' : '(踢?)');
     const nameMetrics = PIXI.TextMetrics.measureText(name, textStyle);
-    const nameX = goldenX - nameMetrics.width / 2;
+    const nameX = goldenX - nameMetrics.width - Sprite.gap;
     const nameY = reverse ? 2 * Sprite.height : -nameMetrics.height;
     i = addLabel(labels, container, i,
         nameX,
@@ -600,6 +604,40 @@ function addAllLabels(
         26,
         playerKickers[playerIndex]
     );
+
+    if (playerIsMe) {
+        if (!playerNotesElement) {
+            playerNotesElement = document.createElement('input');
+            playerNotesElement.style.position = 'absolute'
+            playerNotesElement.style.zIndex = '1';
+
+            document.body.appendChild(playerNotesElement);
+
+            (async () => {
+                while (true) {
+                    await Lib.delay(1000);
+
+                    const notes = playerNotesElement.value;
+                    if (previousNotes !== notes) {
+                        previousNotes = notes;
+                        await Client.setPlayerNotes(notes);
+                    }
+                }
+            })();
+        }
+
+        container.toGlobal({ x: goldenX + Sprite.gap, y: nameY }, playerNotesPosition);
+        playerNotesElement.style.left = `${playerNotesPosition.x}px`;
+        playerNotesElement.style.top = `${playerNotesPosition.y}px`;
+    } else {
+        i = addLabel(labels, container, i,
+            goldenX + Sprite.gap,
+            nameY,
+            playerState.notes,
+            '大字',
+            26
+        );
+    }
 
     const getOffset = (x: number) => x > 0 ? (x - 1) * Sprite.gap + Sprite.width : 0;
 
@@ -665,9 +703,6 @@ function addAllLabels(
 }
 
 function removeAllLabels(labels: (PIXI.BitmapText | undefined)[]) {
-    for (const label of labels) {
-        label?.destroy();
-    }
-
+    labels.map(label => label?.destroy());
     labels.fill(undefined);
 }

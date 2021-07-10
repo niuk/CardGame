@@ -16,6 +16,7 @@ export default class Player implements Lib.PlayerState {
     groupCount = 0;
     cardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
     present = true;
+    notes = '';
 
     constructor(ws: WebSocket) {
         this.ws = ws;
@@ -288,6 +289,10 @@ export default class Player implements Lib.PlayerState {
                 console.log(`'${this.name}' kicked player '${player.name}', returning cards: ${
                     JSON.stringify(disownedCardsWithOrigins)
                 }`);
+            } else if (method.methodName === 'SetPlayerNotes') {
+                this.notes = method.notes;
+
+                console.log(`'${this.name}' noted: ${method.notes}`);
             } else {
                 const _: never = method;
             }
