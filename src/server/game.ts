@@ -92,45 +92,45 @@ export default class Game {
         this.dispensing = true;
         try {
             let remainder: number;
-            if (this.numPlayers === 4) {
-                if (this.numDecks === 1) {
-                    remainder = 6;
-                } else if (this.numDecks === 2) {
-                    remainder = 8;
-                } else if (this.numDecks === 3) {
-                    remainder = 8;
+            do {
+                if (this.numPlayers === 4) {
+                    if (this.numDecks === 1) {
+                        remainder = 6;
+                    } else if (this.numDecks === 2) {
+                        remainder = 8;
+                    } else if (this.numDecks === 3) {
+                        remainder = 8;
+                    } else {
+                        const _: never = this.numDecks;
+                        throw new Error();
+                    }
+                } else if (this.numPlayers === 5) {
+                    if (this.numDecks === 1) {
+                        remainder = 9;
+                    } else if (this.numDecks === 2) {
+                        remainder = 8;
+                    } else if (this.numDecks === 3) {
+                        remainder = 7;
+                    } else {
+                        const _: never = this.numDecks;
+                        throw new Error();
+                    }
+                } else if (this.numPlayers === 6) {
+                    if (this.numDecks === 1) {
+                        remainder = 6;
+                    } else if (this.numDecks === 2) {
+                        remainder = 6;
+                    } else if (this.numDecks === 3) {
+                        remainder = 6;
+                    } else {
+                        const _: never = this.numDecks;
+                        throw new Error();
+                    }
                 } else {
-                    const _: never = this.numDecks;
+                    const _: never = this.numPlayers;
                     throw new Error();
                 }
-            } else if (this.numPlayers === 5) {
-                if (this.numDecks === 1) {
-                    remainder = 9;
-                } else if (this.numDecks === 2) {
-                    remainder = 8;
-                } else if (this.numDecks === 3) {
-                    remainder = 7;
-                } else {
-                    const _: never = this.numDecks;
-                    throw new Error();
-                }
-            } else if (this.numPlayers === 6) {
-                if (this.numDecks === 1) {
-                    remainder = 6;
-                } else if (this.numDecks === 2) {
-                    remainder = 6;
-                } else if (this.numDecks === 3) {
-                    remainder = 6;
-                } else {
-                    const _: never = this.numDecks;
-                    throw new Error();
-                }
-            } else {
-                const _: never = this.numPlayers;
-                throw new Error();
-            }
-
-            while (this.dispensing && this.deckCardsWithOrigins.length > remainder) {
+    
                 if (playerIndex < 0) {
                     playerIndex = this.numPlayers + playerIndex;
                 }
@@ -157,7 +157,7 @@ export default class Game {
                 }
 
                 --playerIndex;
-            }
+            } while (this.dispensing && this.deckCardsWithOrigins.length > remainder);
         } finally {
             this.dispensing = false;
             this.resetCardOrigins();
