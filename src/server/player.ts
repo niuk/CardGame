@@ -71,7 +71,7 @@ export default class Player implements Lib.PlayerState {
         if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
         } else if (method.methodName === 'NewGame') {
-            this.game = new Game(method.numPlayers, method.numDecks);
+            this.game = new Game();
             this.game.players[0] = this;
             this.index = 0;
             
@@ -86,36 +86,38 @@ export default class Player implements Lib.PlayerState {
 
             // get unoccupied indices and indices of disconnected players
             const available = [];
-            for (let i = 0; i < this.game.numPlayers; ++i) {
+            for (let i = 0; i < this.game.players.length; ++i) {
                 const player = this.game.players[i];
                 if (player === this) {
                     joined = true;
-                    available.splice(0, available.length);
                     break;
                 }
 
-                if (!player || player.ws.readyState !== WebSocket.OPEN) {
+                if (!player || !player.present) {
                     available.push(i);
                 }
             }
 
-            // try to join at index of a disconnected player with the same name
-            for (const i of available) {
-                const player = this.game.players[i];
-                if (player && player.name === this.name) {
-                    this.shareCount = player.shareCount;
-                    this.revealCount = player.revealCount;
-                    this.groupCount = player.groupCount;
-                    this.cardsWithOrigins = player.cardsWithOrigins;
-                    this.game.players[i] = this;
-                    this.index = i;
-                    joined = true;
-                    break;
+            if (!joined) {
+                // try to join at index of a disconnected player with the same name
+                for (const i of available) {
+                    const player = this.game.players[i];
+                    if (player && player.name === this.name) {
+                        this.shareCount = player.shareCount;
+                        this.revealCount = player.revealCount;
+                        this.groupCount = player.groupCount;
+                        this.cardsWithOrigins = player.cardsWithOrigins;
+                        this.game.players[i] = this;
+                        this.index = i;
+                        joined = true;
+                        console.log(`player '${this.name}' rejoined '${this.game.gameId} at ${this.index}`);
+                        break;
+                    }
                 }
             }
 
-            // just try to join at any available index
             if (!joined) {
+                // just try to join at any available index
                 const i = available[0];
                 if (i !== undefined) {
                     const player = this.game.players[i];
@@ -129,15 +131,20 @@ export default class Player implements Lib.PlayerState {
                     this.game.players[i] = this;
                     this.index = i;
                     joined = true;
+                    console.log(`player '${this.name}' joined '${this.game.gameId} at empty index ${this.index}`);
                 }
             }
 
             if (!joined) {
-                throw new Error(`could not join game '${this.game.gameId}'`);
+                // join as an extra player
+                const i = this.game.players.length;
+                this.game.players[i] = this;
+                this.index = i;
+                joined = true;
+                console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
             }
 
             ++this.game.tick;
-            console.log(`player '${this.name}' joined game '${this.game.gameId}' at ${this.index}`);
         } else {
             if (!this.game) {
                 throw new Error('you are not in a game');
@@ -283,8 +290,14 @@ export default class Player implements Lib.PlayerState {
                 );
 
                 this.game.deckCardsWithOrigins.push(...disownedCardsWithOrigins);
-                
-                this.game.players[method.playerIndex] = undefined;
+
+                this.game.players.splice(method.playerIndex, 1);
+                for (let i = 0; i < this.game.players.length; ++i) {
+                    const player = this.game.players[i];
+                    if (player) {
+                        player.index = i;
+                    }
+                }
 
                 console.log(`'${this.name}' kicked player '${player.name}', returning cards: ${
                     JSON.stringify(disownedCardsWithOrigins)
@@ -293,6 +306,14 @@ export default class Player implements Lib.PlayerState {
                 this.notes = method.notes;
 
                 console.log(`'${this.name}' noted: ${method.notes}`);
+            } else if (method.methodName === 'AddDeck') {
+                this.game.addDeck();
+
+                console.log(`'${this.name}' added a deck.`);
+            } else if (method.methodName === 'RemoveDeck') {
+                this.game.removeDeck();
+
+                console.log(`'${this.name}' removed a deck.`);
             } else {
                 const _: never = method;
             }

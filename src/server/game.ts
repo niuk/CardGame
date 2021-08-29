@@ -23,48 +23,87 @@ export default class Game {
         return this._gameId;
     }
 
+    public get numPlayers(): number {
+        return this.players.filter(player => player != undefined).length;
+    }
+
     public mutex = new Mutex();
     public tick = 0;
-    public numPlayers: 4 | 5 | 6;
-    public numDecks: 1 | 2 | 3;
-    public players: (Player | undefined)[] = []
+    public numDecks = 0;
+    public players: (Player | undefined)[] = [undefined, undefined, undefined, undefined]
     public deckCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
     public dispensing = false;
 
-    public constructor(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3) {
+    public constructor() {
         do {
             this._gameId = nanoid();
         } while (Game.gamesById.has(this.gameId));
+
+        this.addDeck();
+        this.resetCardOrigins();
+        //this.shuffleDeck();
+
         Game.gamesById.set(this.gameId, this);
+    }
 
-        this.numPlayers = numPlayers;
-        this.numDecks = numDecks;
+    public addDeck(): void {
+        for (const suit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
+            for (let rank = Lib.Rank.Small + 1; rank < Lib.Rank.Big; ++rank) {
+                this.deckCardsWithOrigins.push([[suit, rank], {
+                    origin: 'Deck',
+                    deckIndex: this.deckCardsWithOrigins.length
+                }]);
+            }
+        }
+        
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
+            origin: 'Deck',
+            deckIndex: this.deckCardsWithOrigins.length
+        }]);
 
-        for (let i = 0; i < numPlayers; ++i) {
-            this.players[i] = undefined;
+        this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
+            origin: 'Deck',
+            deckIndex: this.deckCardsWithOrigins.length
+        }]);
+
+        ++this.numDecks;
+    }
+
+    public removeDeck(): void {
+        for (const player of this.players) {
+            if (player && player.cardsWithOrigins.length > 0) {
+                throw new Error(`Can't remove a deck when player ${player.index} has cards!`);
+            }
         }
 
-        for (let i = 0; i < numDecks; ++i) {
-            for (let j = 0; j < 4; ++j) {
-                for (let k = 0; k < 13; ++k) {
-                    this.deckCardsWithOrigins.push([[j, k + 1], {
-                        origin: 'Deck',
-                        deckIndex: this.deckCardsWithOrigins.length
-                    }]);
+        let index = this.deckCardsWithOrigins.findIndex(([[suit, rank], _]) => suit === Lib.Suit.Joker && rank === Lib.Rank.Big);
+        if (index >= 0) {
+            this.deckCardsWithOrigins.splice(index, 1);
+        } else {
+            throw new Error(`Could not find [${Lib.Suit.Joker}, ${Lib.Rank.Big}] in ${this.deckCardsWithOrigins.map(([card, origin]) => `[${card}]`)}`);
+        }
+
+        index = this.deckCardsWithOrigins.findIndex(([[suit, rank], _]) => suit === Lib.Suit.Joker && rank === Lib.Rank.Small);
+        if (index >= 0) {
+            this.deckCardsWithOrigins.splice(index, 1);
+        } else {
+            throw new Error(`Could not find [${Lib.Suit.Joker}, ${Lib.Rank.Small}] in ${this.deckCardsWithOrigins.map(([card, origin]) => `[${card}]`)}`);
+        }
+
+        for (let needleSuit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
+            for (let needleRank = Lib.Rank.Small + 1; needleRank < Lib.Rank.Big; ++needleRank) {
+                index = this.deckCardsWithOrigins.findIndex(([[suit, rank], _]) => suit === needleSuit && rank === needleRank)
+                if (index >= 0) {
+                    this.deckCardsWithOrigins.splice(index, 1);
+                } else {
+                    throw new Error(`Could not find [${needleSuit}, ${needleRank}] in ${this.deckCardsWithOrigins.map(([card, origin]) => `[${card}]`)}`);
                 }
             }
-
-            this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
-                origin: 'Deck',
-                deckIndex: this.deckCardsWithOrigins.length
-            }]);
-            this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
-                origin: 'Deck',
-                deckIndex: this.deckCardsWithOrigins.length
-            }]);
         }
 
-        this.shuffleDeck();
+        --this.numDecks;
+
+        console.log(`${this.deckCardsWithOrigins.length}`);
     }
 
     public shuffleDeck(): void {
@@ -99,9 +138,10 @@ export default class Game {
                     } else if (this.numDecks === 2) {
                         remainder = 8;
                     } else if (this.numDecks === 3) {
+                        remainder = 6;
+                    } else if (this.numDecks === 4) {
                         remainder = 8;
                     } else {
-                        const _: never = this.numDecks;
                         throw new Error();
                     }
                 } else if (this.numPlayers === 5) {
@@ -111,8 +151,9 @@ export default class Game {
                         remainder = 8;
                     } else if (this.numDecks === 3) {
                         remainder = 7;
+                    } else if (this.numDecks === 4) {
+                        remainder = 6;
                     } else {
-                        const _: never = this.numDecks;
                         throw new Error();
                     }
                 } else if (this.numPlayers === 6) {
@@ -122,12 +163,12 @@ export default class Game {
                         remainder = 6;
                     } else if (this.numDecks === 3) {
                         remainder = 6;
+                    } else if (this.numDecks === 4) {
+                        remainder = 6;
                     } else {
-                        const _: never = this.numDecks;
                         throw new Error();
                     }
                 } else {
-                    const _: never = this.numPlayers;
                     throw new Error();
                 }
     

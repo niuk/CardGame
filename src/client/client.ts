@@ -108,6 +108,15 @@ export function setPlayerName(playerName: string): Promise<void> {
     })
 }
 
+export function newGame(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('NewGame', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.NewGame>{
+            methodName: 'NewGame'
+        }));
+    });
+}
+
 export function joinGame(gameId: string): Promise<void> {
     // try to join the game
     return new Promise<void>((resolve, reject) => {
@@ -119,13 +128,22 @@ export function joinGame(gameId: string): Promise<void> {
     });
 }
 
-export function newGame(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3): Promise<void> {
+export function addDeck(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-        addCallback('NewGame', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.NewGame>{
-            methodName: 'NewGame',
-            numPlayers,
-            numDecks
+        addCallback('AddDeck', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.AddDeck>{
+            methodName: 'AddDeck',
+            tick: gameState?.tick
+        }));
+    });
+}
+
+export function removeDeck(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        addCallback('RemoveDeck', resolve, reject);
+        webSocket.send(JSON.stringify(<Lib.RemoveDeck>{
+            methodName: 'RemoveDeck',
+            tick: gameState?.tick
         }));
     });
 }

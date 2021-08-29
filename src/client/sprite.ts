@@ -150,6 +150,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
 
     if (gameState) {
         let playerContainer = Sprite.containers[gameState.playerIndex];
+        console.log(`playerContainer.index = ${gameState.playerIndex}`);
         if (!playerContainer) {
             playerContainer = new PIXI.Container();
             playerContainer.zIndex = 3;
@@ -170,12 +171,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             }
         }
 
-        let layout = Lib.getCookie('layout');
-        if (layout === undefined) {
-            layout = 'polygonal';
-        }
-
-        if (layout === 'polygonal' && gameState.playerStates.length === 6) {
+        if (gameState.playerStates.length === 6) {
             //    \______/
             //    /      \
             // __/        \__
@@ -295,6 +291,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
 
             const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
             const leftContainer = Sprite.containers[leftIndex];
+            console.log(`leftContainer.index = ${leftIndex}`);
             if (!leftContainer) throw new Error();
             leftContainer.position.set(0, Sprite.app.view.height);
             leftContainer.rotation = -Math.PI / 2;
@@ -307,8 +304,10 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
             const rightContainer = Sprite.containers[rightIndex];
             if (!rightContainer) throw new Error();
+            console.log(`rightContainer.index = ${rightIndex}`);
             rightContainer.rotation = Math.PI / 2;
             rightContainer.position.set(Sprite.app.view.width, 0);
+            playerContainer.rotation = 0;
             Sprite.reverse[rightIndex] = true;
             Sprite.widths[rightIndex] = Sprite.app.view.height;
             if (gameState.playerStates.length > 4) {
@@ -316,6 +315,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                 Sprite.widths[rightIndex] -= height;
             }
 
+            console.log(`gameState.playerStates.length = ${gameState.playerStates.length}`);
             for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
                 const playerIndex = (leftIndex + i + 1) % gameState.playerStates.length;
                 const playerContainer = Sprite.containers[playerIndex];
@@ -326,10 +326,18 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                 if (gameState.playerStates.length > 4) {
                     const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
                     playerContainer.position.set(i * width, 0);
+                    playerContainer.rotation = 0;
                     Sprite.widths[playerIndex] = width;
                 } else {
                     playerContainer.position.set(height, 0);
+                    playerContainer.rotation = 0;
                     Sprite.widths[playerIndex] = Sprite.app.view.width - 2 * height;
+                }
+            }
+
+            for (let i = gameState.playerStates.length; i < Sprite.containers.length; ++i) {
+                if (Sprite.containers[i]) {
+                    Sprite.containers[i]?.destroy();
                 }
             }
         }
@@ -523,6 +531,14 @@ export default class Sprite {
             }
     
             this.deckSprites.push(sprite);
+        }
+
+        console.log(`previousDeckSprites.length = ${previousDeckSprites.length}`);
+        for (const previousDeckSprite of previousDeckSprites) {
+            if (previousDeckSprite) {
+                previousDeckSprite.destroy();
+                sprites.delete(previousDeckSprite);
+            }
         }
     }
 

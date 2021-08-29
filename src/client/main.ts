@@ -64,16 +64,12 @@ window.onload = async () => {
     const formElement = <HTMLDivElement>document.getElementById('form');
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
-    const numPlayersSelection = <HTMLSelectElement>document.getElementById('numPlayers');
-    const numDecksSelection = <HTMLSelectElement>document.getElementById('numDecks');
 
     joinGameButton.onclick = async e => {
         playerNameElement.disabled = true;
         gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
-        numPlayersSelection.disabled = true;
-        numDecksSelection.disabled = true;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -90,8 +86,6 @@ window.onload = async () => {
             gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
-            numPlayersSelection.disabled = false;
-            numDecksSelection.disabled = false;
         }
     };
 
@@ -100,16 +94,11 @@ window.onload = async () => {
         gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
-        numPlayersSelection.disabled = true;
-        numDecksSelection.disabled = true;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
             await Client.setPlayerName(playerNameElement.value);
-            await Client.newGame(
-                JSON.parse(numPlayersSelection.value),
-                JSON.parse(numDecksSelection.value)
-            );
+            await Client.newGame();
 
             while (!Client.gameState) {
                 await Lib.delay(100);
@@ -121,8 +110,6 @@ window.onload = async () => {
             gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
-            numPlayersSelection.disabled = false;
-            numDecksSelection.disabled = false;
         }
     };
 
@@ -239,6 +226,22 @@ function renderDeck(deltaTime: number) {
             `︵${数(Sprite.deckSprites.length)}︶`,
             '小字',
             13);
+
+        i = 上下(deckLabels, Sprite.deckContainer, i,
+            Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
+            Sprite.app.view.height / 2 - Sprite.height / 2,
+            '+',
+            '小字',
+            13,
+            Client.addDeck);
+            
+        i = 上下(deckLabels, Sprite.deckContainer, i,
+            Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
+            Sprite.app.view.height / 2 + Sprite.height / 2 - 0.5 * Sprite.pixelsPerCM,
+            '_',
+            '小字',
+            13,
+            Client.removeDeck);
 
         for (; i < deckLabels.length; ++i) {
             deckLabels[i]?.destroy();
@@ -448,7 +451,7 @@ function addLabel(
         label.destroy();
         label = undefined;
         labels[i] = undefined;
-        console.log(`destroyed ${text} at ${i} because fonts changed`);
+        //console.log(`destroyed ${text} at ${i} because fonts changed`);
     }
 
     // workaround for a bug
@@ -457,11 +460,11 @@ function addLabel(
         label.destroy();
         label = undefined;
         labels[i] = undefined;
-        console.log(`destroyed ${text} at ${i} because of bug`);
+        //console.log(`destroyed ${text} at ${i} because of bug`);
     }
 
     if (!label) {
-        console.log(`creating ${text} at ${i} because of null or undefined label`, label, labelsUsingCurrentFontsWithCallbacks);
+        //console.log(`creating ${text} at ${i} because of null or undefined label`, label, labelsUsingCurrentFontsWithCallbacks);
         label = container.addChild(new PIXI.BitmapText(text, { fontName }));
         labels[i] = label;
         labelsUsingCurrentFontsWithCallbacks.set(label, undefined);
@@ -493,11 +496,11 @@ function addLabel(
             label.on('pointerup', onClick);
             label.interactive = true;
             label.cursor = 'pointer';
-            console.log(`${text} at ${i} has onClick`, onClick);
+            //console.log(`${text} at ${i} has onClick`, onClick);
         } else {
             label.interactive = false;
             label.cursor = 'auto';
-            console.log(`${text} at ${i} has no onClick`);
+            //console.log(`${text} at ${i} has no onClick`);
         }
     }
 

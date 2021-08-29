@@ -83,6 +83,8 @@ export type Method =
     SetPlayerName |
     NewGame |
     JoinGame |
+    AddDeck |
+    RemoveDeck |
     TakeFromOtherPlayer |
     GiveToOtherPlayer |
     DrawFromDeck |
@@ -98,6 +100,8 @@ export type MethodName =
     'SetPlayerName' |
     'NewGame' |
     'JoinGame' |
+    'AddDeck' |
+    'RemoveDeck' |
     'TakeFromOtherPlayer' |
     'GiveToOtherPlayer' |
     'DrawFromDeck' |
@@ -125,13 +129,21 @@ export interface SetPlayerName extends MethodBase {
 
 export interface NewGame extends MethodBase {
     methodName: 'NewGame';
-    numPlayers: 4 | 5 | 6;
-    numDecks: 1 | 2 | 3;
 }
 
 export interface JoinGame extends MethodBase {
     methodName: 'JoinGame';
     gameId: string;
+}
+
+export interface AddDeck extends MethodBase {
+    methodName: 'AddDeck';
+    tick: number;
+}
+
+export interface RemoveDeck extends MethodBase {
+    methodName: 'RemoveDeck';
+    tick: number;
 }
 
 export interface TakeFromOtherPlayer extends MethodBase {
