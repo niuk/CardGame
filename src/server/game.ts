@@ -90,7 +90,7 @@ export default class Game {
             throw new Error(`Could not find [${Lib.Suit.Joker}, ${Lib.Rank.Small}] in ${this.deckCardsWithOrigins.map(([card, origin]) => `[${card}]`)}`);
         }
 
-        for (let needleSuit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
+        for (const needleSuit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
             for (let needleRank = Lib.Rank.Small + 1; needleRank < Lib.Rank.Big; ++needleRank) {
                 index = this.deckCardsWithOrigins.findIndex(([[suit, rank], _]) => suit === needleSuit && rank === needleRank)
                 if (index >= 0) {

@@ -30,7 +30,9 @@ export default class Player implements Lib.PlayerState {
                 await this.invoke(method);
             } catch (e) {
                 console.error(e);
-                errorDescription = e.message;
+                if (e instanceof Error) {
+                    errorDescription = e.message;
+                }
             } finally {
                 ws.send(JSON.stringify({
                     newGameState: this.game?.getStateForPlayerAt(this.index),
