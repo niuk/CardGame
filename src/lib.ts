@@ -113,6 +113,11 @@ export type MethodName =
     'Kick' |
     'SetPlayerNotes';
 
+export interface ServerResponse {
+    newGameState?: GameState;
+    methodResult?: Result;
+}
+
 export interface Result {
     methodName: MethodName;
     errorDescription?: string;

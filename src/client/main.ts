@@ -133,8 +133,6 @@ window.onload = async () => {
     playerNameElement.value = playerName;
     gameIdElement.value = gameId;
 
-    await Client.connect();
-
     await spriteLoad;
 }
 

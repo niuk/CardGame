@@ -1,10 +1,15 @@
 import WebSocket from 'ws';
 
-import * as Lib from '../lib';
+import * as Lib from '../lib.js';
 import Game from './game.js';
 
 export default class Player implements Lib.PlayerState {
     ws: WebSocket;
+    heartbeat: number;
+
+    get present(): boolean {
+        return Date.now() - this.heartbeat < 3 * 1000;
+    }
 
     game: Game | undefined = undefined;
     index = -1;
@@ -15,45 +20,86 @@ export default class Player implements Lib.PlayerState {
     revealCount = 0;
     groupCount = 0;
     cardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
-    present = true;
     notes = '';
 
-    constructor(ws: WebSocket) {
+    constructor(ws: WebSocket, rejoin?: {gameId: string, playerIndex: number}) {
         this.ws = ws;
+        this.heartbeat = Date.now();
 
-        ws.onmessage = async messageEvent => {
-            const release = await this.game?.mutex.acquire();
+        ws.onmessage = async (event: WebSocket.MessageEvent) => {
             let errorDescription: string | undefined = undefined;
-            const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
-            try {
-                this.game?.resetCardOrigins();
-                await this.invoke(method);
-            } catch (e) {
-                console.error(e);
-                if (e instanceof Error) {
-                    errorDescription = e.message;
-                }
-            } finally {
-                ws.send(JSON.stringify({
-                    newGameState: this.game?.getStateForPlayerAt(this.index),
-                    methodResult: { methodName: method.methodName, errorDescription }
-                }));
-    
-                this.game?.broadcastStateExceptToPlayerAt(this.index);
 
-                release?.();
+            if (typeof(event.data) === 'string') {
+                if (event.data.startsWith('time = ')) {
+                    //console.log(`received heartbeat from '${this.name}': ${event.data}`);
+                    this.heartbeat = Date.now();
+                } else {
+                    console.log(`method: ${event.data}`);
+                    const method = <Lib.Method>JSON.parse(event.data);
+                    const release = await this.game?.mutex.acquire();
+                    try {
+                        this.game?.resetCardOrigins();
+                        await this.invoke(method);
+                    } catch (e) {
+                        console.error(e);
+                        if (e instanceof Error) {
+                            errorDescription = e.message;
+                        }
+                    } finally {
+                        ws.send(JSON.stringify(<Lib.ServerResponse>{
+                            newGameState: this.game?.getStateForPlayerAt(this.index),
+                            methodResult: { methodName: method.methodName, errorDescription }
+                        }));
+        
+                        this.game?.broadcastStateExceptToPlayerAt(this.index);
+        
+                        release?.();
+                    }
+                }
+            } else {
+                throw new Error();
             }
         };
         
-        ws.onclose = async closeEvent => {
-            console.log('closed websocket connection: ', closeEvent.reason);
-            this.present = false;
+        ws.onclose = async (event: WebSocket.CloseEvent) => {
+            console.log('closed websocket connection: ', event.reason);
             if (this.game) {
                 this.game.resetCardOrigins();
                 this.game.tick++;
                 this.game.broadcastStateExceptToPlayerAt(this.index);
             }
         };
+
+        if (rejoin) {
+            this.game = Game.get(rejoin.gameId);
+            this.index = rejoin.playerIndex;
+
+            const existingPlayer = this.game.players[rejoin.playerIndex];
+            if (existingPlayer) {
+                this.name = existingPlayer.name;
+            }
+
+            this.game.players[rejoin.playerIndex] = this;
+            
+            ws.send(JSON.stringify(<Lib.ServerResponse>{
+                newGameState: this.game?.getStateForPlayerAt(this.index),
+                methodResult: undefined
+            }));
+        }
+
+        this.monitor();
+    }
+
+    private async monitor() {
+        while (this.present) {
+            await Lib.delay(1000);
+
+            // send heartbeat
+            //console.log(`sending heartbeat to '${this.name}'...`);
+            this.ws.send(`time = ${this.heartbeat}`);
+        }
+
+        console.log(`'${this.name}' is no longer present`);
     }
 
     public resetCardOrigins(): void {

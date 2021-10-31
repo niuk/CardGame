@@ -20,9 +20,18 @@ app.get('/', async (_, response) => {
     }, app);
 
     const webSocketServer = new WebSocket.Server({ server: httpsServer });
-    webSocketServer.on('connection', ws => {
-        console.log(`new websocket connection`);
-        new Player(ws);
+    webSocketServer.on('connection', (ws, request) => {
+        console.log(`new websocket connection; url = ${request.url}`);
+        if (request.url && request.url !== '/') {
+            const match = /\/(\d+)\/(\d+)/.exec(request.url);
+            if (match && match[1] && match[2]) {
+                new Player(ws, { gameId: match[1], playerIndex: parseInt(match[2]) });
+            } else {
+                throw Error();
+            }
+        } else {
+            new Player(ws);
+        }
     });
     webSocketServer.on('close', (ws: WebSocket.Server) => {
         console.log(`closed websocket connection`);
