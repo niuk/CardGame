@@ -60,6 +60,10 @@ let webSocket: WebSocket | undefined = undefined;
                     console.log('newGameState', newGameState);
         
                     if (!gameState || gameState.tick === newGameState.tick - 1) {
+                        if (!gameState && gameId && playerIndex) {
+                            cancelCallbacks();
+                        }
+
                         const previousGameState = gameState;
                         gameState = newGameState;
                 
@@ -115,6 +119,7 @@ let webSocket: WebSocket | undefined = undefined;
 })();
 
 const callbacksForMethodType = new Map<Lib.MethodName, ((result: Lib.Result) => void)[]>();
+
 function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: string) => void) {
     //console.log(`adding callback for method '${methodName}'`);
 
@@ -127,11 +132,23 @@ function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (r
     callbacks.push(result => {
         //console.log(`invoking callback for method '${methodName}'`);
         if ('errorDescription' in result && result.errorDescription !== undefined) {
+            console.error(result.errorDescription);
             reject(result.errorDescription);
         } else {
             resolve();
         }
     });
+}
+
+function cancelCallbacks() {
+    for (const [methodName, callbacks] of callbacksForMethodType) {
+        for (const callback of callbacks) {
+            callback({
+                methodName,
+                errorDescription: 'canceled',
+            });
+        }
+    }
 }
 
 export function setPlayerName(playerName: string): Promise<void> {
