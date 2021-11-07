@@ -23,7 +23,7 @@ app.get('/', async (_, response) => {
     webSocketServer.on('connection', (ws, request) => {
         try {
             console.log(`new websocket connection; url = ${request.url}`);
-            if (request.url && request.url !== '/') {
+            if (request.url && request.url !== '//') {
                 const match = /\/(\d+)\/(\d+)/.exec(request.url);
                 if (match && match[1] && match[2]) {
                     new Player(ws, { gameId: match[1], playerIndex: parseInt(match[2]) });

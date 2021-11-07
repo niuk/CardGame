@@ -264,9 +264,8 @@ export default class Game {
     public broadcastStateExceptToPlayerAt(playerIndex: number): void {
         for (const player of this.players) {
             if (player !== undefined && player.index !== playerIndex) {
-                player.ws.send(JSON.stringify({
-                    newGameState: this.getStateForPlayerAt(player.index),
-                    methodResult: null
+                player.ws.send(JSON.stringify(<Lib.ServerResponse>{
+                    newGameState: this.getStateForPlayerAt(player.index)
                 }));
             }
         }

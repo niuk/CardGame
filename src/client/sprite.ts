@@ -542,6 +542,18 @@ export default class Sprite {
         }
     }
 
+    public static async clearSprites() {
+        for (const sprite of sprites) {
+            sprite.destroy();
+        }
+        
+        sprites.clear();
+        
+        this.deckSprites = [];
+        this.playerBackSprites = [];
+        this.playerFaceSprites = [];
+    }
+
     private _sprite: PIXI.Sprite;
 
     public get texture(): PIXI.Texture {

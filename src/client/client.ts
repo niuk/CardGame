@@ -6,22 +6,42 @@ import { Capacitor } from '@capacitor/core';
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
 
-// websocket connection to get game state updates
-const webSocketUrl = `wss://${Capacitor.isNative ? 'haruspex.io': window.location.hostname}`;
 let webSocket: WebSocket | undefined = undefined;
-let heartbeat: number = 0;
 
+// websocket connection to get game state updates
 (async () => {
+    let heartbeat: number = 0;
+    let gameId: string | undefined = undefined;
+    let playerIndex: number | undefined = undefined;
+    
     while (true) {
         await Lib.delay(1000);
 
         if (heartbeat < Date.now() - 3 * 1000) {
+            if (webSocket) {
+                // abort existing connection attempt
+                webSocket.close();
+            }
+
+            if (gameState) {
+                // keep info for rejoins
+                gameId = gameState.gameId;
+                playerIndex = gameState.playerIndex;
+
+                // clear previous gameState
+                gameState = undefined;
+
+                // also clear card sprites, since we'll be getting a competely new gameState
+                Sprite.clearSprites();
+            }
+
             // avoid immediately reconnecting if we haven't received a heartbeat yet
             heartbeat = Date.now();
 
             // reconnect
-            webSocket = new WebSocket(`${webSocketUrl}/${gameState ? `${gameState.gameId}/${gameState.playerIndex}` : ''}`);
-            console.log(`webSocket.url = ${webSocket.url}, isNative = ${Capacitor.isNative}`);
+            const url = `wss://${Capacitor.isNative ? 'haruspex.io': window.location.hostname}/${gameId ?? ''}/${playerIndex ?? ''}`;
+            console.log(`webSocket.url = ${url}, isNative = ${Capacitor.isNative}`);
+            webSocket = new WebSocket(url);
             webSocket.onmessage = async e => {
                 if (typeof(e.data) !== 'string') {
                     throw new Error();
@@ -166,10 +186,15 @@ export function addDeck(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('AddDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.AddDeck>{
             methodName: 'AddDeck',
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -181,10 +206,15 @@ export function removeDeck(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('RemoveDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.RemoveDeck>{
             methodName: 'RemoveDeck',
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -196,12 +226,17 @@ export function takeFromOtherPlayer(playerIndex: number, cardIndex: number): Pro
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('TakeFromOtherPlayer', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.TakeFromOtherPlayer>{
             methodName: 'TakeFromOtherPlayer',
             playerIndex,
             cardIndex,
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -213,10 +248,15 @@ export function drawFromDeck(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('DrawFromDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.DrawFromDeck>{
             methodName: 'DrawFromDeck',
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -228,12 +268,17 @@ export function giveToOtherPlayer(playerIndex: number): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('GiveToOtherPlayer', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.GiveToOtherPlayer>{
             methodName: 'GiveToOtherPlayer',
             playerIndex,
             cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice(),
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -245,11 +290,16 @@ export function returnToDeck(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('ReturnToDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.ReturnToDeck>{
             methodName: 'ReturnToDeck',
             cardIndicesToReturnToDeck: Input.selectedIndices.slice(),
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -261,10 +311,15 @@ export function shuffleDeck(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('ShuffleDeck', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.ShuffleDeck>{
             methodName: 'ShuffleDeck',
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -276,10 +331,15 @@ export function dispense(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('Dispense', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.Dispense>{
             methodName: 'Dispense',
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -291,10 +351,15 @@ export function reset(): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('Reset', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.Reset>{
             methodName: 'Reset',
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -306,11 +371,16 @@ export function kickPlayer(playerIndex: number): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('Kick', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.Kick>{
             methodName: 'Kick',
             playerIndex,
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -322,11 +392,16 @@ export function setPlayerNotes(notes: string): Promise<void> {
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('SetPlayerNotes', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.SetPlayerNotes>{
             methodName: 'SetPlayerNotes',
             notes,
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }
@@ -343,6 +418,11 @@ export function reorderCards(
             return;
         }
 
+        if (!gameState) {
+            reject('not in a game');
+            return;
+        }
+
         addCallback('Reorder', resolve, reject);
         webSocket.send(JSON.stringify(<Lib.Reorder>{
             methodName: 'Reorder',
@@ -350,7 +430,7 @@ export function reorderCards(
             newRevealCount,
             newGroupCount,
             newOriginIndices,
-            tick: gameState?.tick
+            tick: gameState.tick
         }));
     });
 }

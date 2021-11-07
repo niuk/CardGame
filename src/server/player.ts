@@ -50,9 +50,9 @@ export default class Player implements Lib.PlayerState {
                             newGameState: this.game?.getStateForPlayerAt(this.index),
                             methodResult: { methodName: method.methodName, errorDescription }
                         }));
-        
+
                         this.game?.broadcastStateExceptToPlayerAt(this.index);
-        
+
                         release?.();
                     }
                 }
@@ -71,20 +71,27 @@ export default class Player implements Lib.PlayerState {
         };
 
         if (rejoin) {
+            console.log(`player rejoining game ${rejoin.gameId} at index ${rejoin.playerIndex}`);
             this.game = Game.get(rejoin.gameId);
-            this.index = rejoin.playerIndex;
-
             const existingPlayer = this.game.players[rejoin.playerIndex];
             if (existingPlayer) {
+                existingPlayer.game = undefined; // disallow absent player from affecting game
+                existingPlayer.ws.close(); // stop receiving messages for absent player
+
+                // copy all fields
+                this.index = existingPlayer.index;
                 this.name = existingPlayer.name;
+                this.shareCount = existingPlayer.shareCount;
+                this.revealCount = existingPlayer.revealCount;
+                this.groupCount = existingPlayer.groupCount;
+                this.cardsWithOrigins = existingPlayer.cardsWithOrigins;
+                this.notes = existingPlayer.notes;
             }
 
             this.game.players[rejoin.playerIndex] = this;
-            
-            ws.send(JSON.stringify(<Lib.ServerResponse>{
-                newGameState: this.game?.getStateForPlayerAt(this.index),
-                methodResult: undefined
-            }));
+            this.game.resetCardOrigins();
+            this.game.tick++;
+            this.game.broadcastStateExceptToPlayerAt(-1);
         }
 
         this.monitor();
