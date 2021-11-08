@@ -246,19 +246,20 @@ Sprite.onDragMove = async (position, sprite) => {
             // cache because the action might have changed after await
             if (await Lib.isDone(promise)) {
                 promise = (async () => {
+                    const gameState = Client.gameState;
+                    if (!gameState) return;
+
                     if (action.action === 'Take') {
                         await Client.takeFromOtherPlayer(
                             action.playerIndex,
-                            action.cardIndex
+                            action.cardIndex,
+                            gameState
                         );
                     } else if (action.action === 'Draw') {
-                        await Client.drawFromDeck();
+                        await Client.drawFromDeck(gameState);
                     } else {
                         const _: never = action;
                     }
-
-                    const gameState = Client.gameState;
-                    if (!gameState) return;
 
                     const playerState = gameState.playerStates[gameState.playerIndex];
                     if (!playerState) throw new Error();
@@ -270,6 +271,8 @@ Sprite.onDragMove = async (position, sprite) => {
                     action = { action: 'Reorder', cardIndex };
                     await drag();
                 })();
+            } else {
+                console.error('!');
             }
         }
     } else if (
@@ -380,7 +383,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             if (!endedOnBackground) {
                 const playerIndex = action.playerIndex;
                 await promise;
-                promise = Client.giveToOtherPlayer(playerIndex);
+                promise = Client.giveToOtherPlayer(playerIndex, gameState);
             }
         } else if (action.action === 'Return') {
             if (drewFromDeck) {
@@ -389,7 +392,7 @@ Sprite.onDragEnd = async (position, sprite) => {
                 previousClickIndex = -1;
                 if (!endedOnBackground) {
                     await promise;
-                    promise = Client.returnToDeck();
+                    promise = Client.returnToDeck(gameState);
                 }
             }
         } else if (action.action === 'ControlShiftClick') {
@@ -698,7 +701,7 @@ async function drag(): Promise<void> {
         newGroupCount !== player.groupCount ||
         reorder
     ) {
-        await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newOriginIndices);
+        await Client.reorderCards(newShareCount, newRevealCount, newGroupCount, newOriginIndices, gameState);
     }
 }
 

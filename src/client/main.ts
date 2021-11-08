@@ -7,7 +7,10 @@ import Sprite from './sprite';
 
 // because we can't get the callback from the label, we need to record it in a dictionary
 // otherwise, this would just be a set
-const labelsUsingCurrentFontsWithCallbacks = new Map<PIXI.BitmapText, (() => void) | undefined>();
+const labelsUsingCurrentFontsWithCallbacks = new Map<
+    PIXI.BitmapText,
+    (() => void) | ((gameState: Lib.GameState) => void) | undefined
+>();
 
 let 大字: PIXI.BitmapFont | undefined;
 let 中字: PIXI.BitmapFont | undefined;
@@ -190,23 +193,24 @@ function renderDeck(deltaTime: number) {
         deckSprite.animate(deltaTime);
     }
 
-    if (Client.gameState) {
+    const gameState = Client.gameState;
+    if (gameState) {
         let i = 上下(deckLabels, Sprite.deckContainer, 0,
             Sprite.app.view.width / 2 - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 0.75 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             '洗牌',
             '大字',
             26,
-            Client.shuffleDeck
+            () => Client.shuffleDeck(gameState)
         );
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 1.5 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
-            Client.gameState.dispensing ? '停牌' : '发牌',
+            gameState.dispensing ? '停牌' : '发牌',
             '大字',
             26,
-            Client.dispense
+            () => Client.dispense(gameState)
         );
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -215,7 +219,7 @@ function renderDeck(deltaTime: number) {
             '回牌',
             '大字',
             26,
-            Client.reset
+            () => Client.reset(gameState)
         );
     
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -231,7 +235,7 @@ function renderDeck(deltaTime: number) {
             '+',
             '小字',
             13,
-            Client.addDeck);
+            () => Client.addDeck(gameState));
             
         i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
@@ -239,7 +243,7 @@ function renderDeck(deltaTime: number) {
             '_',
             '小字',
             13,
-            Client.removeDeck);
+            () => Client.removeDeck(gameState));
 
         for (; i < deckLabels.length; ++i) {
             deckLabels[i]?.destroy();
@@ -266,7 +270,7 @@ function renderPlayers(deltaTime: number) {
 
         if (playerState && !playerState.present) {
             if (!playerKickers[playerIndex]) {
-                playerKickers[playerIndex] = () => Client.kickPlayer(playerIndex);
+                playerKickers[playerIndex] = () => Client.kickPlayer(playerIndex, gameState);
             }
         } else {
             if (playerKickers[playerIndex]) {
@@ -618,10 +622,14 @@ function addAllLabels(
                 while (true) {
                     await Lib.delay(1000);
 
+                    if (!Client.gameState) {
+                        continue;
+                    }
+
                     const notes = playerNotesElement.value;
                     if (previousNotes !== notes) {
                         previousNotes = notes;
-                        await Client.setPlayerNotes(notes);
+                        await Client.setPlayerNotes(notes, Client.gameState);
                     }
                 }
             })();

@@ -119,12 +119,13 @@ export interface ServerResponse {
 }
 
 export interface Result {
-    methodName: MethodName;
+    index: number;
     errorDescription?: string;
 }
 
 interface MethodBase {
     methodName: MethodName;
+    index: number;
 }
 
 export interface SetPlayerName extends MethodBase {

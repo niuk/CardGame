@@ -48,7 +48,7 @@ export default class Player implements Lib.PlayerState {
                     } finally {
                         ws.send(JSON.stringify(<Lib.ServerResponse>{
                             newGameState: this.game?.getStateForPlayerAt(this.index),
-                            methodResult: { methodName: method.methodName, errorDescription }
+                            methodResult: { index: method.index, errorDescription }
                         }));
 
                         this.game?.broadcastStateExceptToPlayerAt(this.index);
