@@ -152,7 +152,7 @@ export interface RemoveDeck extends MethodBase {
 export interface TakeFromOtherPlayer extends MethodBase {
     methodName: 'TakeFromOtherPlayer';
     playerIndex: number;
-    card: number;
+    cardId: number;
 }
 
 export interface GiveToOtherPlayer extends MethodBase {

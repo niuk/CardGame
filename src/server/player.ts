@@ -234,7 +234,7 @@ export default class Player implements Lib.PlayerState {
                 const otherPlayer = this.game.players[method.playerIndex]
                 if (!otherPlayer) throw new Error(`no player at index ${method.playerIndex}`);
 
-                const disownedCardsWithOrigins = this.disownCardsWithOrigins(method.cardIndicesToGiveToOtherPlayer);
+                const disownedCardsWithOrigins = this.disownCards(method.cardIndicesToGiveToOtherPlayer);
 
                 otherPlayer.shareCount += disownedCardsWithOrigins.length;
                 otherPlayer.revealCount += disownedCardsWithOrigins.length;
