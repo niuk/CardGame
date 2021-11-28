@@ -65,17 +65,16 @@ export interface PlayerState {
     shareCount: number;
     revealCount: number;
     groupCount: number;
-    cardsWithOrigins: [Card | null, Origin][];
+    cardIds: number[];
     present: boolean;
     notes: string;
 }
 
 export interface GameState {
     gameId: string;
-    deckOrigins: Origin[];
+    deckCardIds: number[];
     playerIndex: number;
     playerStates: (PlayerState | null)[];
-    tick: number;
     dispensing: boolean;
 }
 
@@ -144,37 +143,31 @@ export interface JoinGame extends MethodBase {
 
 export interface AddDeck extends MethodBase {
     methodName: 'AddDeck';
-    tick: number;
 }
 
 export interface RemoveDeck extends MethodBase {
     methodName: 'RemoveDeck';
-    tick: number;
 }
 
 export interface TakeFromOtherPlayer extends MethodBase {
     methodName: 'TakeFromOtherPlayer';
     playerIndex: number;
-    cardIndex: number;
-    tick: number;
+    card: number;
 }
 
 export interface GiveToOtherPlayer extends MethodBase {
     methodName: 'GiveToOtherPlayer';
     playerIndex: number;
-    cardIndicesToGiveToOtherPlayer: number[];
-    tick: number;
+    cardsToGiveToOtherPlayer: number[];
 }
 
 export interface DrawFromDeck extends MethodBase {
     methodName: 'DrawFromDeck';
-    tick: number;
 }
 
 export interface ReturnToDeck extends MethodBase {
     methodName: 'ReturnToDeck';
-    cardIndicesToReturnToDeck: number[];
-    tick: number;
+    cardsToReturnToDeck: number[];
 }
 
 export interface Reorder extends MethodBase {
@@ -183,34 +176,28 @@ export interface Reorder extends MethodBase {
     newRevealCount: number;
     newGroupCount: number;
     newOriginIndices: number[];
-    tick: number;
 }
 
 export interface ShuffleDeck extends MethodBase {
     methodName: 'ShuffleDeck';
-    tick: number;
 }
 
 export interface Dispense extends MethodBase {
     methodName: 'Dispense';
-    tick: number;
 }
 
 export interface Reset extends MethodBase {
     methodName: 'Reset';
-    tick: number;
 }
 
 export interface Kick extends MethodBase {
     methodName: 'Kick';
     playerIndex: number;
-    tick: number;
 }
 
 export interface SetPlayerNotes extends MethodBase {
     methodName: 'SetPlayerNotes';
     notes: string;
-    tick: number;
 }
 
 export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
