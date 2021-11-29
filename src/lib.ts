@@ -15,8 +15,28 @@ export function getParam(name: string): string | undefined {
     return window.location.search.split(`${name}=`)[1]?.split("&")[0];
 }
 
+export function pick<T, K extends keyof T>(obj: T, ...keys: K[]): Pick<T, K> {
+    const ret: any = {};
+    keys.forEach(key => {
+        ret[key] = obj[key];
+    })
+    return ret;
+}
+
 export function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
+    let done = true;
+    try {
+        done = await Promise.race<T | 'Timeout'>([p, (async () => {
+            await delay(milliseconds ?? 0);
+            return 'Timeout';
+        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
+    } finally {
+        return done;
+    }
 }
 
 export enum Suit {
@@ -65,7 +85,7 @@ export interface PlayerState {
     shareCount: number;
     revealCount: number;
     groupCount: number;
-    cardIds: number[];
+    handCardIds: number[];
     present: boolean;
     notes: string;
 }
@@ -73,6 +93,7 @@ export interface PlayerState {
 export interface GameState {
     gameId: string;
     deckCardIds: number[];
+    cardsById: [number, Card][];
     playerIndex: number;
     playerStates: (PlayerState | null)[];
     dispensing: boolean;
@@ -114,10 +135,10 @@ export type MethodName =
 
 export interface ServerResponse {
     newGameState?: GameState;
-    methodResult?: Result;
+    methodResult?: MethodResult;
 }
 
-export interface Result {
+export interface MethodResult {
     index: number;
     errorDescription?: string;
 }
@@ -158,7 +179,7 @@ export interface TakeFromOtherPlayer extends MethodBase {
 export interface GiveToOtherPlayer extends MethodBase {
     methodName: 'GiveToOtherPlayer';
     playerIndex: number;
-    cardsToGiveToOtherPlayer: number[];
+    cardIds: number[];
 }
 
 export interface DrawFromDeck extends MethodBase {
@@ -167,7 +188,7 @@ export interface DrawFromDeck extends MethodBase {
 
 export interface ReturnToDeck extends MethodBase {
     methodName: 'ReturnToDeck';
-    cardsToReturnToDeck: number[];
+    cardIds: number[];
 }
 
 export interface Reorder extends MethodBase {
@@ -175,7 +196,7 @@ export interface Reorder extends MethodBase {
     newShareCount: number;
     newRevealCount: number;
     newGroupCount: number;
-    newOriginIndices: number[];
+    newCardIds: number[];
 }
 
 export interface ShuffleDeck extends MethodBase {
@@ -198,16 +219,4 @@ export interface Kick extends MethodBase {
 export interface SetPlayerNotes extends MethodBase {
     methodName: 'SetPlayerNotes';
     notes: string;
-}
-
-export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
-    let done = true;
-    try {
-        done = await Promise.race<T | 'Timeout'>([p, (async () => {
-            await delay(milliseconds ?? 0);
-            return 'Timeout';
-        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
-    } finally {
-        return done;
-    }
 }

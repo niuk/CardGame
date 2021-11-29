@@ -5,11 +5,12 @@ import { Capacitor } from '@capacitor/core';
 
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
+export let cardsById: Map<number, Lib.Card> | undefined;
 
 let webSocket: WebSocket | undefined = undefined;
 
 let nextCallbackIndex = 0;
-const callbacks = new Map<number, (result: Lib.Result) => void>();
+const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
 
 // websocket connection to get game state updates
 (async () => {
@@ -57,20 +58,18 @@ const callbacks = new Map<number, (result: Lib.Result) => void>();
                 }
 
                 const { newGameState,                       methodResult }:
-                      { newGameState: Lib.GameState | null, methodResult: Lib.Result | null } = JSON.parse(e.data);
+                      { newGameState: Lib.GameState | null, methodResult: Lib.MethodResult | null } = JSON.parse(e.data);
         
                 if (newGameState) {
                     console.log('newGameState', newGameState);
-        
-                    if (!gameState || gameState.tick === newGameState.tick - 1) {
-                        const previousGameState = gameState;
-                        gameState = newGameState;
+
+                    gameState = newGameState;
+                    cardsById = new Map<number, Lib.Card>(gameState.cardsById);
                 
-                        Lib.setCookie('gameId', gameState.gameId);
+                    Lib.setCookie('gameId', gameState.gameId);
                 
-                        Input.linkWithCards(gameState);
-                        await Sprite.linkWithCards(previousGameState, gameState);
-                    }
+                    Input.linkWithCards(gameState);
+                    await Sprite.linkWithCards(gameState, cardsById);
                 }
         
                 if (methodResult) {
@@ -157,87 +156,76 @@ export function joinGame(gameId: string): Promise<void> {
     });
 }
 
-export function addDeck(gameState: Lib.GameState): Promise<void> {
+export function addDeck(): Promise<void> {
     return setup<Lib.AddDeck>({
-        methodName: 'AddDeck',
-        tick: gameState.tick
+        methodName: 'AddDeck'
     });
 }
 
-export function removeDeck(gameState: Lib.GameState): Promise<void> {
+export function removeDeck(): Promise<void> {
     return setup<Lib.RemoveDeck>({
-        methodName: 'RemoveDeck',
-        tick: gameState.tick
+        methodName: 'RemoveDeck'
     });
 }
 
-export function takeFromOtherPlayer(playerIndex: number, cardIndex: number, gameState: Lib.GameState): Promise<void> {
+export function takeFromOtherPlayer(playerIndex: number, cardId: number): Promise<void> {
     return setup<Lib.TakeFromOtherPlayer>({
         methodName: 'TakeFromOtherPlayer',
         playerIndex,
-        cardIndex,
-        tick: gameState.tick
+        cardId
     });
 }
 
-export function drawFromDeck(gameState: Lib.GameState): Promise<void> {
+export function drawFromDeck(): Promise<void> {
     return setup<Lib.DrawFromDeck>({
-        methodName: 'DrawFromDeck',
-        tick: gameState.tick
+        methodName: 'DrawFromDeck'
     });
 }
 
-export function giveToOtherPlayer(playerIndex: number, gameState: Lib.GameState): Promise<void> {
+export function giveToOtherPlayer(playerIndex: number): Promise<void> {
     return setup<Lib.GiveToOtherPlayer>({
         methodName: 'GiveToOtherPlayer',
         playerIndex,
-        cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice(),
-        tick: gameState.tick
+        cardIds: new Array(...Input.selectedCardIds)
     });
 }
 
-export function returnToDeck(gameState: Lib.GameState): Promise<void> {
+export function returnToDeck(): Promise<void> {
     return setup<Lib.ReturnToDeck>({
         methodName: 'ReturnToDeck',
-        cardIndicesToReturnToDeck: Input.selectedIndices.slice(),
-        tick: gameState.tick
+        cardIds: new Array(...Input.selectedCardIds)
     });
 }
 
-export function shuffleDeck(gameState: Lib.GameState): Promise<void> {
+export function shuffleDeck(): Promise<void> {
     return setup<Lib.ShuffleDeck>({
-        methodName: 'ShuffleDeck',
-        tick: gameState.tick
+        methodName: 'ShuffleDeck'
     });
 }
 
-export function dispense(gameState: Lib.GameState): Promise<void> {
+export function dispense(): Promise<void> {
     return setup<Lib.Dispense>({
-        methodName: 'Dispense',
-        tick: gameState.tick
+        methodName: 'Dispense'
     });
 }
 
-export function reset(gameState: Lib.GameState): Promise<void> {
+export function reset(): Promise<void> {
     return setup<Lib.Reset>({
-        methodName: 'Reset',
-        tick: gameState.tick
+        methodName: 'Reset'
     });
 }
 
-export function kickPlayer(playerIndex: number, gameState: Lib.GameState): Promise<void> {
+export function kickPlayer(playerIndex: number): Promise<void> {
     return setup<Lib.Kick>({
         methodName: 'Kick',
-        playerIndex,
-        tick: gameState.tick
+        playerIndex
     });
 }
 
-export function setPlayerNotes(notes: string, gameState: Lib.GameState): Promise<void> {
+export function setPlayerNotes(notes: string): Promise<void> {
     return setup<Lib.SetPlayerNotes>({
         methodName: 'SetPlayerNotes',
-        notes,
-        tick: gameState.tick
+        notes
     });
 }
 
@@ -245,16 +233,14 @@ export function reorderCards(
     newShareCount: number,
     newRevealCount: number,
     newGroupCount: number,
-    newOriginIndices: number[],
-    gameState: Lib.GameState
+    newCardIds: number[]
 ): Promise<void> {
     return setup<Lib.Reorder>({
         methodName: 'Reorder',
         newShareCount,
         newRevealCount,
         newGroupCount,
-        newOriginIndices,
-        tick: gameState.tick
+        newCardIds
     });
 }
 
@@ -300,21 +286,21 @@ async function sortCards(compareFn: (a: [Lib.Card, number], b: [Lib.Card, number
     const player = gameState.playerStates[gameState.playerIndex];
     if (!player) throw new Error();
 
-    const cardsWithOriginIndices: [Lib.Card, number][] = player.cardsWithOrigins.map(([card, origin], index) => {
+    const cardsWithIds: [Lib.Card, number][] = player.handCardIds.map(cardId => {
+        const card = cardsById?.get(cardId);
         if (!card) throw new Error();
-        return [card, index];
+        return [card, cardId];
     });
 
-    sortSection(cardsWithOriginIndices, 0, player.shareCount, compareFn);
-    sortSection(cardsWithOriginIndices, player.shareCount, player.revealCount, compareFn);
-    sortSection(cardsWithOriginIndices, player.revealCount, player.groupCount, compareFn);
-    sortSection(cardsWithOriginIndices, player.groupCount, player.cardsWithOrigins.length, compareFn);
+    sortSection(cardsWithIds, 0, player.shareCount, compareFn);
+    sortSection(cardsWithIds, player.shareCount, player.revealCount, compareFn);
+    sortSection(cardsWithIds, player.revealCount, player.groupCount, compareFn);
+    sortSection(cardsWithIds, player.groupCount, cardsWithIds.length, compareFn);
     await reorderCards(
         player.shareCount,
         player.revealCount,
         player.groupCount,
-        cardsWithOriginIndices.map(([card, index]) => index),
-        gameState
+        cardsWithIds.map(([card, index]) => index)
     );
 }
 

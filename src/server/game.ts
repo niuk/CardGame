@@ -1,9 +1,9 @@
 import { Mutex } from 'async-mutex';
 import { customAlphabet } from 'nanoid';
-import Hand from '../hand';
 const nanoid = customAlphabet('0123456789', 5);
 
 import * as Lib from '../lib.js';
+import Hand from '../hand.js';
 import Player from './player';
 
 export default class Game {
@@ -23,7 +23,7 @@ export default class Game {
         return this._gameId;
     }
 
-    players: (Player | undefined)[] = [];
+    players: (Player | undefined)[] = [undefined, undefined, undefined, undefined];
     get numPlayers(): number {
         return this.players.filter(player => player != undefined).length;
     }
@@ -155,7 +155,7 @@ export default class Game {
                             throw new Error(`deck ran out of cards!`);
                         }
 
-                        player.cards.push(card);
+                        player.handCardIds.push(card);
                         this.broadcastStateExceptToPlayerAt(-1);
                     } finally {
                         release();
@@ -178,13 +178,22 @@ export default class Game {
             if (!player) {
                 playerStates.push(null);
             } else {
-                playerStates.push(player);
+                playerStates.push({
+                    name: player.name,
+                    shareCount: player.shareCount,
+                    revealCount: player.revealCount,
+                    groupCount: player.groupCount,
+                    handCardIds: player.handCardIds,
+                    present: player.present,
+                    notes: player.notes
+                } as Lib.PlayerState);
             }
         }
-        
+
         return {
             gameId: this.gameId,
-            deckCardIds: this.deck.toArray(),
+            deckCardIds: this.deck.slice(),
+            cardsById: [...this.stationaryCardsById, ...this.movingCardsById],
             playerIndex,
             playerStates,
             dispensing: this.dispensing
