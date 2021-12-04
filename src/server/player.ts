@@ -36,7 +36,6 @@ export default class Player implements Lib.PlayerState {
 
             if (typeof(event.data) === 'string') {
                 if (event.data.startsWith('time = ')) {
-                    //console.log(`received heartbeat from '${this.name}': ${event.data}`);
                     this.heartbeat = Date.now();
                 } else {
                     console.log(`method: ${event.data}`);
@@ -100,8 +99,6 @@ export default class Player implements Lib.PlayerState {
         while (this.present) {
             await Lib.delay(1000);
 
-            // send heartbeat
-            //console.log(`sending heartbeat to '${this.name}'...`);
             this.ws.send(`time = ${this.heartbeat}`);
         }
 
@@ -221,22 +218,14 @@ export default class Player implements Lib.PlayerState {
                 if (cardId === undefined) throw new Error();
 
                 this.hand.push(cardId);
-
-                console.log(`player '${this.name}' took card ${cardId} from player '${otherPlayer.name}'`);
             } else if (method.methodName === 'DrawFromDeck') {
                 const deckIndex = this.game.deck.length - 1;
-                console.log('deckIndex', deckIndex);
                 const [cardId] = this.game.deck.splice(deckIndex, 1);
-                console.log('cardId', cardId);
                 if (cardId === undefined) {
                     throw new Error(`deck has no cards (${this.game.deck.length} remaining)`);
                 }
 
                 this.hand.push(cardId);
-                
-                console.log(`player '${this.name}' drew card ${
-                    JSON.stringify(cardId)
-                }`, '\ncards:', this.hand, '\ndeck:', this.game.deck);
             } else if (method.methodName === 'GiveToOtherPlayer') {
                 const otherPlayer = this.game.players[method.playerIndex]
                 if (!otherPlayer) throw new Error(`no player at index ${method.playerIndex}`);
@@ -247,24 +236,9 @@ export default class Player implements Lib.PlayerState {
                 otherPlayer.revealCount += method.cardIds.length;
                 otherPlayer.groupCount += method.cardIds.length;
                 otherPlayer.hand.unshift(...method.cardIds);
-
-                console.log(
-                    `player ${this.index} gave cards to player ${otherPlayer.index}:`, method.cardIds,
-                    '\r\ncards:', this.handCardIds,
-                    'shareCount', this.shareCount,
-                    'revealCount', this.revealCount,
-                    'groupCount', this.groupCount
-                );
             } else if (method.methodName === 'ReturnToDeck') {
                 this.disown(method.cardIds);
-
                 this.game.deck.push(...method.cardIds);
-
-                console.log(`'${this.name}' returned cards: ${
-                    JSON.stringify(method.cardIds)
-                }, cards: ${
-                    JSON.stringify(this.handCardIds)
-                }`);
             } else if (method.methodName === 'Reorder') {
                 if (JSON.stringify(this.handCardIds.sort()) !== JSON.stringify(method.newCardIds.slice().sort())) {
                     throw new Error(`new card order isn't a permutation of the old`);
@@ -272,7 +246,6 @@ export default class Player implements Lib.PlayerState {
 
                 let i = 0;
                 for (const newCard of method.newCardIds) {
-                    console.log('looking for', newCard);
                     const cardIndex = this.hand.indexOf(newCard);
                     if (cardIndex === undefined) {
                         throw new Error();
@@ -286,10 +259,6 @@ export default class Player implements Lib.PlayerState {
                 this.shareCount = method.newShareCount;
                 this.revealCount = method.newRevealCount;
                 this.groupCount = method.newGroupCount;
-
-                console.log(`player '${this.name}' reordered cards: ${
-                    JSON.stringify(this.handCardIds)
-                }\r\nshareCount: ${this.shareCount}, revealCount: ${this.revealCount}, groupCount: ${this.groupCount}`);
             } else if (method.methodName === 'ShuffleDeck') {
                 this.game.shuffleDeck();
             } else if (method.methodName === 'Dispense') {
@@ -301,12 +270,6 @@ export default class Player implements Lib.PlayerState {
                     const cardIds = player.handCardIds;
                     player.disown(cardIds);
                     this.game.deck.push(...cardIds);
-
-                    console.log(`'${player.name}' returned cards (reset): ${
-                        JSON.stringify(cardIds)
-                    }, cards: ${
-                        JSON.stringify(player.handCardIds)
-                    }`);
                 }
             } else if (method.methodName === 'Kick') {
                 const player = this.game.players[method.playerIndex];
