@@ -14,7 +14,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
 
 // websocket connection to get game state updates
 (async () => {
-    let heartbeat: number = 0;
+    let heartbeat = 0;
     let gameId: string | undefined = undefined;
     let playerIndex: number | undefined = undefined;
     
@@ -43,7 +43,13 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
             heartbeat = Date.now();
 
             // reconnect
-            const url = `wss://${Capacitor.isNative ? 'haruspex.io': window.location.hostname}/${gameId ?? ''}/${playerIndex ?? ''}`;
+            const url = `wss://${
+                Capacitor.isNative !== undefined && Capacitor.isNative ? 'haruspex.io': window.location.hostname
+            }/${
+                gameId !== undefined ? gameId : ''
+            }/${
+                playerIndex !== undefined ? playerIndex : ''
+            }`;
             console.log(`webSocket.url = ${url}, isNative = ${Capacitor.isNative}`);
             webSocket = new WebSocket(url);
             webSocket.onmessage = async e => {
@@ -116,7 +122,7 @@ function setup<TMethod extends Lib.Method>(method: Omit<TMethod, 'index'>): Prom
 
         const index = nextCallbackIndex++;
         callbacks.set(index, result => {
-            if (result.errorDescription) {
+            if (result.errorDescription !== undefined) {
                 console.error(result.errorDescription);
                 reject(result.errorDescription);
             } else {

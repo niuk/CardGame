@@ -34,7 +34,6 @@ export default class Hand<TKey, TValue> {
     }
 
     public add(key: TKey, value: TValue): void {
-        console.log('add');
         if (this.stationary.has(key) || this.moving.has(key)) {
             throw new Error(`Key ${key} already exists.`);
         }
@@ -42,10 +41,10 @@ export default class Hand<TKey, TValue> {
         this.stationary.set(key, value);
         this.indicesByKey.set(key, this.array.length);
         this.array.push(key);
+        console.log('added', this);
     }
 
     public remove(key: TKey): void {
-        console.log('remove');
         if (!this.stationary.delete(key)) {
             throw new Error(`Key ${key} is moving or doesn't exist.`);
         }
@@ -124,7 +123,9 @@ export default class Hand<TKey, TValue> {
             this.array,
             JSON.stringify(new Array(...this.moving)),
             JSON.stringify(new Array(...this.stationary)),
-            JSON.stringify(items));*/
+            JSON.stringify(items),
+            removedItems
+        );*/
         return removedItems;
     }
 

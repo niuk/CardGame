@@ -51,12 +51,12 @@ export default class Game {
     }
 
     public addDeck(): void {
-        for (const suit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
+        /*for (const suit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
             for (let rank = Lib.Rank.Small + 1; rank < Lib.Rank.Big; ++rank) {
                 const cardId = this.nextCardId++;
                 this.deck.add(cardId, [suit, rank]);
             }
-        }
+        }*/
 
         let cardId = this.nextCardId++;
         this.deck.add(cardId, [Lib.Suit.Joker, Lib.Rank.Small]);

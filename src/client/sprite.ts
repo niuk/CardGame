@@ -496,7 +496,7 @@ export default class Sprite {
         }
     }
 
-    public static async clearSprites() {
+    public static async clearSprites(): Promise<void> {
         for (const sprite of sprites) {
             sprite.destroy();
         }

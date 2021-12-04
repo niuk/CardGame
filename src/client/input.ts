@@ -161,7 +161,7 @@ Sprite.onDragStart = (position, sprite) => {
             const cardIndex = sprites.indexOf(sprite);
             if (cardIndex >= 0) {
                 const cardId = playerState.handCardIds[cardIndex];
-                if (!cardId) throw new Error();
+                if (cardId === undefined) throw new Error();
     
                 if (playerIndex === gameState.playerIndex) {
                     // this player's own card
@@ -242,7 +242,7 @@ Sprite.onDragMove = async (position, sprite) => {
 
                     // immediately select newly acquired card
                     const cardId = playerState.handCardIds[playerState.handCardIds.length - 1];
-                    if (!cardId) throw new Error();
+                    if (cardId === undefined) throw new Error();
                     selectedCardIds.clear();
                     selectedCardIds.add(cardId);
                     action = { action: 'Reorder', cardId };
@@ -396,7 +396,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             const end = Math.max(clickIndex, previousClickIndex);
             for (let i = start; i <= end; ++i) {
                 const cardId = playerState.handCardIds[i];
-                if (!cardId) throw new Error();
+                if (cardId === undefined) throw new Error();
                 selectedCardIds.add(cardId);
             }
         } else if (action.action === 'ControlClick') {
@@ -418,7 +418,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             selectedCardIds.clear();
             for (let i = start; i <= end; ++i) {
                 const cardId = playerState.handCardIds[i];
-                if (!cardId) throw new Error();
+                if (cardId === undefined) throw new Error();
                 selectedCardIds.add(cardId);
             }
         } else if (action.action === 'Click') {
@@ -456,7 +456,7 @@ async function drag(): Promise<void> {
     for (let i = 0; i < playerState.handCardIds.length; ++i) {
         const sprite = sprites[i];
         const cardId = playerState.handCardIds[i];
-        if (!sprite || !cardId) throw new Error();
+        if (sprite === undefined || cardId === undefined) throw new Error();
 
         if (selectedCardIds.has(cardId)) {
             movingSpritesAndCardIds.push([sprite, cardId]);

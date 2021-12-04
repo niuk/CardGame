@@ -258,7 +258,7 @@ const playerLabels: (PIXI.BitmapText | undefined)[][] = [];
 const playerKickers: ((() => void) | undefined)[] = [];
 
 let playerNotesElement: HTMLInputElement | undefined = undefined;
-let playerNotesPosition = new PIXI.Point();
+const playerNotesPosition = new PIXI.Point();
 let previousNotes = '';
 
 function renderPlayers(deltaTime: number) {
@@ -304,7 +304,7 @@ function renderPlayers(deltaTime: number) {
 
         for (let cardIndex = 0; cardIndex < playerState.handCardIds.length; ++cardIndex) {
             const cardId = playerState.handCardIds[cardIndex];
-            if (!cardId) throw new Error();
+            if (cardId === undefined) throw new Error();
 
             let sprite: Sprite | undefined;
             if (cardIndex < playerState.revealCount || playerIndex === gameState.playerIndex) {
@@ -604,7 +604,7 @@ function addAllLabels(
     let i = 0;
     const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
-    let name = playerState.name + (playerState.present ? '' : '(撤?)');
+    const name = playerState.name + (playerState.present ? '' : '(撤?)');
     const nameMetrics = PIXI.TextMetrics.measureText(name, textStyle);
     const nameX = goldenX - nameMetrics.width - Sprite.gap;
     const nameY = reverse ? 2 * Sprite.height : -nameMetrics.height;

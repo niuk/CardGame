@@ -218,15 +218,17 @@ export default class Player implements Lib.PlayerState {
                 }
 
                 const [cardId] = otherPlayer.hand.splice(cardIndex, 1);
-                if (!cardId) throw new Error();
+                if (cardId === undefined) throw new Error();
 
                 this.hand.push(cardId);
 
                 console.log(`player '${this.name}' took card ${cardId} from player '${otherPlayer.name}'`);
             } else if (method.methodName === 'DrawFromDeck') {
                 const deckIndex = this.game.deck.length - 1;
+                console.log('deckIndex', deckIndex);
                 const [cardId] = this.game.deck.splice(deckIndex, 1);
-                if (!cardId) {
+                console.log('cardId', cardId);
+                if (cardId === undefined) {
                     throw new Error(`deck has no cards (${this.game.deck.length} remaining)`);
                 }
 
@@ -234,7 +236,7 @@ export default class Player implements Lib.PlayerState {
                 
                 console.log(`player '${this.name}' drew card ${
                     JSON.stringify(cardId)
-                }, cards: ${JSON.stringify(this.hand)}`);
+                }`, '\ncards:', this.hand, '\ndeck:', this.game.deck);
             } else if (method.methodName === 'GiveToOtherPlayer') {
                 const otherPlayer = this.game.players[method.playerIndex]
                 if (!otherPlayer) throw new Error(`no player at index ${method.playerIndex}`);
