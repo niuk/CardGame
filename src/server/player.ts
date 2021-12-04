@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import Hand from '../hand.js';
+import Hand from './hand.js';
 
 import * as Lib from '../lib.js';
 import Game from './game.js';
@@ -266,11 +266,13 @@ export default class Player implements Lib.PlayerState {
                     JSON.stringify(this.handCardIds)
                 }`);
             } else if (method.methodName === 'Reorder') {
-                if (JSON.stringify(this.handCardIds.sort()) !== JSON.stringify(method.newCardIds.sort())) {
+                if (JSON.stringify(this.handCardIds.sort()) !== JSON.stringify(method.newCardIds.slice().sort())) {
                     throw new Error(`new card order isn't a permutation of the old`);
                 }
 
+                let i = 0;
                 for (const newCard of method.newCardIds) {
+                    console.log('looking for', newCard);
                     const cardIndex = this.hand.indexOf(newCard);
                     if (cardIndex === undefined) {
                         throw new Error();
@@ -278,6 +280,7 @@ export default class Player implements Lib.PlayerState {
 
                     this.hand.splice(cardIndex, 1);
                     this.hand.push(newCard);
+                    ++i;
                 }
 
                 this.shareCount = method.newShareCount;
@@ -343,17 +346,8 @@ export default class Player implements Lib.PlayerState {
     }
 
     private disown(cardIds: number[]) {
-        const cardIndices = [];
         for (const cardId of cardIds) {
             const cardIndex = this.hand.indexOf(cardId);
-            if (cardIndex === undefined) {
-                throw new Error(`player ${this.name} doesn't own card ${cardId}`);
-            }
-
-            cardIndices.push(cardIndex);
-        }
-
-        for (const cardIndex of cardIndices) {
             this.hand.splice(cardIndex, 1);
 
             if (cardIndex < this.shareCount) {

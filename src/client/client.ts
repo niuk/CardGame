@@ -192,14 +192,14 @@ export function giveToOtherPlayer(playerIndex: number): Promise<void> {
     return setup<Lib.GiveToOtherPlayer>({
         methodName: 'GiveToOtherPlayer',
         playerIndex,
-        cardIds: new Array(...Input.selectedCardIds)
+        cardIds: Array.from(Input.selectedCardIds)
     });
 }
 
 export function returnToDeck(): Promise<void> {
     return setup<Lib.ReturnToDeck>({
         methodName: 'ReturnToDeck',
-        cardIds: new Array(...Input.selectedCardIds)
+        cardIds: Array.from(Input.selectedCardIds)
     });
 }
 

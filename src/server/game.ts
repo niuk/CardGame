@@ -3,7 +3,7 @@ import { customAlphabet } from 'nanoid';
 const nanoid = customAlphabet('0123456789', 5);
 
 import * as Lib from '../lib.js';
-import Hand from '../hand.js';
+import Hand from './hand.js';
 import Player from './player';
 
 export default class Game {
@@ -35,7 +35,7 @@ export default class Game {
     deck = new Hand<number, Lib.Card>(this.stationaryCardsById, this.movingCardsById);
 
     get numDecks(): number {
-        return this.stationaryCardsById.size / 54;
+        return (this.stationaryCardsById.size + this.movingCardsById.size) / 54;
     }
 
     dispensing = false;
@@ -51,12 +51,12 @@ export default class Game {
     }
 
     public addDeck(): void {
-        /*for (const suit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
+        for (const suit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
             for (let rank = Lib.Rank.Small + 1; rank < Lib.Rank.Big; ++rank) {
                 const cardId = this.nextCardId++;
                 this.deck.add(cardId, [suit, rank]);
             }
-        }*/
+        }
 
         let cardId = this.nextCardId++;
         this.deck.add(cardId, [Lib.Suit.Joker, Lib.Rank.Small]);
@@ -111,7 +111,7 @@ export default class Game {
                     } else if (this.numDecks === 4) {
                         remainder = 8;
                     } else {
-                        throw new Error();
+                        return;
                     }
                 } else if (this.numPlayers === 5) {
                     if (this.numDecks === 1) {
@@ -123,7 +123,7 @@ export default class Game {
                     } else if (this.numDecks === 4) {
                         remainder = 6;
                     } else {
-                        throw new Error();
+                        return;
                     }
                 } else if (this.numPlayers === 6) {
                     if (this.numDecks === 1) {
@@ -135,10 +135,10 @@ export default class Game {
                     } else if (this.numDecks === 4) {
                         remainder = 6;
                     } else {
-                        throw new Error();
+                        return;
                     }
                 } else {
-                    throw new Error();
+                    return;
                 }
     
                 if (playerIndex < 0) {
@@ -155,7 +155,7 @@ export default class Game {
                             throw new Error(`deck ran out of cards!`);
                         }
 
-                        player.handCardIds.push(card);
+                        player.hand.push(card);
                         this.broadcastStateExceptToPlayerAt(-1);
                     } finally {
                         release();

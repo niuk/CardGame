@@ -306,12 +306,13 @@ function renderPlayers(deltaTime: number) {
             const cardId = playerState.handCardIds[cardIndex];
             if (cardId === undefined) throw new Error();
 
-            let sprite: Sprite | undefined;
+            const sprite = Sprite.spriteForCardId.get(cardId);
+            /*let sprite: Sprite | undefined;
             if (cardIndex < playerState.revealCount || playerIndex === gameState.playerIndex) {
                 sprite = faceSprites[cardIndex];
             } else {
                 sprite = backSprites[cardIndex - playerState.revealCount];
-            }
+            }*/
 
             if (!sprite) throw new Error();
 

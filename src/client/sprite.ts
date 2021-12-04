@@ -445,8 +445,8 @@ export default class Sprite {
                 sprite.transfer(Sprite.deckContainer, deckTexture);
             } else {
                 sprite = new Sprite(Sprite.deckContainer, deckTexture);
+                console.log(`new deck sprite for card ${cardId}`);
                 Sprite.spriteForCardId.set(cardId, sprite);
-                console.log(`added sprite for card ${cardId}`);
             }
     
             this.deckSprites.push(sprite);
@@ -455,13 +455,13 @@ export default class Sprite {
         for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
             const playerState = gameState.playerStates[playerIndex];
             if (!playerState) continue;
-    
+
             const faceSprites = this.playerFaceSprites[playerIndex] ?? [];
             this.playerFaceSprites[playerIndex] = faceSprites;
-    
+
             const backSprites = this.playerBackSprites[playerIndex] ?? [];
             this.playerBackSprites[playerIndex] = backSprites;
-    
+
             let container = Sprite.containers[playerIndex];
             if (!container) {
                 container = new PIXI.Container();
@@ -470,26 +470,36 @@ export default class Sprite {
 
             const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);
 
-            for (const cardId of playerState.handCardIds) {
+            for (let cardIndex = 0; cardIndex < playerState.handCardIds.length; ++cardIndex) {
+                const cardId = playerState.handCardIds[cardIndex];
+                if (cardId === undefined) throw new Error(`cardIndex: ${
+                    JSON.stringify(cardIndex)
+                }, handCardIds: ${
+                    JSON.stringify(playerState.handCardIds)
+                }`);
+
                 let sprite = Sprite.spriteForCardId.get(cardId);
-                console.log(`added sprite for card ${cardId}`);
                 const card = cardsById.get(cardId);
-                if (card) {
+                if (card !== undefined && (
+                    playerIndex === gameState.playerIndex || cardIndex < playerState.revealCount
+                )) {
                     const faceTexture = Sprite.getTexture(JSON.stringify(card));
                     if (sprite) {
                         sprite.transfer(container, faceTexture);
                     } else {
                         sprite = new Sprite(container, faceTexture);
+                        console.log(`new face sprite for card ${cardId}`);
                     }
-    
+
                     faceSprites.push(sprite);
                 } else {
                     if (sprite) {
                         sprite.transfer(container, backTexture);
                     } else {
                         sprite = new Sprite(container, backTexture);
+                        console.log(`new back sprite for card ${cardId}`);
                     }
-    
+
                     backSprites.push(sprite);
                 }
             }

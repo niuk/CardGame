@@ -92,7 +92,7 @@ export function linkWithCards(gameState: Lib.GameState): void {
         }
     }));
 
-    for (const selectedCardId of new Array(...selectedCardIds)) {
+    for (const selectedCardId of Array.from(selectedCardIds)) {
         if (!faceCardIdSet.has(selectedCardId)) {
             selectedCardIds.delete(selectedCardId);
             if ('cardId' in action && action.cardId === selectedCardId) {
@@ -220,34 +220,39 @@ Sprite.onDragMove = async (position, sprite) => {
             if (await Lib.isDone(promise)) {
                 console.log(`previous action is done`);
                 promise = (async () => {
-                    const gameState = Client.gameState;
-                    if (!gameState) return;
+                    try {
+                        // the action might have changed after await
+                        if (action.action === 'Take') {
+                            await Client.takeFromOtherPlayer(
+                                action.playerIndex,
+                                action.cardId
+                            );
+                        } else if (action.action === 'Draw') {
+                            console.log(`drawing...`);
+                            await Client.drawFromDeck();
+                            console.log(`drew`);
+                        } else {
+                            const _: never = action;
+                        }
 
-                    // the action might have changed after await
-                    if (action.action === 'Take') {
-                        await Client.takeFromOtherPlayer(
-                            action.playerIndex,
-                            action.cardId
-                        );
-                    } else if (action.action === 'Draw') {
-                        console.log(`drawing...`);
-                        await Client.drawFromDeck();
-                        console.log(`drew`);
-                    } else {
-                        const _: never = action;
+                        const gameState = Client.gameState;
+                        if (!gameState) throw new Error();
+
+                        const playerState = gameState.playerStates[gameState.playerIndex];
+                        if (!playerState) throw new Error();
+
+                        // immediately select newly acquired card
+                        const cardId = playerState.handCardIds[playerState.handCardIds.length - 1];
+                        if (cardId === undefined) throw new Error();
+                        selectedCardIds.clear();
+                        selectedCardIds.add(cardId);
+                        action = { action: 'Reorder', cardId };
+                        console.log(`set action to reorder`);
+                        await drag();
+                    } catch (e) {
+                        console.error(e);
+                        throw e;
                     }
-
-                    const playerState = gameState.playerStates[gameState.playerIndex];
-                    if (!playerState) throw new Error();
-
-                    // immediately select newly acquired card
-                    const cardId = playerState.handCardIds[playerState.handCardIds.length - 1];
-                    if (cardId === undefined) throw new Error();
-                    selectedCardIds.clear();
-                    selectedCardIds.add(cardId);
-                    action = { action: 'Reorder', cardId };
-                    console.log(`set action to reorder`);
-                    await drag();
                 })();
             } else {
                 console.error('!');
