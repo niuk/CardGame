@@ -37,7 +37,7 @@
     "server": "ts-node build/server/server.js",
     "lint-server": "eslint -c src/server/.eslintrc.json src/server/*.ts",
     "lint-client": "eslint -c src/client/.eslintrc.json src/client/*.ts",
-    "lint": "concurrently --kill-others \"npm run lint-client\" \"npm run lint-server\""
+    "lint": "npm run lint-client && npm run lint-server"
   },
   "type": "module",
   "name": "cardgame"

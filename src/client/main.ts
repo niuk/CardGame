@@ -201,7 +201,7 @@ function renderDeck(deltaTime: number) {
             '洗牌',
             '大字',
             26,
-            () => Client.shuffleDeck(gameState)
+            () => Client.shuffleDeck()
         );
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -210,7 +210,7 @@ function renderDeck(deltaTime: number) {
             gameState.dispensing ? '停牌' : '发牌',
             '大字',
             26,
-            () => Client.dispense(gameState)
+            () => Client.dispense()
         );
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -219,7 +219,7 @@ function renderDeck(deltaTime: number) {
             '回牌',
             '大字',
             26,
-            () => Client.reset(gameState)
+            () => Client.reset()
         );
     
         i = 上下(deckLabels, Sprite.deckContainer, i,
@@ -235,7 +235,7 @@ function renderDeck(deltaTime: number) {
             '+',
             '小字',
             13,
-            () => Client.addDeck(gameState));
+            () => Client.addDeck());
             
         i = 上下(deckLabels, Sprite.deckContainer, i,
             Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
@@ -243,7 +243,7 @@ function renderDeck(deltaTime: number) {
             '_',
             '小字',
             13,
-            () => Client.removeDeck(gameState));
+            () => Client.removeDeck());
 
         for (; i < deckLabels.length; ++i) {
             deckLabels[i]?.destroy();
@@ -258,19 +258,20 @@ const playerLabels: (PIXI.BitmapText | undefined)[][] = [];
 const playerKickers: ((() => void) | undefined)[] = [];
 
 let playerNotesElement: HTMLInputElement | undefined = undefined;
-let playerNotesPosition = new PIXI.Point();
+const playerNotesPosition = new PIXI.Point();
 let previousNotes = '';
 
 function renderPlayers(deltaTime: number) {
     const gameState = Client.gameState;
-    if (!gameState) return;
+    const cardsById = Client.cardsById;
+    if (!gameState || !cardsById) return;
 
     for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
         const playerState = gameState.playerStates[playerIndex];
 
         if (playerState && !playerState.present) {
             if (!playerKickers[playerIndex]) {
-                playerKickers[playerIndex] = () => Client.kickPlayer(playerIndex, gameState);
+                playerKickers[playerIndex] = () => Client.kickPlayer(playerIndex);
             }
         } else {
             if (playerKickers[playerIndex]) {
@@ -301,33 +302,37 @@ function renderPlayers(deltaTime: number) {
 
         const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
-        for (let cardIndex = 0; cardIndex < playerState.cardsWithOrigins.length; ++cardIndex) {
-            let sprite: Sprite | undefined;
+        for (let cardIndex = 0; cardIndex < playerState.handCardIds.length; ++cardIndex) {
+            const cardId = playerState.handCardIds[cardIndex];
+            if (cardId === undefined) throw new Error();
+
+            const sprite = Sprite.spriteForCardId.get(cardId);
+            /*let sprite: Sprite | undefined;
             if (cardIndex < playerState.revealCount || playerIndex === gameState.playerIndex) {
                 sprite = faceSprites[cardIndex];
             } else {
                 sprite = backSprites[cardIndex - playerState.revealCount];
-            }
+            }*/
 
             if (!sprite) throw new Error();
 
             if (Input.action.action === 'Take' &&
                 Input.action.playerIndex === playerIndex &&
-                Input.action.cardIndex === cardIndex ||
+                Input.action.cardId === cardId ||
                 playerIndex === gameState.playerIndex && ((
                     Input.action.action === 'ControlShiftClick' ||
                     Input.action.action === 'ControlClick' ||
                     Input.action.action === 'ShiftClick' ||
                     Input.action.action === 'Click'
                 ) && (
-                    Input.action.cardIndex === cardIndex ||
-                    Input.selectedIndices.has(Input.action.cardIndex) && Input.selectedIndices.has(cardIndex)
+                    Input.action.cardId === cardId ||
+                    Input.selectedCardIds.has(Input.action.cardId) && Input.selectedCardIds.has(cardId)
                 ) || (
                     Input.action.action === 'Give' ||
                     Input.action.action === 'Return' ||
                     Input.action.action === 'Reorder'
                 ) && (
-                    Input.selectedIndices.has(cardIndex)
+                    Input.selectedCardIds.has(cardId)
                 )
             )) {
                 sprite.target = container.transform.worldTransform.applyInverse(Input.mouseMovePosition);
@@ -355,7 +360,7 @@ function renderPlayers(deltaTime: number) {
                 sprite.resetAnchor();
             }
 
-            sprite.selected = gameState.playerIndex === playerIndex && Input.selectedIndices.has(cardIndex);
+            sprite.selected = gameState.playerIndex === playerIndex && Input.selectedCardIds.has(cardId);
             sprite.zIndex = cardIndex;
             sprite.animate(deltaTime);
         }
@@ -379,12 +384,13 @@ function renderPlayers(deltaTime: number) {
             container,
             reverse,
             width,
+            cardsById,
             playerIndex,
             playerState,
             playerState.shareCount,
             playerState.revealCount,
             playerState.groupCount,
-            playerState.cardsWithOrigins.length,
+            playerState.handCardIds.length,
             playerIndex === gameState.playerIndex
         );
     }
@@ -577,6 +583,7 @@ function addAllLabels(
     container: PIXI.Container,
     reverse: boolean,
     width: number,
+    cardsById: Map<number, Lib.Card>,
     playerIndex: number,
     playerState: Lib.PlayerState,
     shareCount: number,
@@ -585,7 +592,8 @@ function addAllLabels(
     totalCount: number,
     playerIsMe: boolean
 ) {
-    const score = playerState.cardsWithOrigins.slice(0, shareCount).map(([card, origin]) => {
+    const score = playerState.handCardIds.slice(0, shareCount).map(cardId => {
+        const card = cardsById.get(cardId);
         if (card) {
             const [suit, rank] = card;
             return Math.min(10, rank);
@@ -597,7 +605,7 @@ function addAllLabels(
     let i = 0;
     const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 
-    let name = playerState.name + (playerState.present ? '' : '(撤?)');
+    const name = playerState.name + (playerState.present ? '' : '(撤?)');
     const nameMetrics = PIXI.TextMetrics.measureText(name, textStyle);
     const nameX = goldenX - nameMetrics.width - Sprite.gap;
     const nameY = reverse ? 2 * Sprite.height : -nameMetrics.height;
@@ -629,7 +637,7 @@ function addAllLabels(
                     const notes = playerNotesElement.value;
                     if (previousNotes !== notes) {
                         previousNotes = notes;
-                        await Client.setPlayerNotes(notes, Client.gameState);
+                        await Client.setPlayerNotes(notes);
                     }
                 }
             })();

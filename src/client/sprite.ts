@@ -387,6 +387,9 @@ export default class Sprite {
     // each element corresponds to a face card by index
     public static playerFaceSprites: Sprite[][] = [];
 
+    public static cardForCardId = new Map<number, Lib.Card>();
+    public static spriteForCardId = new Map<number, Sprite>();
+
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
         const previousPromise = promise;
         promise = (async () => {
@@ -428,68 +431,37 @@ export default class Sprite {
         Lib.setCookie('backgroundIndex', JSON.stringify(backgroundIndex));
     }
 
-    public static async linkWithCards(previousGameState: Lib.GameState | undefined, gameState: Lib.GameState): Promise<void> {
+    public static async linkWithCards(gameState: Lib.GameState, cardsById: Map<number, Lib.Card>): Promise<void> {
         await this.load(gameState);
 
-        const previousDeckSprites: (Sprite | undefined)[] = this.deckSprites;
         this.deckSprites = [];
-
-        const previousPlayerBackSprites: (Sprite | undefined)[][] = this.playerBackSprites;
         this.playerBackSprites = [];
-
-        const previousPlayerFaceSprites: (Sprite | undefined)[][] = this.playerFaceSprites;
         this.playerFaceSprites = [];
-
-        const getSpriteWithOrigin = (origin: Lib.Origin) => {
-            let sprite: Sprite | undefined;
-            if (origin.origin === 'Deck') {
-                sprite = previousDeckSprites[origin.deckIndex];
-                previousDeckSprites[origin.deckIndex] = undefined;
-            } else if (origin.origin === 'Hand') {
-                const previousFaceSprites = previousPlayerFaceSprites[origin.playerIndex];
-                if (origin.playerIndex === gameState.playerIndex) {
-                    if (previousFaceSprites) {
-                        sprite = previousFaceSprites[origin.cardIndex];
-                        previousFaceSprites[origin.cardIndex] = undefined;
-                    }
-                } else {
-                    const originPlayer = previousGameState?.playerStates[origin.playerIndex];
-                    if (originPlayer) {
-                        if (origin.cardIndex < originPlayer.revealCount) {
-                            if (previousFaceSprites) {
-                                sprite = previousFaceSprites[origin.cardIndex];
-                                previousFaceSprites[origin.cardIndex] = undefined;
-                            }
-                        } else {
-                            const previousBackSprites = previousPlayerBackSprites[origin.playerIndex];
-                            if (previousBackSprites) {
-                                sprite = previousBackSprites[origin.cardIndex - originPlayer.revealCount];
-                                previousBackSprites[origin.cardIndex - originPlayer.revealCount] = undefined;
-                            }
-                        }
-                    }
-                }
+    
+        for (const cardId of gameState.deckCardIds) {
+            let sprite = Sprite.spriteForCardId.get(cardId);
+            const deckTexture = Sprite.getTexture('Back0');
+            if (sprite) {
+                sprite.transfer(Sprite.deckContainer, deckTexture);
             } else {
-                const _: never = origin;
+                sprite = new Sprite(Sprite.deckContainer, deckTexture);
+                console.log(`new deck sprite for card ${cardId}`);
+                Sprite.spriteForCardId.set(cardId, sprite);
             }
-
-            return sprite;
-        };
+    
+            this.deckSprites.push(sprite);
+        }
     
         for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
             const playerState = gameState.playerStates[playerIndex];
             if (!playerState) continue;
-    
+
             const faceSprites = this.playerFaceSprites[playerIndex] ?? [];
             this.playerFaceSprites[playerIndex] = faceSprites;
-            const previousFaceSprites = previousPlayerFaceSprites[playerIndex] ?? [];
-            previousPlayerFaceSprites[playerIndex] = previousFaceSprites;
-    
+
             const backSprites = this.playerBackSprites[playerIndex] ?? [];
             this.playerBackSprites[playerIndex] = backSprites;
-            const previousBackSprites = previousPlayerBackSprites[playerIndex] ?? [];
-            previousPlayerBackSprites[playerIndex] = previousBackSprites;
-    
+
             let container = Sprite.containers[playerIndex];
             if (!container) {
                 container = new PIXI.Container();
@@ -497,52 +469,44 @@ export default class Sprite {
             }
 
             const backTexture = Sprite.getTexture(`Back${playerIndex + 1}`);
-            
-            for (const [card, origin] of playerState.cardsWithOrigins) {
-                let sprite = getSpriteWithOrigin(origin);
-                if (card) {
+
+            for (let cardIndex = 0; cardIndex < playerState.handCardIds.length; ++cardIndex) {
+                const cardId = playerState.handCardIds[cardIndex];
+                if (cardId === undefined) throw new Error(`cardIndex: ${
+                    JSON.stringify(cardIndex)
+                }, handCardIds: ${
+                    JSON.stringify(playerState.handCardIds)
+                }`);
+
+                let sprite = Sprite.spriteForCardId.get(cardId);
+                const card = cardsById.get(cardId);
+                if (card !== undefined && (
+                    playerIndex === gameState.playerIndex || cardIndex < playerState.revealCount
+                )) {
                     const faceTexture = Sprite.getTexture(JSON.stringify(card));
                     if (sprite) {
                         sprite.transfer(container, faceTexture);
                     } else {
                         sprite = new Sprite(container, faceTexture);
+                        console.log(`new face sprite for card ${cardId}`);
                     }
-    
+
                     faceSprites.push(sprite);
                 } else {
                     if (sprite) {
                         sprite.transfer(container, backTexture);
                     } else {
                         sprite = new Sprite(container, backTexture);
+                        console.log(`new back sprite for card ${cardId}`);
                     }
-    
+
                     backSprites.push(sprite);
                 }
             }
         }
-    
-        for (const origin of gameState.deckOrigins) {
-            let sprite = getSpriteWithOrigin(origin);
-            const deckTexture = Sprite.getTexture('Back0');
-            if (sprite) {
-                sprite.transfer(Sprite.deckContainer, deckTexture);
-            } else {
-                sprite = new Sprite(Sprite.deckContainer, deckTexture);
-            }
-    
-            this.deckSprites.push(sprite);
-        }
-
-        console.log(`previousDeckSprites.length = ${previousDeckSprites.length}`);
-        for (const previousDeckSprite of previousDeckSprites) {
-            if (previousDeckSprite) {
-                previousDeckSprite.destroy();
-                sprites.delete(previousDeckSprite);
-            }
-        }
     }
 
-    public static async clearSprites() {
+    public static async clearSprites(): Promise<void> {
         for (const sprite of sprites) {
             sprite.destroy();
         }

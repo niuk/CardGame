@@ -15,8 +15,28 @@ export function getParam(name: string): string | undefined {
     return window.location.search.split(`${name}=`)[1]?.split("&")[0];
 }
 
+export function pick<T, K extends keyof T>(obj: T, ...keys: K[]): Pick<T, K> {
+    const ret: any = {};
+    keys.forEach(key => {
+        ret[key] = obj[key];
+    })
+    return ret;
+}
+
 export function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
+    let done = true;
+    try {
+        done = await Promise.race<T | 'Timeout'>([p, (async () => {
+            await delay(milliseconds ?? 0);
+            return 'Timeout';
+        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
+    } finally {
+        return done;
+    }
 }
 
 export enum Suit {
@@ -65,17 +85,17 @@ export interface PlayerState {
     shareCount: number;
     revealCount: number;
     groupCount: number;
-    cardsWithOrigins: [Card | null, Origin][];
+    handCardIds: number[];
     present: boolean;
     notes: string;
 }
 
 export interface GameState {
     gameId: string;
-    deckOrigins: Origin[];
+    deckCardIds: number[];
+    cardsById: [number, Card][];
     playerIndex: number;
     playerStates: (PlayerState | null)[];
-    tick: number;
     dispensing: boolean;
 }
 
@@ -115,10 +135,10 @@ export type MethodName =
 
 export interface ServerResponse {
     newGameState?: GameState;
-    methodResult?: Result;
+    methodResult?: MethodResult;
 }
 
-export interface Result {
+export interface MethodResult {
     index: number;
     errorDescription?: string;
 }
@@ -144,37 +164,31 @@ export interface JoinGame extends MethodBase {
 
 export interface AddDeck extends MethodBase {
     methodName: 'AddDeck';
-    tick: number;
 }
 
 export interface RemoveDeck extends MethodBase {
     methodName: 'RemoveDeck';
-    tick: number;
 }
 
 export interface TakeFromOtherPlayer extends MethodBase {
     methodName: 'TakeFromOtherPlayer';
     playerIndex: number;
-    cardIndex: number;
-    tick: number;
+    cardId: number;
 }
 
 export interface GiveToOtherPlayer extends MethodBase {
     methodName: 'GiveToOtherPlayer';
     playerIndex: number;
-    cardIndicesToGiveToOtherPlayer: number[];
-    tick: number;
+    cardIds: number[];
 }
 
 export interface DrawFromDeck extends MethodBase {
     methodName: 'DrawFromDeck';
-    tick: number;
 }
 
 export interface ReturnToDeck extends MethodBase {
     methodName: 'ReturnToDeck';
-    cardIndicesToReturnToDeck: number[];
-    tick: number;
+    cardIds: number[];
 }
 
 export interface Reorder extends MethodBase {
@@ -182,45 +196,27 @@ export interface Reorder extends MethodBase {
     newShareCount: number;
     newRevealCount: number;
     newGroupCount: number;
-    newOriginIndices: number[];
-    tick: number;
+    newCardIds: number[];
 }
 
 export interface ShuffleDeck extends MethodBase {
     methodName: 'ShuffleDeck';
-    tick: number;
 }
 
 export interface Dispense extends MethodBase {
     methodName: 'Dispense';
-    tick: number;
 }
 
 export interface Reset extends MethodBase {
     methodName: 'Reset';
-    tick: number;
 }
 
 export interface Kick extends MethodBase {
     methodName: 'Kick';
     playerIndex: number;
-    tick: number;
 }
 
 export interface SetPlayerNotes extends MethodBase {
     methodName: 'SetPlayerNotes';
     notes: string;
-    tick: number;
-}
-
-export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
-    let done = true;
-    try {
-        done = await Promise.race<T | 'Timeout'>([p, (async () => {
-            await delay(milliseconds ?? 0);
-            return 'Timeout';
-        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
-    } finally {
-        return done;
-    }
 }
