@@ -693,7 +693,7 @@ function addAllLabels(
     const gameState = Client.gameState;
     if (gameState && gameState.playerIndex == playerIndex) {
         i = addLabel(labels, container, i,
-            -3.25 * Sprite.pixelsPerCM,
+            0,
             2 * Sprite.height - 1.5 * Sprite.pixelsPerCM,
             '分类(大小)',
             '大字',
@@ -702,7 +702,7 @@ function addAllLabels(
         );
 
         i = addLabel(labels, container, i,
-            -3.25 * Sprite.pixelsPerCM,
+            0,
             2 * Sprite.height - 0.75 * Sprite.pixelsPerCM,
             '分类(花色)',
             '大字',
