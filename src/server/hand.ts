@@ -39,7 +39,7 @@ export default class Hand<TKey, TValue> {
 
         this.stationary.set(key, value);
         this.array.push(key);
-        console.log('added', this);
+        //console.log('added', this);
     }
 
     public remove(key: TKey): void {
@@ -120,9 +120,9 @@ export default class Hand<TKey, TValue> {
     }
 
     public push(...items: TKey[]): number {
-        console.log('pushing', this.array, items);
+        //console.log('pushing', this.array, items);
         this.splice(this.array.length, 0, ...items);
-        console.log('pushed', this.array);
+        //console.log('pushed', this.array);
         return this.array.length;
     }
 
