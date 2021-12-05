@@ -29,7 +29,6 @@ app.post('/clientLogs', async (request, response) => {
     const s = f.createWriteStream();
     for (const entry of request.body as string[][]) {
         for (const line of entry) {
-            console.log(typeof line);
             s.write(line);
             s.write('\n');
         }
