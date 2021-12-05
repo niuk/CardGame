@@ -34,6 +34,8 @@ app.post('/clientLogs', async (request, response) => {
         }
     }
 
+    console.log('client logs saved');
+
     response.contentType('application/json').send({
         entries: request.body.length
     });
