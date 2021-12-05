@@ -17,14 +17,22 @@ app.get('/', async (_, response) => {
 });
 
 app.post('/clientLogs', async (request, response) => {
-    await fs.writeFile(`./${
+    const f = await fs.open(`./${
         new Date().toLocaleString()
             .replace(/ /g, '')
             .replace(/\//g, '-')
             .replace(/,/g, '_')
         }.log`,
-        JSON.stringify(request.body)
+        'w'
     );
+
+    const s = f.createWriteStream();
+    for (const entry of request.body as string[][]) {
+        for (const line of entry) {
+            s.write(line);
+            s.write('\n');
+        }
+    }
 });
 
 (async () => {
