@@ -307,14 +307,7 @@ function renderPlayers(deltaTime: number) {
             if (cardId === undefined) throw new Error();
 
             const sprite = Sprite.spriteForCardId.get(cardId);
-            /*let sprite: Sprite | undefined;
-            if (cardIndex < playerState.revealCount || playerIndex === gameState.playerIndex) {
-                sprite = faceSprites[cardIndex];
-            } else {
-                sprite = backSprites[cardIndex - playerState.revealCount];
-            }*/
-
-            if (!sprite) throw new Error();
+            if (!sprite) /*throw new Error();*/return; // TODO: figure out how this can happen
 
             if (Input.action.action === 'Take' &&
                 Input.action.playerIndex === playerIndex &&

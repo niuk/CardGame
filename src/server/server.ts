@@ -2,6 +2,7 @@ import express from 'express';
 import https from 'https';
 import fs from 'fs/promises';
 import WebSocket from 'ws';
+import bodyParser from 'body-parser';
 
 import Player from './player.js';
 
@@ -9,8 +10,21 @@ const app = express();
 
 app.use(express.static('www'));
 
+app.use(bodyParser.json());
+
 app.get('/', async (_, response) => {
     response.contentType('text/html').send(await fs.readFile('www/index.html'));
+});
+
+app.post('/clientLogs', async (request, response) => {
+    await fs.writeFile(`./${
+        new Date().toLocaleString()
+            .replace(/ /g, '')
+            .replace(/\//g, '-')
+            .replace(/,/g, '_')
+        }.log`,
+        request.body
+    );
 });
 
 (async () => {

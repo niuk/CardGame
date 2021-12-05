@@ -6,6 +6,46 @@
         <meta name='viewport' content='width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=0'>
         <link rel='stylesheet' href='style.css'>
         <script>
+            messages = [];
+            function pushMessage(arguments) {
+                const stack = new Error().stack;
+                const frames = stack.split('\n');
+                frames.splice(0, 2);
+
+                messages.push([...Array.from(arguments), ...frames]);
+            }
+
+            defaultLog = console.log.bind(console);
+            console.log = function() {
+                defaultLog.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            defaultError = console.error.bind(console);
+            console.error = function() {
+                defaultError.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            defaultWarn = console.warn.bind(console);
+            console.warn = function() {
+                defaultWarn.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            defaultDebug = console.debug.bind(console);
+            console.debug = function() {
+                defaultDebug.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            function sendLogs() {
+                const request = new XMLHttpRequest();
+                request.open("POST", "/clientLogs");
+                request.setRequestHeader("Content-type", "application/json");
+                request.send(JSON.stringify(messages));
+            }
+
             function showCredits() {
                 document.getElementById('showCredits').style.visibility = 'hidden';
                 document.getElementById('credits').style.visibility = 'visible';
@@ -44,6 +84,9 @@
             Wood backgrounds by <a href='https://www.freepik.com/photos/background'>rawpixel.com and kues1 - www.freepik.com</a>
             <br>
             Other backgrounds by <a href='https://unsplash.com/@custodiancontent?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText'>Kalle Kortelainen</a> and <a href='https://unsplash.com/@scottwebb?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText'>Scott Webb</a> on <a href='https://unsplash.com/backgrounds/desktop?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText'>Unsplash</a>
+        </div>
+        <div id='bottomLeft'>
+            <a id='sendLogs' onclick='sendLogs()'>🐞</a>
         </div>
         <div id='bottomRight'>
             <a id='backgroundLeft'>&lt;</a>

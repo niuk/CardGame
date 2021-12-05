@@ -43,6 +43,14 @@ a {
     color: cyan;
 }
 
+#bottomLeft {
+    position: absolute;
+    cursor: pointer;
+    bottom: 0px;
+    left: 0px;
+    z-index: 1;
+}
+
 #bottomRight {
     position: absolute;
     cursor: help;
