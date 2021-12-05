@@ -27,19 +27,27 @@ app.post('/clientLogs', async (request, response) => {
         'w'
     );
 
-    const s = f.createWriteStream();
-    for (const entry of request.body as string[][]) {
-        for (const line of entry) {
-            s.write(line);
-            s.write('\n');
+    try {
+        const s = f.createWriteStream();
+        try {
+            for (const entry of request.body as string[][]) {
+                for (const line of entry) {
+                    s.write(line);
+                    s.write('\n');
+                }
+            }
+
+            console.log('client logs saved');
+
+            response.contentType('application/json').send({
+                clientLogs: request.body.length
+            });
+        } finally {
+            s.end();
         }
+    } finally {
+        f.close();
     }
-
-    console.log('client logs saved');
-
-    response.contentType('application/json').send({
-        clientLogs: request.body.length
-    });
 });
 
 (async () => {
