@@ -307,7 +307,7 @@ function renderPlayers(deltaTime: number) {
             if (cardId === undefined) throw new Error();
 
             const sprite = Sprite.spriteForCardId.get(cardId);
-            if (!sprite) /*throw new Error();*/return; // TODO: figure out how this can happen
+            if (!sprite) throw new Error();
 
             if (Input.action.action === 'Take' &&
                 Input.action.playerIndex === playerIndex &&

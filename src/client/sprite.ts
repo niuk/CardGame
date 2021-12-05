@@ -489,6 +489,7 @@ export default class Sprite {
                     } else {
                         sprite = new Sprite(container, faceTexture);
                         console.log(`new face sprite for card ${cardId}`);
+                        Sprite.spriteForCardId.set(cardId, sprite);
                     }
 
                     faceSprites.push(sprite);
@@ -498,6 +499,7 @@ export default class Sprite {
                     } else {
                         sprite = new Sprite(container, backTexture);
                         console.log(`new back sprite for card ${cardId}`);
+                        Sprite.spriteForCardId.set(cardId, sprite);
                     }
 
                     backSprites.push(sprite);
