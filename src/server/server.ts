@@ -21,6 +21,7 @@ app.post('/clientLogs', async (request, response) => {
         new Date().toLocaleString()
             .replace(/ /g, '')
             .replace(/\//g, '-')
+            .replace(/:/g, '-')
             .replace(/,/g, '_')
         }.log`,
         'w'
@@ -37,7 +38,7 @@ app.post('/clientLogs', async (request, response) => {
     console.log('client logs saved');
 
     response.contentType('application/json').send({
-        entries: request.body.length
+        clientLogs: request.body.length
     });
 });
 

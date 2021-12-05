@@ -42,11 +42,11 @@
             function sendLogs() {
                 const request = new XMLHttpRequest();
                 request.onload = function() {
-                    console.log(`Loaded: ${request.status} ${request.response}`);
+                    console.log(`HTTP ${request.status}: ${request.response}`);
                 };
 
                 request.onerror = function() {
-                    console.log(`Network Error`);
+                    console.error(`could not send logs`);
                 };
 
                 request.open("POST", "/clientLogs");
