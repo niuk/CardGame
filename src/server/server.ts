@@ -23,7 +23,7 @@ app.post('/clientLogs', async (request, response) => {
             .replace(/\//g, '-')
             .replace(/,/g, '_')
         }.log`,
-        request.body
+        JSON.stringify(request.body)
     );
 });
 
