@@ -49,10 +49,6 @@
                     console.log(`Network Error`);
                 };
 
-                request.onprogress = function(event) {
-                    console.log(`Received ${event.loaded} of ${event.total}`);
-                };
-
                 request.open("POST", "/clientLogs");
                 request.setRequestHeader("Content-type", "application/json");
                 request.send(JSON.stringify(messages));
