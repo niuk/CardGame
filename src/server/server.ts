@@ -33,6 +33,10 @@ app.post('/clientLogs', async (request, response) => {
             s.write('\n');
         }
     }
+
+    response.contentType('application/json').send({
+        entries: request.body.length
+    });
 });
 
 (async () => {

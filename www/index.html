@@ -41,6 +41,18 @@
 
             function sendLogs() {
                 const request = new XMLHttpRequest();
+                request.onload = function() {
+                    console.log(`Loaded: ${request.status} ${request.response}`);
+                };
+
+                request.onerror = function() {
+                    console.log(`Network Error`);
+                };
+
+                request.onprogress = function(event) {
+                    console.log(`Received ${event.loaded} of ${event.total}`);
+                };
+
                 request.open("POST", "/clientLogs");
                 request.setRequestHeader("Content-type", "application/json");
                 request.send(JSON.stringify(messages));
