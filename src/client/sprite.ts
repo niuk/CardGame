@@ -150,8 +150,8 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
 
     if (gameState) {
         let playerContainer = Sprite.containers[gameState.playerIndex];
-        console.log(`playerContainer.index = ${gameState.playerIndex}`);
         if (!playerContainer) {
+            console.log(`your playerContainer.index = ${gameState.playerIndex}`);
             playerContainer = new PIXI.Container();
             playerContainer.zIndex = 3;
             playerContainer.sortableChildren = true;
@@ -163,6 +163,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const playerIndex = (gameState.playerIndex + i) % gameState.playerStates.length;
             let playerContainer = Sprite.containers[playerIndex];
             if (!playerContainer) {
+                console.log(`other playerContainer.index = ${i}`);
                 playerContainer = new PIXI.Container();
                 playerContainer.zIndex = 2;
                 playerContainer.sortableChildren = true;
@@ -291,7 +292,6 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
 
             const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
             const leftContainer = Sprite.containers[leftIndex];
-            console.log(`leftContainer.index = ${leftIndex}`);
             if (!leftContainer) throw new Error();
             leftContainer.position.set(0, Sprite.app.view.height);
             leftContainer.rotation = -Math.PI / 2;
@@ -304,7 +304,6 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
             const rightContainer = Sprite.containers[rightIndex];
             if (!rightContainer) throw new Error();
-            console.log(`rightContainer.index = ${rightIndex}`);
             rightContainer.rotation = Math.PI / 2;
             rightContainer.position.set(Sprite.app.view.width, 0);
             playerContainer.rotation = 0;

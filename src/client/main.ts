@@ -298,7 +298,14 @@ function renderPlayers(deltaTime: number) {
         const reverse = Sprite.reverse[playerIndex];
         const faceSprites = Sprite.playerFaceSprites[playerIndex];
         const backSprites = Sprite.playerBackSprites[playerIndex];
-        if (width === undefined || !container || reverse === undefined || !faceSprites || !backSprites) throw new Error();
+        if (width === undefined ||
+            container === undefined ||
+            reverse === undefined ||
+            faceSprites === undefined ||
+            backSprites === undefined
+        ) {
+            throw new Error(`width = ${width}, container = ${container}, reverse = ${reverse}, faceSprites = ${faceSprites}, backSprites = ${backSprites}`);
+        }
 
         const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
 

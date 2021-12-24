@@ -36,7 +36,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
                 gameState = undefined;
 
                 // also clear card sprites, since we'll be getting a competely new gameState
-                Sprite.clearSprites();
+                //Sprite.clearSprites();
             }
 
             // avoid immediately reconnecting if we haven't received a heartbeat yet
