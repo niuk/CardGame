@@ -32,7 +32,7 @@ app.post('/clientLogs', async (request, response) => {
         try {
             for (const entry of request.body as string[][]) {
                 for (const line of entry) {
-                    s.write(line);
+                    s.write(JSON.stringify(line));
                     s.write('\n');
                 }
             }
