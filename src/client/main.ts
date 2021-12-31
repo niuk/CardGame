@@ -674,11 +674,21 @@ function addAllLabels(
         goldenX + getOffset(revealCount - shareCount);
     i = 上下(labels, container, i, 出牌X, outerY, '出牌', '中字', 19);
 
+    const 出牌CountX = reverse ?
+        出牌X - 0.375 * Sprite.pixelsPerCM :
+        出牌X + 0.548 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, 出牌CountX, outerY, `︵${数(revealCount - shareCount)}︶`, '小字', 13);
+
     const innerY = reverse ? 0 : Sprite.height;
     const 底牌X = reverse ?
         goldenX + getOffset(groupCount - revealCount) :
         goldenX - getOffset(groupCount - revealCount) - 0.548 * Sprite.pixelsPerCM;
     i = 上下(labels, container, i, 底牌X, innerY, '底牌', '中字', 19);
+
+    const 底牌CountX = reverse ?
+        底牌X + 0.548 * Sprite.pixelsPerCM :
+        底牌X - 0.375 * Sprite.pixelsPerCM;
+    i = 上下(labels, container, i, 底牌CountX, innerY, `︵${数(groupCount - revealCount)}︶`, '小字', 13);
 
     const 持牌X = reverse ?
         goldenX - getOffset(totalCount - groupCount) -  0.548 * Sprite.pixelsPerCM :
