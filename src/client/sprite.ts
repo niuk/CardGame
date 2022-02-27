@@ -352,7 +352,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
     }
 }
 
-let promise = Promise.resolve();
+let loadPromise = Promise.resolve();
 let cachedOnTick: (deltaTime: number) => void | undefined;
 
 export default class Sprite {
@@ -390,12 +390,12 @@ export default class Sprite {
     public static spriteForCardId = new Map<number, Sprite>();
 
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
-        const previousPromise = promise;
-        promise = (async () => {
+        const previousPromise = loadPromise;
+        loadPromise = (async () => {
             await previousPromise;
             await _load(gameState);
         })();
-        await promise;
+        await loadPromise;
     }
 
     public static getTexture(textureName: string): PIXI.Texture {

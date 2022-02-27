@@ -137,6 +137,11 @@ window.onload = async () => {
     gameIdElement.value = gameId;
 
     await spriteLoad;
+
+    playerNameElement.disabled = false;
+    gameIdElement.disabled = false;
+    joinGameButton.disabled = false;
+    newGameButton.disabled = false;
 }
 
 // it takes a while for page elements to render at their new size,
