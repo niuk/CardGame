@@ -92,11 +92,10 @@ app.post('/clientLogs', async (request, response) => {
             }
 
             if (gameFile.isFile()) {
-                console.log(gameFile.name);
                 const gameFilePath = path.join(Game.SAVEDIR, gameFile.name);
-                const gameFileContent = await fs.readFile(gameFilePath);
-                const gameState = JSON.parse(gameFileContent.toString());
-                console.log('restoring game:', gameState);
+                const gameFileContent = (await fs.readFile(gameFilePath)).toString();
+                const gameState = JSON.parse(gameFileContent);
+                console.log(`restoring game: ${gameFileContent}`);
                 new Game(gameState);
             }
         }
