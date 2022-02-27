@@ -11,22 +11,17 @@ const b = browserify({ cache: {}, packageCache: {}, debug: true })
 const bundle = 'www/script.js';
 
 function onUpdate() {
-    let error = null;
     b.bundle()
         .on('end', () => {
-            if (error !== null) {
-                console.error(`failure:`);
-                console.error(error);
-            } else {
-                console.log(`success:`);
-                console.log({
-                    timestamp: new Date(),
-                    bundle: bundle
-                });
-            }
+            console.log('success:');
+            console.log({
+                timestamp: new Date(),
+                bundle: bundle
+            });
         })
         .on('error', e => {
-            error = e;
+            console.error('error:');
+            console.log(e);
         })
         .pipe(fs.createWriteStream(bundle));
 }

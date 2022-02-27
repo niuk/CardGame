@@ -15,8 +15,8 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
 // websocket connection to get game state updates
 (async () => {
     let heartbeat = 0;
-    let gameId: string | undefined = undefined;
-    let playerIndex: number | undefined = undefined;
+    let gameId: string | undefined;
+    let playerName: string | undefined;
     
     while (true) {
         await Lib.delay(1000);
@@ -30,7 +30,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
             if (gameState) {
                 // keep info for rejoins
                 gameId = gameState.gameId;
-                playerIndex = gameState.playerIndex;
+                playerName = gameState.playerStates[gameState.playerIndex]?.name;
 
                 // clear previous gameState
                 gameState = undefined;
@@ -48,7 +48,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
             }/${
                 gameId !== undefined ? gameId : ''
             }/${
-                playerIndex !== undefined ? playerIndex : ''
+                playerName !== undefined ? playerName : ''
             }`;
             console.log(`webSocket.url = ${url}, isNative = ${Capacitor.isNative}`);
             webSocket = new WebSocket(url);

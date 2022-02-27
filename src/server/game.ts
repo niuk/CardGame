@@ -1,12 +1,16 @@
+import * as fs from 'fs/promises';
+import path from 'path';
 import { Mutex } from 'async-mutex';
 import { customAlphabet } from 'nanoid';
 const nanoid = customAlphabet('0123456789', 5);
 
 import * as Lib from '../lib.js';
 import Hand from './hand.js';
-import Player from './player';
+import Player from './player.js';
 
 export default class Game {
+    public static readonly SAVEDIR = 'games';
+
     static gamesById = new Map<string, Game>();
 
     public static get(gameId: string): Game {
@@ -18,14 +22,14 @@ export default class Game {
         return game;
     }
 
-    _gameId: string;
+    private _gameId: string;
     get gameId(): string {
         return this._gameId;
     }
 
     players: (Player | undefined)[] = [undefined, undefined, undefined, undefined];
     get numPlayers(): number {
-        return this.players.filter(player => player != undefined).length;
+        return this.players.filter(player => player != null).length;
     }
 
     mutex = new Mutex();
@@ -40,14 +44,65 @@ export default class Game {
 
     dispensing = false;
 
-    public constructor() {
-        do {
-            this._gameId = nanoid();
-        } while (Game.gamesById.has(this.gameId));
+    public constructor(gameState?: Lib.GameState) {
+        if (gameState !== undefined) {
+            this._gameId = gameState.gameId;
+            Game.gamesById.set(this.gameId, this);
 
-        this.addDeck();
+            for (const [cardId, card] of gameState.cardsById) {
+                this.movingCardsById.set(cardId, card);
+            }
 
-        Game.gamesById.set(this.gameId, this);
+            this.deck.push(...gameState.deckCardIds);
+
+            for (let i = 0; i < gameState.playerStates.length; ++i) {
+                const playerState = gameState.playerStates[i];
+                if (playerState !== null && playerState !== undefined) {
+                    const player = new Player(playerState.name, undefined, this.gameId);
+                    player.hand.push(...playerState.handCardIds);
+                    player.shareCount = playerState.shareCount;
+                    player.revealCount = playerState.revealCount;
+                    player.groupCount = playerState.groupCount;
+                    player.notes = playerState.notes;
+                }
+            }
+
+            if (this.movingCardsById.size > 0) {
+                throw new Error(`not all cards distributed to players, ${this.movingCardsById.size} remaining`);
+            }
+
+            this.broadcastStateExceptToPlayerAt(-1);
+        } else {
+            do {
+                this._gameId = nanoid();
+            } while (Game.gamesById.has(this.gameId));
+            Game.gamesById.set(this.gameId, this);
+
+            this.addDeck();
+        }
+
+        this.persist();
+    }
+
+    private async persist(): Promise<void> {
+        let savedState: string | undefined;
+        let previousState: string | undefined;
+        while (true) {
+            await Lib.delay(1000);
+
+            const state = JSON.stringify(this.getStateForPlayerAt(-1));
+
+            if (previousState !== state) {
+                previousState = state;
+            } else {
+                if (savedState !== state) {
+                    savedState = state;
+
+                    console.log(`persisting game: ${state}`);
+                    await fs.writeFile(path.join(Game.SAVEDIR, `${this.gameId}`), state);
+                }
+            }
+        }
     }
 
     public addDeck(): void {
@@ -146,7 +201,7 @@ export default class Game {
                 }
 
                 const player = this.players[playerIndex % this.numPlayers];
-                if (player) {
+                if (player !== undefined && 'ws' in player) {
                     const release = await this.mutex.acquire();
                     try {
                         const deckIndex = this.deck.length - 1;
@@ -202,8 +257,8 @@ export default class Game {
 
     public broadcastStateExceptToPlayerAt(playerIndex: number): void {
         for (const player of this.players) {
-            if (player !== undefined && player.index !== playerIndex) {
-                player.ws.send(JSON.stringify(<Lib.ServerResponse>{
+            if (player !== undefined && 'ws' in player && player.index !== playerIndex) {
+                player.ws?.send(JSON.stringify(<Lib.ServerResponse>{
                     newGameState: this.getStateForPlayerAt(player.index)
                 }));
             }

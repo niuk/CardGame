@@ -5,7 +5,7 @@ import * as Lib from '../lib.js';
 import Game from './game.js';
 
 export default class Player implements Lib.PlayerState {
-    ws: WebSocket;
+    ws?: WebSocket;
     heartbeat: number;
 
     get present(): boolean {
@@ -13,93 +13,130 @@ export default class Player implements Lib.PlayerState {
     }
 
     game: Game | undefined = undefined;
-    index = -1;
     hand = new Hand<number, Lib.Card>(new Map<number, Lib.Card>(), new Map<number, Lib.Card>());
 
     public get handCardIds(): number[] {
         return this.hand.slice();
     }
 
+    public get index(): number {
+        return this.game?.players.findIndex(player => this === player) ?? -1;
+    }
+
     // Lib.PlayerState properties
-    name = '';
+    name: string;
     shareCount = 0;
     revealCount = 0;
     groupCount = 0;
     notes = '';
 
-    constructor(ws: WebSocket, rejoin?: {gameId: string, playerIndex: number}) {
+    constructor(name: string, ws?: WebSocket, gameId?: string, ) {
+        this.name = name;
         this.ws = ws;
         this.heartbeat = Date.now();
 
-        ws.onmessage = async (event: WebSocket.MessageEvent) => {
-            let errorDescription: string | undefined = undefined;
+        if (ws) {
+            ws.onmessage = async (event: WebSocket.MessageEvent) => {
+                let errorDescription: string | undefined = undefined;
 
-            if (typeof(event.data) === 'string') {
-                if (event.data.startsWith('time = ')) {
-                    this.heartbeat = Date.now();
-                } else {
-                    console.log(`method: ${event.data}`);
-                    const method = <Lib.Method>JSON.parse(event.data);
-                    const release = await this.game?.mutex.acquire();
-                    try {
-                        await this.invoke(method);
-                    } catch (e) {
-                        console.error(e);
-                        if (e instanceof Error) {
-                            errorDescription = e.message;
+                if (typeof(event.data) === 'string') {
+                    if (event.data.startsWith('time = ')) {
+                        this.heartbeat = Date.now();
+                    } else {
+                        console.log(`method: ${event.data}`);
+                        const method = <Lib.Method>JSON.parse(event.data);
+                        const release = await this.game?.mutex.acquire();
+                        try {
+                            await this.invoke(method);
+                        } catch (e) {
+                            console.error(e);
+                            if (e instanceof Error) {
+                                errorDescription = e.message;
+                            }
+                        } finally {
+                            ws.send(JSON.stringify(<Lib.ServerResponse>{
+                                newGameState: this.game?.getStateForPlayerAt(this.index),
+                                methodResult: { index: method.index, errorDescription }
+                            }));
+
+                            this.game?.broadcastStateExceptToPlayerAt(this.index);
+
+                            release?.();
                         }
-                    } finally {
-                        ws.send(JSON.stringify(<Lib.ServerResponse>{
-                            newGameState: this.game?.getStateForPlayerAt(this.index),
-                            methodResult: { index: method.index, errorDescription }
-                        }));
-
-                        this.game?.broadcastStateExceptToPlayerAt(this.index);
-
-                        release?.();
                     }
+                } else {
+                    throw new Error();
                 }
-            } else {
-                throw new Error();
-            }
-        };
-        
-        ws.onclose = async (event: WebSocket.CloseEvent) => {
-            console.log('closed websocket connection: ', event.reason);
-            this.game?.broadcastStateExceptToPlayerAt(this.index);
-        };
+            };
+            
+            ws.onclose = async (event: WebSocket.CloseEvent) => {
+                console.log('closed websocket connection: ', event.reason);
+                this.game?.broadcastStateExceptToPlayerAt(this.index);
+            };
+        }
 
-        if (rejoin) {
-            console.log(`player rejoining game ${rejoin.gameId} at index ${rejoin.playerIndex}`);
-            this.game = Game.get(rejoin.gameId);
-            this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
-            const existingPlayer = this.game.players[rejoin.playerIndex];
-            if (existingPlayer) {
-                existingPlayer.game = undefined; // disallow absent player from affecting game
-                existingPlayer.ws.close(); // stop receiving messages for absent player
-
-                // copy all fields
-                this.index = existingPlayer.index;
-                this.name = existingPlayer.name;
-                this.shareCount = existingPlayer.shareCount;
-                this.revealCount = existingPlayer.revealCount;
-                this.groupCount = existingPlayer.groupCount;
-                this.hand = existingPlayer.hand;
-                this.notes = existingPlayer.notes;
-            }
-
-            this.game.players[rejoin.playerIndex] = this;
-            this.game.broadcastStateExceptToPlayerAt(-1);
+        if (gameId !== undefined) {
+            this.joinGame(gameId);
+            this.game?.broadcastStateExceptToPlayerAt(-1);
         }
 
         this.monitor();
+    }
+
+    private joinGame(gameId: string): void {
+        console.log(`player (re)joining game ${gameId}...`);
+        this.game = Game.get(gameId);
+        this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
+
+        console.log(`looking for existing player with name "${this.name}"...`);
+        const i = this.game.players.findIndex(player => player?.name === this.name);
+        const player = this.game.players[i];
+        if (player) {
+            player.game = undefined; // disallow absent player from affecting game
+            player.ws?.close(); // stop receiving messages for absent player
+
+            this.hand = player.hand;
+            this.shareCount = player.shareCount;
+            this.revealCount = player.revealCount;
+            this.groupCount = player.groupCount;
+            this.notes = player.notes;
+
+            this.game.players[i] = this;
+            console.log(`player '${this.name}' rejoined '${this.game.gameId}`);
+            return;
+        }
+
+        console.log('looking for empty slot...');
+        for (let i = 0; i < this.game.players.length; ++i) {
+            const player = this.game.players[i];
+            if (!player || !player.present) {
+                const player = this.game.players[i];
+                if (player) {
+                    player.game = undefined;
+                    player.ws?.close();
+    
+                    this.hand = player.hand;
+                    this.shareCount = player.shareCount;
+                    this.revealCount = player.revealCount;
+                    this.groupCount = player.groupCount;
+                    this.notes = player.notes;
+                }
+
+                this.game.players[i] = this;
+                console.log(`player '${this.name}' joined '${this.game.gameId} at empty index ${this.index}`);
+                return;
+            }
+        }
+
+        this.game.players[this.game.players.length] = this;
+        console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
     }
 
     private async monitor() {
         while (this.present) {
             await Lib.delay(1000);
 
-            this.ws.send(`time = ${this.heartbeat}`);
+            this.ws?.send(`time = ${this.heartbeat}`);
         }
 
         console.log(`'${this.name}' is no longer present`);
@@ -112,76 +149,10 @@ export default class Player implements Lib.PlayerState {
             this.game = new Game();
             this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
             this.game.players[0] = this;
-            this.index = 0;
             
             console.log(`player '${this.name}' created and joined game '${this.game.gameId}'`);
         } else if (method.methodName === 'JoinGame') {
-            this.game = Game.get(method.gameId);
-            this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
-
-            console.log(`player '${this.name}' is trying to join game '${this.game.gameId}'...`);
-
-            let joined = false;
-
-            // get unoccupied indices and indices of disconnected players
-            const available = [];
-            for (let i = 0; i < this.game.players.length; ++i) {
-                const player = this.game.players[i];
-                if (player === this) {
-                    joined = true;
-                    break;
-                }
-
-                if (!player || !player.present) {
-                    available.push(i);
-                }
-            }
-
-            if (!joined) {
-                // try to join at index of a disconnected player with the same name
-                for (const i of available) {
-                    const player = this.game.players[i];
-                    if (player && player.name === this.name) {
-                        this.shareCount = player.shareCount;
-                        this.revealCount = player.revealCount;
-                        this.groupCount = player.groupCount;
-                        this.hand = player.hand;
-                        this.game.players[i] = this;
-                        this.index = i;
-                        joined = true;
-                        console.log(`player '${this.name}' rejoined '${this.game.gameId} at ${this.index}`);
-                        break;
-                    }
-                }
-            }
-
-            if (!joined) {
-                // just try to join at any available index
-                const i = available[0];
-                if (i !== undefined) {
-                    const player = this.game.players[i];
-                    if (player) {
-                        this.shareCount = player.shareCount;
-                        this.revealCount = player.revealCount;
-                        this.groupCount = player.groupCount;
-                        this.hand = player.hand;
-                    }
-
-                    this.game.players[i] = this;
-                    this.index = i;
-                    joined = true;
-                    console.log(`player '${this.name}' joined '${this.game.gameId} at empty index ${this.index}`);
-                }
-            }
-
-            if (!joined) {
-                // join as an extra player
-                const i = this.game.players.length;
-                this.game.players[i] = this;
-                this.index = i;
-                joined = true;
-                console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
-            }
+            this.joinGame(method.gameId);
         } else {
             if (!this.game) {
                 throw new Error('you are not in a game');
@@ -280,12 +251,6 @@ export default class Player implements Lib.PlayerState {
                 this.game.deck.push(...cardIds);
 
                 this.game.players.splice(method.playerIndex, 1);
-                for (let i = 0; i < this.game.players.length; ++i) {
-                    const player = this.game.players[i];
-                    if (player) {
-                        player.index = i;
-                    }
-                }
 
                 console.log(`'${this.name}' kicked player '${player.name}', returning cards: ${
                     JSON.stringify(cardIds)

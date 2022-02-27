@@ -1,4 +1,4 @@
-import * as PIXI from 'pixi.js-legacy';
+import * as PIXI from 'pixi.js';
 import * as Lib from '../lib';
 import * as V from './vector';
 
@@ -27,7 +27,7 @@ let loadedTextureCount = 0;
 const totalTextureCount = backgroundTextureNames.length + 4 * 13 + 2 + colorNames.length;
 
 function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
-    Sprite.app.loader.add(src, resource => {
+    Sprite.app.loader.add(src, () => {
         textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
     });
 }

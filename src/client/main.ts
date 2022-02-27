@@ -1,4 +1,4 @@
-import * as PIXI from 'pixi.js-legacy';
+import * as PIXI from 'pixi.js';
 
 import * as Lib from '../lib';
 import * as Client from './client';
