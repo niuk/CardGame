@@ -5,6 +5,7 @@ import path from 'path';
 import WebSocket from 'ws';
 import bodyParser from 'body-parser';
 
+import * as Lib from '../lib.js';
 import Game from './game.js';
 import Player from './player.js';
 
@@ -83,6 +84,30 @@ app.post('/clientLogs', async (request, response) => {
     });
 
     // restore saved games
+    await foreachSavedGame(async path => {
+        const gameFileContent = (await fs.readFile(path)).toString();
+        console.log(`restoring game: ${gameFileContent}`);
+        new Game(JSON.parse(gameFileContent));
+    });
+
+    const port = 443;
+    console.log(`listening on port ${port}...`);
+    httpsServer.listen(port);
+
+    while (true) {
+        // every hour, prune saved games that are older than a day
+        await foreachSavedGame(async path => {
+            if (new Date().getTime() - (await fs.lstat(path)).atimeMs > 24 * 60 * 60 * 1000) {
+                console.log(`deleting game: ${path}`);
+                fs.rm(path);
+            }
+        });
+
+        await Lib.delay(60 * 60 * 1000);
+    }
+})();
+
+async function foreachSavedGame(cb: (path: string) => Promise<void>): Promise<void> {
     const gamesDir = await fs.opendir(Game.SAVEDIR);
     try {
         while (true) {
@@ -92,16 +117,10 @@ app.post('/clientLogs', async (request, response) => {
             }
 
             if (gameFile.isFile()) {
-                const gameFileContent = (await fs.readFile(path.join(Game.SAVEDIR, gameFile.name))).toString();
-                console.log(`restoring game: ${gameFileContent}`);
-                new Game(JSON.parse(gameFileContent));
+                await cb(path.join(Game.SAVEDIR, gameFile.name));
             }
         }
     } finally {
         await gamesDir.close();
     }
-
-    const port = 443;
-    console.log(`listening on port ${port}...`);
-    httpsServer.listen(port);
-})();
+}
