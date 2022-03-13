@@ -118,6 +118,7 @@ window.onload = async () => {
     };
 
     Sprite.onTick = (deltaTime: number) => {
+        renderHovered(deltaTime);
         renderDeck(deltaTime);
         renderPlayers(deltaTime);
     };
@@ -165,6 +166,19 @@ window.onresize = async () => {
 
     await resizePromise;
 };
+
+function renderHovered(deltaTime: number) {
+    if (Sprite.hoveredSprite) {
+        const position = {
+            x: Sprite.app.view.width / goldenRatio - 2 * Sprite.width / 2,
+            y: Sprite.app.view.height / 2 - 2 * Sprite.height / 2
+        };
+
+        Sprite.hoveredSprite.position = position;
+        Sprite.hoveredSprite.target = position;
+        Sprite.hoveredSprite.animate(deltaTime);
+    }
+}
 
 const deckLabels: (PIXI.BitmapText | undefined)[] = [];
 

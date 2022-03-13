@@ -144,7 +144,7 @@ Sprite.onDragStart = (position, sprite) => {
         sprite.setAnchorAt(position);
         action = { action: 'Draw' };
         drewFromDeck = true;
-        console.log(`action is now draw`);
+        //console.log(`action is now draw`);
     } else {
         action = { action: 'Deselect' };
 
@@ -215,7 +215,7 @@ Sprite.onDragMove = async (position, sprite) => {
     ) {
         if (exceededDragThreshold) {
             if (await Lib.isDone(promise)) {
-                console.log(`previous action is done`);
+                //console.log(`previous action is done`);
                 promise = (async () => {
                     try {
                         // the action might have changed after await
@@ -225,9 +225,9 @@ Sprite.onDragMove = async (position, sprite) => {
                                 action.cardId
                             );
                         } else if (action.action === 'Draw') {
-                            console.log(`drawing...`);
+                            //console.log(`drawing...`);
                             await Client.drawFromDeck();
-                            console.log(`drew`);
+                            //console.log(`drew`);
                         } else {
                             const _: never = action;
                         }
@@ -244,7 +244,7 @@ Sprite.onDragMove = async (position, sprite) => {
                         selectedCardIds.clear();
                         selectedCardIds.add(cardId);
                         action = { action: 'Reorder', cardId };
-                        console.log(`set action to reorder`);
+                        //console.log(`set action to reorder`);
                         await drag();
                     } catch (e) {
                         console.error(e);

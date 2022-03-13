@@ -314,7 +314,7 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
                 Sprite.widths[rightIndex] -= height;
             }
 
-            console.log(`gameState.playerStates.length = ${gameState.playerStates.length}`);
+            //console.log(`gameState.playerStates.length = ${gameState.playerStates.length}`);
             for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
                 const playerIndex = (leftIndex + i + 1) % gameState.playerStates.length;
                 const playerContainer = Sprite.containers[playerIndex];
@@ -385,6 +385,8 @@ export default class Sprite {
     public static playerBackSprites: Sprite[][] = [];
     // each element corresponds to a face card by index
     public static playerFaceSprites: Sprite[][] = [];
+
+    public static hoveredSprite: Sprite | undefined;
 
     public static cardForCardId = new Map<number, Lib.Card>();
     public static spriteForCardId = new Map<number, Sprite>();
@@ -543,6 +545,7 @@ export default class Sprite {
 
     public destroy(): void {
         this._sprite.destroy();
+        sprites.delete(this);
     }
 
     public get selected(): boolean {
@@ -566,8 +569,13 @@ export default class Sprite {
     }
 
     public updateSize(): void {
-        this._sprite.width = Sprite.width;
-        this._sprite.height = Sprite.height;
+        if (this === Sprite.hoveredSprite) {
+            this._sprite.width = 2 * Sprite.width;
+            this._sprite.height = 2 * Sprite.height;
+        } else {
+            this._sprite.width = Sprite.width;
+            this._sprite.height = Sprite.height;
+        }
     }
 
     public target: V.IVector2;
@@ -606,10 +614,30 @@ export default class Sprite {
             }
         };
 
+        const onPointerOver = (event: PIXI.InteractionEvent) => {
+            if (Sprite.hoveredSprite) {
+                Sprite.hoveredSprite.destroy();
+                Sprite.hoveredSprite = undefined;
+            }
+
+            Sprite.hoveredSprite = new Sprite(Sprite.deckContainer, this.texture);
+            Sprite.hoveredSprite._sprite.width *= 2;
+            Sprite.hoveredSprite._sprite.height *= 2;
+        };
+
+        const onPointerOut = (event: PIXI.InteractionEvent) => {
+            if (Sprite.hoveredSprite) {
+                Sprite.hoveredSprite.destroy();
+                Sprite.hoveredSprite = undefined;
+            }
+        };
+
         this._sprite.on('pointerdown', onPointerDown);
         this._sprite.on('pointermove', onPointerMove);
         this._sprite.on('pointerup', onPointerUp);
         this._sprite.on('pointerupoutside', onPointerUp);
+        this._sprite.on('pointerover', onPointerOver);
+        this._sprite.on('pointerout', onPointerOut);
 
         parent.addChild(this._sprite);
     }

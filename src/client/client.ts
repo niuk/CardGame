@@ -67,7 +67,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
                       { newGameState: Lib.GameState | null, methodResult: Lib.MethodResult | null } = JSON.parse(e.data);
         
                 if (newGameState) {
-                    console.log('newGameState', newGameState);
+                    //console.log('newGameState', newGameState);
 
                     gameState = newGameState;
                     cardsById = new Map<number, Lib.Card>(gameState.cardsById);
