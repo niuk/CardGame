@@ -74,13 +74,13 @@ app.get('/', async (_, response) => {
 });
 
 app.post('/clientLogs', async (request, response) => {
-    const f = await fs.open(`./${
+    const f = await fs.open(path.join('logs', `${
         new Date().toLocaleString()
             .replace(/ /g, '')
             .replace(/\//g, '-')
             .replace(/:/g, '-')
             .replace(/,/g, '_')
-        }.log`,
+        }.log`),
         'w'
     );
 
