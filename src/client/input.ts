@@ -1,6 +1,3 @@
-import SortedSet from 'collections/sorted-set';
-import * as PIXI from 'pixi.js';
-
 import * as Lib from '../lib';
 import * as Client from './client';
 import * as V from './vector';
@@ -102,7 +99,7 @@ export function linkWithCards(gameState: Lib.GameState): void {
     }
 }
 
-const goldenRatio = (1 + Math.sqrt(5)) / 2;
+export const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
 //const doubleClickThreshold = 500; // milliseconds
 

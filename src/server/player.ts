@@ -128,8 +128,14 @@ export default class Player implements Lib.PlayerState {
             }
         }
 
-        this.game.players[this.game.players.length] = this;
-        console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
+        if (this.game.players.length < 6) {
+            console.log('joining at new slot...');
+            this.game.players[this.game.players.length] = this;
+            console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
+            return;
+        }
+
+        throw new Error(`can't join this game`);
     }
 
     private async monitor() {

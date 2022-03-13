@@ -9,6 +9,60 @@ import * as Lib from '../lib.js';
 import Game from './game.js';
 import Player from './player.js';
 
+async function foreachSavedGame(cb: (path: string) => Promise<void>): Promise<void> {
+    const gamesDir = await fs.opendir(Game.SAVEDIR);
+    try {
+        while (true) {
+            const gameFile = await gamesDir.read();
+            if (gameFile === null) {
+                break;
+            }
+
+            if (gameFile.isFile()) {
+                await cb(path.join(Game.SAVEDIR, gameFile.name));
+            }
+        }
+    } finally {
+        await gamesDir.close();
+    }
+}
+
+let pruned = false;
+
+(async () => {
+    const MS_PER_HOUR = 60 * 60 * 1000;
+    
+    while (true) {
+        // every hour, prune saved games that are older than a day
+        await foreachSavedGame(async path => {
+            if (new Date().getTime() - (await fs.lstat(path)).mtimeMs > 24 * MS_PER_HOUR) {
+                console.log(`deleting game: ${path}`);
+                fs.rm(path);
+            } else {
+                console.log(`game is too recent: ${path}`);
+            }
+        });
+
+        pruned = true;
+
+        await Lib.delay(1 * MS_PER_HOUR);
+    }
+})();
+
+// wait so that we don't restore stale games
+// since each game almost immediately persists itself,
+// doing so would bump their modification timestamps
+while (!pruned) {
+    await Lib.delay(1000);
+}
+
+// now we can restore saved games
+await foreachSavedGame(async path => {
+    const gameFileContent = (await fs.readFile(path)).toString();
+    console.log(`restoring game: ${gameFileContent}`);
+    new Game(JSON.parse(gameFileContent));
+});
+
 const app = express();
 
 app.use(express.static('www'));
@@ -53,74 +107,36 @@ app.post('/clientLogs', async (request, response) => {
     }
 });
 
-(async () => {
-    const httpsServer = https.createServer({
-        key: await fs.readFile('../key.pem'),
-        cert: await fs.readFile('../cert.pem'),
-    }, app);
+// start receiving connections
+const httpsServer = https.createServer({
+    key: await fs.readFile('../key.pem'),
+    cert: await fs.readFile('../cert.pem'),
+}, app);
 
-    const webSocketServer = new WebSocket.Server({ server: httpsServer });
+const webSocketServer = new WebSocket.Server({ server: httpsServer });
 
-    webSocketServer.on('connection', (ws, request) => {
-        try {
-            console.log(`new websocket connection; url = ${request.url}`);
-            if (request.url !== undefined && request.url !== '//') {
-                const match = /\/(\d+)\/(.*)/.exec(request.url);
-                if (match !== null && match[1] !== undefined && match[2] !== undefined) {
-                    new Player(match[2], ws, match[1]);
-                } else {
-                    throw Error(`bad request: ${request.url}`);
-                }
-            } else {
-                new Player('', ws);
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    });
-
-    webSocketServer.on('close', (ws: WebSocket.Server) => {
-        console.log(`closed websocket connection`);
-    });
-
-    // restore saved games
-    await foreachSavedGame(async path => {
-        const gameFileContent = (await fs.readFile(path)).toString();
-        console.log(`restoring game: ${gameFileContent}`);
-        new Game(JSON.parse(gameFileContent));
-    });
-
-    const port = 443;
-    console.log(`listening on port ${port}...`);
-    httpsServer.listen(port);
-
-    while (true) {
-        // every hour, prune saved games that are older than a day
-        await foreachSavedGame(async path => {
-            if (new Date().getTime() - (await fs.lstat(path)).atimeMs > 24 * 60 * 60 * 1000) {
-                console.log(`deleting game: ${path}`);
-                fs.rm(path);
-            }
-        });
-
-        await Lib.delay(60 * 60 * 1000);
-    }
-})();
-
-async function foreachSavedGame(cb: (path: string) => Promise<void>): Promise<void> {
-    const gamesDir = await fs.opendir(Game.SAVEDIR);
+webSocketServer.on('connection', (ws, request) => {
     try {
-        while (true) {
-            const gameFile = await gamesDir.read();
-            if (gameFile === null) {
-                break;
+        console.log(`new websocket connection; url = ${request.url}`);
+        if (request.url !== undefined && request.url !== '//') {
+            const match = /\/(\d+)\/(.*)/.exec(request.url);
+            if (match !== null && match[1] !== undefined && match[2] !== undefined) {
+                new Player(match[2], ws, match[1]);
+            } else {
+                throw Error(`bad request: ${request.url}`);
             }
-
-            if (gameFile.isFile()) {
-                await cb(path.join(Game.SAVEDIR, gameFile.name));
-            }
+        } else {
+            new Player('', ws);
         }
-    } finally {
-        await gamesDir.close();
+    } catch (e) {
+        console.error(e);
     }
-}
+});
+
+webSocketServer.on('close', (ws: WebSocket.Server) => {
+    console.log(`closed websocket connection`);
+});
+
+const port = 443;
+console.log(`listening on port ${port}...`);
+httpsServer.listen(port);

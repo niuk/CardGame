@@ -86,21 +86,16 @@ export default class Game {
 
     private async persist(): Promise<void> {
         let savedState: string | undefined;
-        let previousState: string | undefined;
         while (true) {
             await Lib.delay(1000);
 
             const state = JSON.stringify(this.getStateForPlayerAt(-1));
 
-            if (previousState !== state) {
-                previousState = state;
-            } else {
-                if (savedState !== state) {
-                    savedState = state;
+            if (savedState !== state) {
+                savedState = state;
 
-                    console.log(`persisting game: ${state}`);
-                    await fs.writeFile(path.join(Game.SAVEDIR, `${this.gameId}`), state);
-                }
+                console.log(`persisting game: ${state}`);
+                await fs.writeFile(path.join(Game.SAVEDIR, `${this.gameId}`), state);
             }
         }
     }

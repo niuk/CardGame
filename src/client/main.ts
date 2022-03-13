@@ -3,6 +3,7 @@ import * as PIXI from 'pixi.js';
 import * as Lib from '../lib';
 import * as Client from './client';
 import * as Input from './input';
+import { goldenRatio } from './input';
 import Sprite from './sprite';
 
 // because we can't get the callback from the label, we need to record it in a dictionary
@@ -183,13 +184,13 @@ function renderDeck(deltaTime: number) {
         ) {
             deckSprite.target = Input.mouseMovePosition;
         } else if (performance.now() - deckDealTime < i * deckDealDuration / Sprite.deckSprites.length) {
-            // card not yet dealt; keep top left
+            // card not yet dealt; keep top left, outside of viewport
             deckSprite.position = { x: -Sprite.width, y: -Sprite.height };
             deckSprite.target = { x: -Sprite.width, y: -Sprite.height };
         } else {
             deckSprite.resetAnchor();
             deckSprite.target = {
-                x: Sprite.app.view.width / 2 - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
+                x: Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
                 y: Sprite.app.view.height / 2 - Sprite.height / 2
             };
         }
@@ -201,7 +202,7 @@ function renderDeck(deltaTime: number) {
     const gameState = Client.gameState;
     if (gameState) {
         let i = 上下(deckLabels, Sprite.deckContainer, 0,
-            Sprite.app.view.width / 2 - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 0.75 * Sprite.pixelsPerCM,
+            Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 0.75 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             '洗牌',
             '大字',
@@ -210,7 +211,7 @@ function renderDeck(deltaTime: number) {
         );
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width / 2 - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 1.5 * Sprite.pixelsPerCM,
+            Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 1.5 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             gameState.dispensing ? '停牌' : '发牌',
             '大字',
@@ -219,7 +220,7 @@ function renderDeck(deltaTime: number) {
         );
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width / 2 - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 2.25 * Sprite.pixelsPerCM,
+            Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 2.25 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             '回牌',
             '大字',
@@ -228,14 +229,14 @@ function renderDeck(deltaTime: number) {
         );
     
         i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,
+            Sprite.app.view.width * (1 - 1 / goldenRatio) + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             `︵${数(Sprite.deckSprites.length)}︶`,
             '小字',
             13);
 
         i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
+            Sprite.app.view.width * (1 - 1 / goldenRatio) + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 - Sprite.height / 2,
             '+',
             '小字',
@@ -243,7 +244,7 @@ function renderDeck(deltaTime: number) {
             () => Client.addDeck());
             
         i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width / 2 + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
+            Sprite.app.view.width * (1 - 1 / goldenRatio) + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
             Sprite.app.view.height / 2 + Sprite.height / 2 - 0.5 * Sprite.pixelsPerCM,
             '_',
             '小字',
@@ -257,7 +258,6 @@ function renderDeck(deltaTime: number) {
     }
 }
 
-const goldenRatio = (1 + Math.sqrt(5)) / 2;
 const playerLines: (PIXI.Graphics | undefined)[][] = [];
 const playerLabels: (PIXI.BitmapText | undefined)[][] = [];
 const playerKickers: ((() => void) | undefined)[] = [];
