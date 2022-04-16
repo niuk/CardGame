@@ -139,7 +139,6 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
 
     Sprite.dragThreshold = 0.5 * Sprite.pixelsPerCM;
     Sprite.pixelsPerPercent = Math.sqrt(Sprite.app.view.width * Sprite.app.view.height) / 100;
-    Sprite.fixedGap = 0.15 * Sprite.pixelsPerCM;
     Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
     Sprite.gap = 0.8 * Sprite.pixelsPerPercent;
     Sprite.width = 5 * Sprite.pixelsPerPercent;
@@ -367,7 +366,6 @@ export default class Sprite {
     public static pixelsPerCM = 0;
     public static pixelsPerPercent = 0;
     public static dragThreshold = 0;
-    public static fixedGap = 0;
     public static deckGap = 0;
     public static gap = 0;
     public static width = 0;

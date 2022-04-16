@@ -30,7 +30,7 @@ export default class Player implements Lib.PlayerState {
     groupCount = 0;
     notes = '';
 
-    constructor(name: string, ws?: WebSocket, gameId?: string, ) {
+    constructor(name: string, ws?: WebSocket, gameId?: string) {
         this.name = name;
         this.ws = ws;
         this.heartbeat = Date.now();
@@ -151,6 +151,8 @@ export default class Player implements Lib.PlayerState {
     private async invoke(method: Lib.Method) {
         if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
+
+            console.log(`player name set to "${method.playerName}"`);
         } else if (method.methodName === 'NewGame') {
             this.game = new Game();
             this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);

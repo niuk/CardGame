@@ -100,6 +100,7 @@ export function linkWithCards(gameState: Lib.GameState): void {
 }
 
 export const goldenRatio = (1 + Math.sqrt(5)) / 2;
+export const deckRatio = 1 - 2 / (1 + Math.sqrt(5));
 
 //const doubleClickThreshold = 500; // milliseconds
 
@@ -498,22 +499,14 @@ async function drag(): Promise<void> {
         V.sub(rightMovingSprite.getTopLeftInWorld(), container.transform.worldTransform.apply(rightMovingSprite.position))
     );
 
-    let deckMin: V.IVector2;
-    let deckMax: V.IVector2;
-    if (Sprite.deckSprites.length > 0) {
-        const top = Sprite.deckSprites[Sprite.deckSprites.length - 1];
-        if (!top) throw new Error();
-        deckMin = top.getTopLeftInWorld();
-        
-        const bottom = Sprite.deckSprites[0];
-        if (!bottom) throw new Error();
-        deckMax = V.add(bottom.getTopLeftInWorld(), cardSize);
-    } else {
-        const center = { x: Sprite.app.view.width / 2, y: Sprite.app.view.height / 2 };
-        const halfCardSize = V.scale(0.5, cardSize);
-        deckMin = V.sub(center, halfCardSize);
-        deckMax = V.add(center, halfCardSize);
-    }
+    const deckMin = {
+        x: deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2,
+        y: Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+    };
+    const deckMax = {
+        x: deckRatio * Sprite.app.view.width + (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2,
+        y: Sprite.app.view.height / 2 - Sprite.gap,
+    };
 
     if (intersectBox(dragMin, dragMax, deckMin, deckMax)) {
         if ('cardId' in action) {

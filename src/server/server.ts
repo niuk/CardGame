@@ -121,7 +121,7 @@ webSocketServer.on('connection', (ws, request) => {
         if (request.url !== undefined && request.url !== '//') {
             const match = /\/(\d+)\/(.*)/.exec(request.url);
             if (match !== null && match[1] !== undefined && match[2] !== undefined) {
-                new Player(match[2], ws, match[1]);
+                new Player(decodeURI(match[2]), ws, match[1]);
             } else {
                 throw Error(`bad request: ${request.url}`);
             }

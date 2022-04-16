@@ -3,7 +3,7 @@ import * as PIXI from 'pixi.js';
 import * as Lib from '../lib';
 import * as Client from './client';
 import * as Input from './input';
-import { goldenRatio } from './input';
+import { goldenRatio, deckRatio } from './input';
 import Sprite from './sprite';
 
 // because we can't get the callback from the label, we need to record it in a dictionary
@@ -170,7 +170,7 @@ window.onresize = async () => {
 function renderHovered(deltaTime: number) {
     if (Sprite.hoveredSprite) {
         const position = {
-            x: Sprite.app.view.width / goldenRatio - 2 * Sprite.width / 2,
+            x: Sprite.app.view.width * (1 - deckRatio) - 2 * Sprite.width / 2,
             y: Sprite.app.view.height / 2 - 2 * Sprite.height / 2
         };
 
@@ -180,6 +180,7 @@ function renderHovered(deltaTime: number) {
     }
 }
 
+const deckLines: (PIXI.Graphics | undefined)[] = [];
 const deckLabels: (PIXI.BitmapText | undefined)[] = [];
 
 const deckDealDuration = 1000;
@@ -205,7 +206,7 @@ function renderDeck(deltaTime: number) {
             deckSprite.resetAnchor();
             deckSprite.target = {
                 x: Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
-                y: Sprite.app.view.height / 2 - Sprite.height / 2
+                y: Sprite.app.view.height / 2 - Sprite.height - Sprite.gap
             };
         }
 
@@ -214,61 +215,97 @@ function renderDeck(deltaTime: number) {
     }
 
     const gameState = Client.gameState;
-    if (gameState) {
-        let i = 上下(deckLabels, Sprite.deckContainer, 0,
-            Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 0.75 * Sprite.pixelsPerCM,
-            Sprite.app.view.height / 2 - Sprite.height / 2,
-            '洗牌',
-            '大字',
-            26,
-            () => Client.shuffleDeck()
-        );
+    const cardsById = Client.cardsById;
+    if (!gameState || !cardsById) return;
 
-        i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 1.5 * Sprite.pixelsPerCM,
-            Sprite.app.view.height / 2 - Sprite.height / 2,
-            gameState.dispensing ? '停牌' : '发牌',
-            '大字',
-            26,
-            () => Client.dispense()
-        );
+    addDeckLines();
+    addDeckLabels(gameState, cardsById);
+}
 
-        i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - Sprite.deckSprites.length / 2 * Sprite.deckGap - 2.25 * Sprite.pixelsPerCM,
-            Sprite.app.view.height / 2 - Sprite.height / 2,
-            '回牌',
-            '大字',
-            26,
-            () => Client.reset()
-        );
-    
-        i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width * (1 - 1 / goldenRatio) + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap,
-            Sprite.app.view.height / 2 - Sprite.height / 2,
-            `︵${数(Sprite.deckSprites.length)}︶`,
-            '小字',
-            13);
+function addDeckLines() {
+    // to hold the deck
+    let i = addLine(deckLines, Sprite.deckContainer, 0,
+        deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap);
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width + (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        deckRatio * Sprite.app.view.width + (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap);
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        deckRatio * Sprite.app.view.width + (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.height - Sprite.gap);
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap,
+        deckRatio * Sprite.app.view.width + (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap);
 
-        i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width * (1 - 1 / goldenRatio) + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
-            Sprite.app.view.height / 2 - Sprite.height / 2,
-            '+',
-            '小字',
-            13,
-            () => Client.addDeck());
-            
-        i = 上下(deckLabels, Sprite.deckContainer, i,
-            Sprite.app.view.width * (1 - 1 / goldenRatio) + Sprite.width / 2 + (1 + Sprite.deckSprites.length / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
-            Sprite.app.view.height / 2 + Sprite.height / 2 - 0.5 * Sprite.pixelsPerCM,
-            '_',
-            '小字',
-            13,
-            () => Client.removeDeck());
+    // to hold scores
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap);
+    i = addLine(deckLines, Sprite.deckContainer, i,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
+}
 
-        for (; i < deckLabels.length; ++i) {
-            deckLabels[i]?.destroy();
-            deckLabels[i] = undefined;
-        }
+function addDeckLabels(gameState: Lib.GameState, cardsById: Map<number, Lib.Card>) {
+    let i = 上下(deckLabels, Sprite.deckContainer, 0,
+        deckRatio * Sprite.app.view.width - Sprite.width / 2 - Sprite.spriteForCardId.size / 2 * Sprite.deckGap - 0.75 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        '洗牌',
+        '大字',
+        26,
+        () => Client.shuffleDeck()
+    );
+
+    i = 上下(deckLabels, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width - Sprite.width / 2 - Sprite.spriteForCardId.size / 2 * Sprite.deckGap - 1.5 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        gameState.dispensing ? '停牌' : '发牌',
+        '大字',
+        26,
+        () => Client.dispense()
+    );
+
+    i = 上下(deckLabels, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width - Sprite.width / 2 - Sprite.spriteForCardId.size / 2 * Sprite.deckGap - 2.25 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        '回牌',
+        '大字',
+        26,
+        () => Client.reset()
+    );
+
+    i = 上下(deckLabels, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width + Sprite.width / 2 + (1 + Sprite.spriteForCardId.size / 2) * Sprite.deckGap,
+        Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        `︵${数(Sprite.deckSprites.length)}︶`,
+        '小字',
+        13);
+
+    i = 上下(deckLabels, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width + Sprite.width / 2 + (1 + Sprite.spriteForCardId.size / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
+        '+',
+        '小字',
+        13,
+        () => Client.addDeck());
+        
+    i = 上下(deckLabels, Sprite.deckContainer, i,
+        deckRatio * Sprite.app.view.width + Sprite.width / 2 + (1 + Sprite.spriteForCardId.size / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 - Sprite.gap - 0.5 * Sprite.pixelsPerCM,
+        '–',
+        '小字',
+        13,
+        () => Client.removeDeck());
+
+    for (; i < deckLabels.length; ++i) {
+        deckLabels[i]?.destroy();
+        deckLabels[i] = undefined;
     }
 }
 
@@ -390,7 +427,7 @@ function renderPlayers(deltaTime: number) {
             playerLines[playerIndex] = lines;
         }
 
-        addAllLines(lines, 0, container, reverse, width);
+        addPlayerLines(lines, 0, container, reverse, width);
 
         let labels = playerLabels[playerIndex];
         if (!labels) {
@@ -398,7 +435,7 @@ function renderPlayers(deltaTime: number) {
             playerLabels[playerIndex] = labels;
         }
 
-        addAllLabels(
+        addPlayerLabels(
             labels,
             container,
             reverse,
@@ -419,8 +456,8 @@ function addLine(
     lines: (PIXI.Graphics | undefined)[],
     container: PIXI.Container,
     i: number,
-    moveX: number, moveY: number,
-    lineX: number, lineY: number
+    fromX: number, fromY: number,
+    toX: number, toY: number
 ): number {
     let line = lines[i];
     if (!line) {
@@ -430,14 +467,14 @@ function addLine(
 
     line.clear();
     line.lineStyle(0.05 * Sprite.pixelsPerCM, 0xFFD700, 0x01);
-    line.moveTo(moveX, moveY);
-    line.lineTo(lineX, lineY);
+    line.moveTo(fromX, fromY);
+    line.lineTo(toX, toY);
     line.zIndex = 0;
 
     return i + 1;
 }
 
-function addAllLines(
+function addPlayerLines(
     lines: (PIXI.Graphics | undefined)[],
     i: number,
     container: PIXI.Container,
@@ -597,7 +634,7 @@ function 数(n: number): string {
     }
 }
 
-function addAllLabels(
+function addPlayerLabels(
     labels: (PIXI.BitmapText | undefined)[],
     container: PIXI.Container,
     reverse: boolean,
