@@ -120,6 +120,7 @@ window.onload = async () => {
     Sprite.onTick = (deltaTime: number) => {
         renderHovered(deltaTime);
         renderDeck(deltaTime);
+        renderScore(deltaTime);
         renderPlayers(deltaTime);
     };
 
@@ -205,7 +206,7 @@ function renderDeck(deltaTime: number) {
         } else {
             deckSprite.resetAnchor();
             deckSprite.target = {
-                x: Sprite.app.view.width * (1 - 1 / goldenRatio) - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
+                x: Sprite.app.view.width * deckRatio - Sprite.width / 2 - (i - Sprite.deckSprites.length / 2) * Sprite.deckGap,
                 y: Sprite.app.view.height / 2 - Sprite.height - Sprite.gap
             };
         }
@@ -214,16 +215,14 @@ function renderDeck(deltaTime: number) {
         deckSprite.animate(deltaTime);
     }
 
-    const gameState = Client.gameState;
-    const cardsById = Client.cardsById;
-    if (!gameState || !cardsById) return;
-
     addDeckLines();
-    addDeckLabels(gameState, cardsById);
+    addDeckLabels();
 }
 
 function addDeckLines() {
-    // to hold the deck
+    const gameState = Client.gameState;
+    if (!gameState) return;
+
     let i = addLine(deckLines, Sprite.deckContainer, 0,
         deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
         deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap);
@@ -236,23 +235,12 @@ function addDeckLines() {
     i = addLine(deckLines, Sprite.deckContainer, i,
         deckRatio * Sprite.app.view.width - (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap,
         deckRatio * Sprite.app.view.width + (Sprite.width + Sprite.spriteForCardId.size * Sprite.deckGap) / 2, Sprite.app.view.height / 2 - Sprite.gap);
-
-    // to hold scores
-    i = addLine(deckLines, Sprite.deckContainer, i,
-        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
-        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
-    i = addLine(deckLines, Sprite.deckContainer, i,
-        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
-        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
-    i = addLine(deckLines, Sprite.deckContainer, i,
-        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
-        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height);
-    i = addLine(deckLines, Sprite.deckContainer, i,
-        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap,
-        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
 }
 
-function addDeckLabels(gameState: Lib.GameState, cardsById: Map<number, Lib.Card>) {
+function addDeckLabels() {
+    const gameState = Client.gameState;
+    if (!gameState) return;
+
     let i = 上下(deckLabels, Sprite.deckContainer, 0,
         deckRatio * Sprite.app.view.width - Sprite.width / 2 - Sprite.spriteForCardId.size / 2 * Sprite.deckGap - 0.75 * Sprite.pixelsPerCM,
         Sprite.app.view.height / 2 - Sprite.height - Sprite.gap,
@@ -306,6 +294,67 @@ function addDeckLabels(gameState: Lib.GameState, cardsById: Map<number, Lib.Card
     for (; i < deckLabels.length; ++i) {
         deckLabels[i]?.destroy();
         deckLabels[i] = undefined;
+    }
+}
+
+function renderScore(deltaTime: number) {
+    const gameState = Client.gameState;
+    if (!gameState) return;
+
+    for (let i = 0; i < Sprite.scoreSprites.length; ++i) {
+        const scoreSprite = Sprite.scoreSprites[i];
+        if (!scoreSprite) throw new Error();
+
+        if (Input.action.action === 'TakeFromScore' &&
+            Input.action.cardId === gameState.scoreCardIds[i]
+        ) {
+            scoreSprite.target = Input.mouseMovePosition;
+        } else {
+            scoreSprite.resetAnchor();
+            scoreSprite.target = {
+                x: Sprite.app.view.width / 2 - Sprite.width - i * Sprite.gap,
+                y: Sprite.app.view.height / 2 + Sprite.gap,
+            };
+        }
+
+        scoreSprite.zIndex = i;
+        scoreSprite.animate(deltaTime);
+    }
+
+    addScoreLines();
+    addScoreLabels();
+}
+
+const scoreLines: (PIXI.Graphics | undefined)[] = [];
+const scoreLabels: (PIXI.BitmapText | undefined)[] = [];
+
+function addScoreLines() {
+    let i = addLine(scoreLines, Sprite.deckContainer, 0,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
+    i = addLine(scoreLines, Sprite.deckContainer, i,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
+    i = addLine(scoreLines, Sprite.deckContainer, i,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height);
+    i = addLine(scoreLines, Sprite.deckContainer, i,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
+}
+
+function addScoreLabels() {
+    const gameState = Client.gameState;
+    if (!gameState) return;
+
+    let i = 上下(scoreLabels, Sprite.deckContainer, 0,
+        Sprite.app.view.width / 2 - getOffset(Sprite.scoreSprites.length) - 0.548 * Sprite.pixelsPerCM,
+        Sprite.app.view.height / 2 + Sprite.gap,
+        `︵${数(getScore(gameState.scoreCardIds))}︶`, '小字', 13);
+        
+    for (; i < scoreLabels.length; ++i) {
+        scoreLabels[i]?.destroy();
+        scoreLabels[i] = undefined;
     }
 }
 
@@ -649,15 +698,7 @@ function addPlayerLabels(
     totalCount: number,
     playerIsMe: boolean
 ) {
-    const score = playerState.handCardIds.slice(0, shareCount).map(cardId => {
-        const card = cardsById.get(cardId);
-        if (card) {
-            const [suit, rank] = card;
-            return Math.min(10, rank);
-        }
-
-        return 0;
-    }).reduce((a, b) => a + b, 0);
+    const score = getScore(playerState.handCardIds.slice(0, shareCount));
     
     let i = 0;
     const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
@@ -712,8 +753,6 @@ function addPlayerLabels(
             26
         );
     }
-
-    const getOffset = (x: number) => x > 0 ? (x - 1) * Sprite.gap + Sprite.width : 0;
 
     const outerY = reverse ? Sprite.height : 0;
     const shareX = reverse ?
@@ -789,4 +828,23 @@ function addPlayerLabels(
 function removeAllLabels(labels: (PIXI.BitmapText | undefined)[]) {
     labels.map(label => label?.destroy());
     labels.fill(undefined);
+}
+
+function getOffset(x: number): number {
+    return x > 0 ? (x - 1) * Sprite.gap + Sprite.width : 0;
+}
+
+function getScore(cardIds: number[]): number {
+    const cardsById = Client.cardsById;
+    if (!cardsById) throw new Error();
+
+    return cardIds.map(cardId => {
+        const card = cardsById.get(cardId);
+        if (card) {
+            const [suit, rank] = card;
+            return Math.min(10, rank);
+        }
+
+        return 0;
+    }).reduce((a, b) => a + b, 0);
 }

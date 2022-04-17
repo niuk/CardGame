@@ -250,6 +250,9 @@ export default class Player implements Lib.PlayerState {
                     player.disown(cardIds);
                     this.game.deck.push(...cardIds);
                 }
+
+                const cardIds = this.game.score.splice(0, this.game.score.length);
+                this.game.deck.push(...cardIds);
             } else if (method.methodName === 'Kick') {
                 const player = this.game.players[method.playerIndex];
                 if (!player) return;

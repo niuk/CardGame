@@ -436,12 +436,13 @@ export default class Sprite {
         await this.load(gameState);
 
         this.deckSprites = [];
+        this.scoreSprites = [];
         this.playerBackSprites = [];
         this.playerFaceSprites = [];
     
         for (const cardId of gameState.deckCardIds) {
-            let sprite = Sprite.spriteForCardId.get(cardId);
             const deckTexture = Sprite.getTexture('Back0');
+            let sprite = Sprite.spriteForCardId.get(cardId);
             if (sprite) {
                 sprite.transfer(Sprite.deckContainer, deckTexture);
             } else {
@@ -451,6 +452,21 @@ export default class Sprite {
             }
     
             this.deckSprites.push(sprite);
+        }
+
+        for (const cardId of gameState.scoreCardIds) {
+            const card = cardsById.get(cardId);
+            const faceTexture = Sprite.getTexture(JSON.stringify(card));
+            let sprite = Sprite.spriteForCardId.get(cardId);
+            if (sprite) {
+                sprite.transfer(Sprite.deckContainer, faceTexture);
+            } else {
+                sprite = new Sprite(Sprite.deckContainer, faceTexture);
+                console.log(`new face sprite for card ${cardId}`);
+                Sprite.spriteForCardId.set(cardId, sprite);
+            }
+
+            this.scoreSprites.push(sprite);
         }
     
         for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {

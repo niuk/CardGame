@@ -83,7 +83,12 @@ export type Action =
     TakeFromScore;
 
 export let action: Action = { action: 'None' };
+
+// so that a card drawn from the deck goes into 持牌
 let drewFromDeck = false;
+
+// so that a card taken from the score doesn't immediately go back
+let tookFromScore = false;
 
 // indices of cards for drag & drop
 export const selectedCardIds = new Set<number>();
@@ -164,10 +169,12 @@ Sprite.onDragStart = (position, sprite) => {
             const cardId = gameState.scoreCardIds[cardIndex];
             if (cardId === undefined) throw new Error();
 
+            sprite.setAnchorAt(position);
             action = {
                 action: 'TakeFromScore',
                 cardId
             };
+            tookFromScore = true;
         } else {
             action = { action: 'Deselect' };
     
@@ -422,6 +429,16 @@ Sprite.onDragEnd = async (position, sprite) => {
                     promise = Client.returnToDeck();
                 }
             }
+        } else if (action.action === 'AddToScore') {
+            if (tookFromScore) {
+                previousClickIndex = playerState.handCardIds.indexOf(action.cardId);
+            } else {
+                previousClickIndex = -1;
+                if (!endedOnBackground) {
+                    await promise;
+                    promise = Client.addToScore();
+                }
+            }
         } else if (action.action === 'ControlShiftClick') {
             if (previousClickIndex === -1) {
                 previousClickIndex = playerState.handCardIds.indexOf(action.cardId);
@@ -462,18 +479,13 @@ Sprite.onDragEnd = async (position, sprite) => {
 
             selectedCardIds.clear();
             selectedCardIds.add(action.cardId);
-        } else if (action.action === 'AddToScore') {
-            previousClickIndex = -1;
-            if (!endedOnBackground) {
-                await promise;
-                promise = Client.addToScore();
-            }
         } else {
             const _: never = action;
         }
     } finally {
         action = { action: 'None' };
         drewFromDeck = false;
+        tookFromScore = false;
     }
 }
 
@@ -548,7 +560,7 @@ async function drag(): Promise<void> {
     };
 
     if (intersectBox(dragMin, dragMax, deckMin, deckMax)) {
-        if ('cardId' in action) {
+        if ('cardId' in action && !drewFromDeck) {
             action = {
                 action: 'Return',
                 cardId: action.cardId
@@ -569,7 +581,7 @@ async function drag(): Promise<void> {
     };
 
     if (intersectBox(dragMin, dragMax, scoreMin, scoreMax)) {
-        if ('cardId' in action) {
+        if ('cardId' in action && !drewFromDeck && !tookFromScore) {
             action = {
                 action: 'AddToScore',
                 cardId: action.cardId
