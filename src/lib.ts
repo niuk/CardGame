@@ -67,8 +67,6 @@ export enum Rank {
 
 export type Card = [Suit, Rank];
 
-export type Origin = Deck | Hand;
-
 export interface Deck {
     origin: 'Deck';
     deckIndex: number;
@@ -93,6 +91,7 @@ export interface PlayerState {
 export interface GameState {
     gameId: string;
     deckCardIds: number[];
+    scoreCardIds: number[];
     cardsById: [number, Card][];
     playerIndex: number;
     playerStates: (PlayerState | null)[];
@@ -114,7 +113,9 @@ export type Method =
     Dispense |
     Reset |
     Kick |
-    SetPlayerNotes;
+    SetPlayerNotes |
+    AddToScore |
+    TakeFromScore;
 
 export type MethodName =
     'SetPlayerName' |
@@ -131,7 +132,9 @@ export type MethodName =
     'Dispense' |
     'Reset' |
     'Kick' |
-    'SetPlayerNotes';
+    'SetPlayerNotes' |
+    'AddToScore' |
+    'TakeFromScore';
 
 export interface ServerResponse {
     newGameState?: GameState;
@@ -219,4 +222,14 @@ export interface Kick extends MethodBase {
 export interface SetPlayerNotes extends MethodBase {
     methodName: 'SetPlayerNotes';
     notes: string;
+}
+
+export interface AddToScore extends MethodBase {
+    methodName: 'AddToScore';
+    cardIds: number[];
+}
+
+export interface TakeFromScore extends MethodBase {
+    methodName: 'TakeFromScore';
+    cardId: number;
 }

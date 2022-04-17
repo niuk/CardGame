@@ -239,14 +239,14 @@ function addDeckLines() {
 
     // to hold scores
     i = addLine(deckLines, Sprite.deckContainer, i,
-        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap,
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
         (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
     i = addLine(deckLines, Sprite.deckContainer, i,
-        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
         0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
     i = addLine(deckLines, Sprite.deckContainer, i,
-        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap,
-        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.height + Sprite.gap);
+        (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
+        0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height);
     i = addLine(deckLines, Sprite.deckContainer, i,
         (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap,
         0.5 * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
@@ -386,7 +386,8 @@ function renderPlayers(deltaTime: number) {
                 ) || (
                     Input.action.action === 'Give' ||
                     Input.action.action === 'Return' ||
-                    Input.action.action === 'Reorder'
+                    Input.action.action === 'Reorder' ||
+                    Input.action.action === 'AddToScore'
                 ) && (
                     Input.selectedCardIds.has(cardId)
                 )

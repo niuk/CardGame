@@ -378,6 +378,8 @@ export default class Sprite {
 
     // for animating the deck
     public static deckSprites: Sprite[] = [];
+    // for animating the score
+    public static scoreSprites: Sprite[] = [];
     // associative arrays, one for each player at their player index
     // each element corresponds to a back card by index
     public static playerBackSprites: Sprite[][] = [];

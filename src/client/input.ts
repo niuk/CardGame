@@ -57,6 +57,16 @@ interface Click {
     cardId: number;
 }
 
+interface AddToScore {
+    action: 'AddToScore';
+    cardId: number;
+}
+
+interface TakeFromScore {
+    action: 'TakeFromScore';
+    cardId: number;
+}
+
 export type Action =
     None |
     Deselect |
@@ -68,7 +78,9 @@ export type Action =
     ControlShiftClick |
     ControlClick |
     ShiftClick |
-    Click;
+    Click |
+    AddToScore |
+    TakeFromScore;
 
 export let action: Action = { action: 'None' };
 let drewFromDeck = false;
@@ -147,51 +159,62 @@ Sprite.onDragStart = (position, sprite) => {
         drewFromDeck = true;
         //console.log(`action is now draw`);
     } else {
-        action = { action: 'Deselect' };
+        const cardIndex = Sprite.scoreSprites.indexOf(sprite);
+        if (cardIndex >= 0) {
+            const cardId = gameState.scoreCardIds[cardIndex];
+            if (cardId === undefined) throw new Error();
 
-        for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
-            const playerState = gameState.playerStates[playerIndex];
-            if (!playerState) continue;
-
-            const sprites = Sprite.playerFaceSprites[playerIndex];
-            if (!sprites) continue;
-
-            const cardIndex = sprites.indexOf(sprite);
-            if (cardIndex >= 0) {
-                const cardId = playerState.handCardIds[cardIndex];
-                if (cardId === undefined) throw new Error();
+            action = {
+                action: 'TakeFromScore',
+                cardId
+            };
+        } else {
+            action = { action: 'Deselect' };
     
-                if (playerIndex === gameState.playerIndex) {
-                    // this player's own card
-                    if (selectedCardIds.has(cardId)) {
-                        selectedCardIds.forEach((selectedCardId: number) => {
-                            const selectedSprite = Sprite.spriteForCardId.get(selectedCardId);
-                            if (!selectedSprite) throw new Error();
-                            selectedSprite.setAnchorAt(position);
-                        });
-                    } else {
-                        sprite.setAnchorAt(position);
-                    }
-
-                    action = {
-                        action: holdingControl && holdingShift ? 'ControlShiftClick' :
-                                holdingControl                 ? 'ControlClick' :
-                                                  holdingShift ? 'ShiftClick' :
-                                                                 'Click',
-                        cardId
-                    };
-                } else {
-                    // another player's shared card
-                    const playerState = gameState.playerStates[playerIndex];
-                    if (!playerState) throw new Error();
-
-                    if (cardIndex < playerState.shareCount) {
-                        sprite.setAnchorAt(position);
+            for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
+                const playerState = gameState.playerStates[playerIndex];
+                if (!playerState) continue;
+    
+                const sprites = Sprite.playerFaceSprites[playerIndex];
+                if (!sprites) continue;
+    
+                const cardIndex = sprites.indexOf(sprite);
+                if (cardIndex >= 0) {
+                    const cardId = playerState.handCardIds[cardIndex];
+                    if (cardId === undefined) throw new Error();
+        
+                    if (playerIndex === gameState.playerIndex) {
+                        // this player's own card
+                        if (selectedCardIds.has(cardId)) {
+                            selectedCardIds.forEach((selectedCardId: number) => {
+                                const selectedSprite = Sprite.spriteForCardId.get(selectedCardId);
+                                if (!selectedSprite) throw new Error();
+                                selectedSprite.setAnchorAt(position);
+                            });
+                        } else {
+                            sprite.setAnchorAt(position);
+                        }
+    
                         action = {
-                            action: 'Take',
-                            playerIndex,
+                            action: holdingControl && holdingShift ? 'ControlShiftClick' :
+                                    holdingControl                 ? 'ControlClick' :
+                                                      holdingShift ? 'ShiftClick' :
+                                                                     'Click',
                             cardId
                         };
+                    } else {
+                        // another player's shared card
+                        const playerState = gameState.playerStates[playerIndex];
+                        if (!playerState) throw new Error();
+    
+                        if (cardIndex < playerState.shareCount) {
+                            sprite.setAnchorAt(position);
+                            action = {
+                                action: 'Take',
+                                playerIndex,
+                                cardId
+                            };
+                        }
                     }
                 }
             }
@@ -211,8 +234,9 @@ Sprite.onDragMove = async (position, sprite) => {
     } else if (action.action === 'Deselect') {
         // TODO: box selection?
     } else if (
+        action.action === 'Draw' ||
         action.action === 'Take' ||
-        action.action === 'Draw'
+        action.action === 'TakeFromScore'
     ) {
         if (exceededDragThreshold) {
             if (await Lib.isDone(promise)) {
@@ -229,6 +253,8 @@ Sprite.onDragMove = async (position, sprite) => {
                             //console.log(`drawing...`);
                             await Client.drawFromDeck();
                             //console.log(`drew`);
+                        } else if (action.action === 'TakeFromScore') {
+                            await Client.takeFromScore(action.cardId);
                         } else {
                             const _: never = action;
                         }
@@ -259,7 +285,8 @@ Sprite.onDragMove = async (position, sprite) => {
     } else if (
         action.action === 'Give' ||
         action.action === 'Return' ||
-        action.action === 'Reorder'
+        action.action === 'Reorder' ||
+        action.action === 'AddToScore'
     ) {
         if (await Lib.isDone(promise)) {
             promise = drag();
@@ -331,8 +358,10 @@ Sprite.onDragEnd = async (position, sprite) => {
 
     try {
         let endedOnBackground = true;
+
         for (const deckSprite of Sprite.deckSprites) {
             if (deckSprite === sprite) {
+                console.log(1);
                 endedOnBackground = false;
                 break;
             }
@@ -342,6 +371,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             for (const backSprites of Sprite.playerBackSprites) {
                 for (const backSprite of backSprites) {
                     if (backSprite === sprite) {
+                        console.log(2);
                         endedOnBackground = false;
                         break;
                     }
@@ -353,12 +383,15 @@ Sprite.onDragEnd = async (position, sprite) => {
             for (const faceSprites of Sprite.playerFaceSprites) {
                 for (const faceSprite of faceSprites) {
                     if (faceSprite === sprite) {
+                        console.log(3);
                         endedOnBackground = false;
                         break;
                     }
                 }
             }
         }
+
+        console.log('endedOnBackground', endedOnBackground);
 
         const playerState = gameState.playerStates[gameState.playerIndex];
         if (!playerState) throw new Error();
@@ -367,7 +400,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             // do nothing
         } else if (action.action === 'Deselect') {
             selectedCardIds.clear();
-        } else if (action.action === 'Draw' || action.action === 'Take') {
+        } else if (action.action === 'Draw' || action.action === 'Take' || action.action === 'TakeFromScore') {
             // taking from other players or the deck are placeholder states until mouse movement reaches threshold
         } else if (action.action === 'Reorder') {
             // reordering happens in onDragMove
@@ -429,6 +462,12 @@ Sprite.onDragEnd = async (position, sprite) => {
 
             selectedCardIds.clear();
             selectedCardIds.add(action.cardId);
+        } else if (action.action === 'AddToScore') {
+            previousClickIndex = -1;
+            if (!endedOnBackground) {
+                await promise;
+                promise = Client.addToScore();
+            }
         } else {
             const _: never = action;
         }
@@ -516,6 +555,28 @@ async function drag(): Promise<void> {
             };
         }
 
+        console.log('fdsa');
+        return;
+    }
+
+    const scoreMin = {
+        x: (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width,
+        y: Sprite.app.view.height / 2 + Sprite.gap,
+    };
+    const scoreMax = {
+        x: 0.5 * Sprite.app.view.width,
+        y: Sprite.app.view.height /2 + Sprite.gap + Sprite.height,
+    };
+
+    if (intersectBox(dragMin, dragMax, scoreMin, scoreMax)) {
+        if ('cardId' in action) {
+            action = {
+                action: 'AddToScore',
+                cardId: action.cardId
+            };
+        }
+
+        console.log('asdf');
         return;
     }
 

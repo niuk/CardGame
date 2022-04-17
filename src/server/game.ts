@@ -37,6 +37,7 @@ export default class Game {
     movingCardsById = new Map<number, Lib.Card>();
     nextCardId = 0;
     deck = new Hand<number, Lib.Card>(this.stationaryCardsById, this.movingCardsById);
+    score = new Hand<number, Lib.Card>(this.stationaryCardsById, this.movingCardsById);
 
     get numDecks(): number {
         return (this.stationaryCardsById.size + this.movingCardsById.size) / 54;
@@ -243,6 +244,7 @@ export default class Game {
         return {
             gameId: this.gameId,
             deckCardIds: this.deck.slice(),
+            scoreCardIds: this.score.slice(),
             cardsById: [...this.stationaryCardsById, ...this.movingCardsById],
             playerIndex,
             playerStates,

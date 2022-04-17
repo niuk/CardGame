@@ -250,6 +250,20 @@ export function reorderCards(
     });
 }
 
+export function takeFromScore(cardId: number): Promise<void> {
+    return setup<Lib.TakeFromScore>({
+        methodName: 'TakeFromScore',
+        cardId,
+    });
+}
+
+export function addToScore(): Promise<void> {
+    return setup<Lib.AddToScore>({
+        methodName: 'AddToScore',
+        cardIds: Array.from(Input.selectedCardIds)
+    });
+}
+
 function adjust(rank: number): number {
     if (rank === 1) {
         return 13;
