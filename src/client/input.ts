@@ -567,7 +567,6 @@ async function drag(): Promise<void> {
             };
         }
 
-        console.log('fdsa');
         return;
     }
 
@@ -588,7 +587,6 @@ async function drag(): Promise<void> {
             };
         }
 
-        console.log('asdf');
         return;
     }
 
