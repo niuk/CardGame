@@ -3,7 +3,7 @@ import * as PIXI from 'pixi.js';
 import * as Lib from '../lib';
 import * as Client from './client';
 import * as Input from './input';
-import { goldenRatio, deckRatio } from './input';
+import { handRatio, deckRatio } from './input';
 import Sprite from './sprite';
 
 // because we can't get the callback from the label, we need to record it in a dictionary
@@ -412,7 +412,7 @@ function renderPlayers(deltaTime: number) {
             throw new Error(`width = ${width}, container = ${container}, reverse = ${reverse}, faceSprites = ${faceSprites}, backSprites = ${backSprites}`);
         }
 
-        const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
+        const handX = reverse ? (1 - handRatio) * width : handRatio * width;
 
         for (let cardIndex = 0; cardIndex < playerState.handCardIds.length; ++cardIndex) {
             const cardId = playerState.handCardIds[cardIndex];
@@ -449,15 +449,15 @@ function renderPlayers(deltaTime: number) {
 
                 if (reverse) {
                     if (count < 0) {
-                        sprite.target.x = goldenX - (count + 1) * Sprite.gap;
+                        sprite.target.x = handX - (count + 1) * Sprite.gap;
                     } else {
-                        sprite.target.x = goldenX - count * Sprite.gap - Sprite.width;
+                        sprite.target.x = handX - count * Sprite.gap - Sprite.width;
                     }
                 } else {
                     if (count < 0) {
-                        sprite.target.x = goldenX + (count + 1) * Sprite.gap - Sprite.width;
+                        sprite.target.x = handX + (count + 1) * Sprite.gap - Sprite.width;
                     } else {
-                        sprite.target.x = goldenX + count * Sprite.gap;
+                        sprite.target.x = handX + count * Sprite.gap;
                     }
                 }
     
@@ -490,7 +490,6 @@ function renderPlayers(deltaTime: number) {
             container,
             reverse,
             width,
-            cardsById,
             playerIndex,
             playerState,
             playerState.shareCount,
@@ -531,15 +530,13 @@ function addPlayerLines(
     reverse: boolean,
     width: number
 ) {
-    const goldenX = reverse ?
-        width / goldenRatio :
-        width * (1 - 1 / goldenRatio);
+    const handX = reverse ? (1 - handRatio) * width : handRatio * width;
     i = addLine(lines, container, i, 0, 0, width, 0);
     i = addLine(lines, container, i, 0, 0, 0, 2 * Sprite.height);
     i = addLine(lines, container, i, width, 0, width, 2 * Sprite.height);
     i = addLine(lines, container, i, 0, 2 * Sprite.height, width, 2 * Sprite.height);
     i = addLine(lines, container, i, 0, Sprite.height, width, Sprite.height);
-    i = addLine(lines, container, i, goldenX, 0, goldenX, 2 * Sprite.height);
+    i = addLine(lines, container, i, handX, 0, handX, 2 * Sprite.height);
 }
 
 function removeAllLines(lines: (PIXI.Graphics | undefined)[]) {
@@ -689,7 +686,6 @@ function addPlayerLabels(
     container: PIXI.Container,
     reverse: boolean,
     width: number,
-    cardsById: Map<number, Lib.Card>,
     playerIndex: number,
     playerState: Lib.PlayerState,
     shareCount: number,
@@ -701,11 +697,11 @@ function addPlayerLabels(
     const score = getScore(playerState.handCardIds.slice(0, shareCount));
     
     let i = 0;
-    const goldenX = reverse ? width / goldenRatio : width * (1 - 1 / goldenRatio);
+    const handX = reverse ? (1 - handRatio) * width : handRatio * width;
 
     const name = playerState.name + (playerState.present ? '' : '(撤?)');
     const nameMetrics = PIXI.TextMetrics.measureText(name, textStyle);
-    const nameX = goldenX - nameMetrics.width - Sprite.gap;
+    const nameX = handX - nameMetrics.width - Sprite.gap;
     const nameY = reverse ? 2 * Sprite.height : -nameMetrics.height;
     i = addLabel(labels, container, i,
         nameX,
@@ -741,12 +737,12 @@ function addPlayerLabels(
             })();
         }
 
-        container.toGlobal({ x: goldenX + Sprite.gap, y: nameY }, playerNotesPosition);
+        container.toGlobal({ x: handX + Sprite.gap, y: nameY }, playerNotesPosition);
         playerNotesElement.style.left = `${playerNotesPosition.x}px`;
         playerNotesElement.style.top = `${playerNotesPosition.y}px`;
     } else {
         i = addLabel(labels, container, i,
-            goldenX + Sprite.gap,
+            handX + Sprite.gap,
             nameY,
             playerState.notes,
             '大字',
@@ -756,8 +752,8 @@ function addPlayerLabels(
 
     const outerY = reverse ? Sprite.height : 0;
     const shareX = reverse ?
-        goldenX + getOffset(shareCount) :
-        goldenX - getOffset(shareCount) - 0.548 * Sprite.pixelsPerCM;
+        handX + getOffset(shareCount) :
+        handX - getOffset(shareCount) - 0.548 * Sprite.pixelsPerCM;
     i = 上下(labels, container, i, shareX, outerY, '得分', '中字', 19);
 
     const 得分X = reverse ?
@@ -766,8 +762,8 @@ function addPlayerLabels(
     i = 上下(labels, container, i, 得分X, outerY, `︵${数(score)}︶`, '小字', 13);
 
     const 出牌X = reverse ?
-        goldenX - getOffset(revealCount - shareCount) - 0.548 * Sprite.pixelsPerCM :
-        goldenX + getOffset(revealCount - shareCount);
+        handX - getOffset(revealCount - shareCount) - 0.548 * Sprite.pixelsPerCM :
+        handX + getOffset(revealCount - shareCount);
     i = 上下(labels, container, i, 出牌X, outerY, '出牌', '中字', 19);
 
     const 出牌CountX = reverse ?
@@ -777,8 +773,8 @@ function addPlayerLabels(
 
     const innerY = reverse ? 0 : Sprite.height;
     const 底牌X = reverse ?
-        goldenX + getOffset(groupCount - revealCount) :
-        goldenX - getOffset(groupCount - revealCount) - 0.548 * Sprite.pixelsPerCM;
+        handX + getOffset(groupCount - revealCount) :
+        handX - getOffset(groupCount - revealCount) - 0.548 * Sprite.pixelsPerCM;
     i = 上下(labels, container, i, 底牌X, innerY, '底牌', '中字', 19);
 
     const 底牌CountX = reverse ?
@@ -787,8 +783,8 @@ function addPlayerLabels(
     i = 上下(labels, container, i, 底牌CountX, innerY, `︵${数(groupCount - revealCount)}︶`, '小字', 13);
 
     const 持牌X = reverse ?
-        goldenX - getOffset(totalCount - groupCount) -  0.548 * Sprite.pixelsPerCM :
-        goldenX + getOffset(totalCount - groupCount);
+        handX - getOffset(totalCount - groupCount) -  0.548 * Sprite.pixelsPerCM :
+        handX + getOffset(totalCount - groupCount);
     i = 上下(labels, container, i, 持牌X, innerY, '持牌', '中字', 19);
 
     const hiddenX = reverse ?

@@ -116,7 +116,7 @@ export function linkWithCards(gameState: Lib.GameState): void {
     }
 }
 
-export const goldenRatio = (1 + Math.sqrt(5)) / 2;
+export const handRatio = 0.25;
 export const deckRatio = 1 - 2 / (1 + Math.sqrt(5));
 
 //const doubleClickThreshold = 500; // milliseconds
@@ -602,18 +602,18 @@ async function drag(): Promise<void> {
 
         if (!playerContainer || playerWidth === undefined || above == undefined) throw new Error();
 
-        const cardsMin = {
-            x: above ? playerWidth / goldenRatio : 0,
+        const sharedCardsMin = {
+            x: above ? (1 - handRatio) * playerWidth : 0,
             y: above ? Sprite.height : 0
         };
-        const cardsMax = {
-            x: above ? playerWidth : playerWidth * (1 - 1 / goldenRatio),
+        const sharedCardsMax = {
+            x: above ? playerWidth : handRatio * playerWidth,
             y: above ? 2 * Sprite.height : Sprite.height
         };
 
         const dragMinInContainer = playerContainer.transform.worldTransform.applyInverse(dragMin);
         const dragMaxInContainer = playerContainer.transform.worldTransform.applyInverse(dragMax);
-        if (intersectBox(dragMinInContainer, dragMaxInContainer, cardsMin, cardsMax)) {
+        if (intersectBox(dragMinInContainer, dragMaxInContainer, sharedCardsMin, sharedCardsMax)) {
             if ('cardId' in action) {
                 action = {
                     action: 'Give',
@@ -643,16 +643,16 @@ async function drag(): Promise<void> {
     ));
 
     // determine whether the moving sprites are closer to the revealed sprites or to the hidden sprites
-    const goldenX = (1 - 1 / goldenRatio) * width;
+    const handX = handRatio * width;
     const midY = (dragMinInContainer.y + dragMaxInContainer.y) / 2;
 
     const splitTop = !drewFromDeck && midY < Sprite.height;
-    const splitLeft = (dragMinInContainer.x + dragMaxInContainer.x) / 2 < goldenX;
+    const splitLeft = (dragMinInContainer.x + dragMaxInContainer.x) / 2 < handX;
     let splitIndex: number | undefined = undefined;
     let start: number;
     let end: number;
     if (splitTop) {
-        if (dragMinInContainer.x < goldenX && goldenX < dragMaxInContainer.x) {
+        if (dragMinInContainer.x < handX && handX < dragMaxInContainer.x) {
             splitIndex = newShareCount;
         }
         
@@ -664,7 +664,7 @@ async function drag(): Promise<void> {
             end = newRevealCount;
         }
     } else {
-        if (dragMinInContainer.x < goldenX && goldenX < dragMaxInContainer.x) {
+        if (dragMinInContainer.x < handX && handX < dragMaxInContainer.x) {
             splitIndex = newGroupCount;
         }
 
