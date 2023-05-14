@@ -439,7 +439,7 @@ export default class Sprite {
         this.scoreSprites = [];
         this.playerBackSprites = [];
         this.playerFaceSprites = [];
-    
+
         for (const cardId of gameState.deckCardIds) {
             const deckTexture = Sprite.getTexture('Back0');
             let sprite = Sprite.spriteForCardId.get(cardId);
@@ -521,6 +521,41 @@ export default class Sprite {
 
                     backSprites.push(sprite);
                 }
+            }
+        }
+
+        function contains<T>(haystack: T[], needle: T): boolean {
+            for (const item of haystack) {
+                if (item === needle) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function nestedContains<T>(haystackOfHaystacks: T[][], needle: T): boolean {
+            for (const haystack of haystackOfHaystacks) {
+                if (contains(haystack, needle)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        for (const sprite of new Array<Sprite>(...sprites)) {
+            this.deckSprites = [];
+            this.scoreSprites = [];
+            this.playerBackSprites = [];
+            this.playerFaceSprites = [];
+            
+            if (!contains(this.deckSprites, sprite) &&
+                !contains(this.scoreSprites, sprite) &&
+                !nestedContains(this.playerBackSprites, sprite) &&
+                !nestedContains(this.playerFaceSprites, sprite)
+            ) {
+                sprite.destroy();
             }
         }
     }
