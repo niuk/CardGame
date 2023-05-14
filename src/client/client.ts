@@ -43,7 +43,10 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
             heartbeat = Date.now();
 
             // reconnect
-            const url = `wss://${
+            console.log(window.location.protocol)
+            const url = `${
+                window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+            }//${
                 Capacitor.isNative !== undefined && Capacitor.isNative ? 'haruspex.io': window.location.hostname
             }/${
                 gameId !== undefined ? gameId : ''

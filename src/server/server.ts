@@ -1,5 +1,6 @@
 import express from 'express';
 import https from 'https';
+import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
 import WebSocket from 'ws';
@@ -108,10 +109,24 @@ app.post('/clientLogs', async (request, response) => {
 });
 
 // start receiving connections
-const httpsServer = https.createServer({
-    key: await fs.readFile('../key.pem'),
-    cert: await fs.readFile('../cert.pem'),
-}, app);
+const [httpsServer, port] = await ((async () => {
+    try {
+        return [
+            https.createServer({
+                key: await fs.readFile('../key.pem'),
+                cert: await fs.readFile('../cert.pem'),
+            }, app),
+            443
+        ];
+    } catch (e) {
+        console.error(e);
+        console.log('HTTP server creation failed. Creating HTTP server...');
+        return [
+            http.createServer(app),
+            8080
+        ];
+    }
+})());
 
 const webSocketServer = new WebSocket.Server({ server: httpsServer });
 
@@ -137,6 +152,5 @@ webSocketServer.on('close', (ws: WebSocket.Server) => {
     console.log(`closed websocket connection`);
 });
 
-const port = 443;
 console.log(`listening on port ${port}...`);
 httpsServer.listen(port);

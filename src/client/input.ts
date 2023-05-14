@@ -285,8 +285,6 @@ Sprite.onDragMove = async (position, sprite) => {
                         throw e;
                     }
                 })();
-            } else {
-                console.error('!');
             }
         }
     } else if (

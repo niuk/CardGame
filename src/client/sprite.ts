@@ -334,8 +334,9 @@ async function _load(gameState: Lib.GameState | undefined): Promise<void> {
             }
 
             for (let i = gameState.playerStates.length; i < Sprite.containers.length; ++i) {
-                if (Sprite.containers[i]) {
-                    Sprite.containers[i]?.destroy();
+                const container = Sprite.containers[i];
+                if (container) {
+                    container.destroy({ children: true });
                 }
             }
         }
@@ -390,6 +391,7 @@ export default class Sprite {
 
     public static cardForCardId = new Map<number, Lib.Card>();
     public static spriteForCardId = new Map<number, Sprite>();
+    private static cardIdForSprite = new Map<Sprite, number>();
 
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
         const previousPromise = loadPromise;
@@ -449,6 +451,7 @@ export default class Sprite {
                 sprite = new Sprite(Sprite.deckContainer, deckTexture);
                 console.log(`new deck sprite for card ${cardId}`);
                 Sprite.spriteForCardId.set(cardId, sprite);
+                Sprite.cardIdForSprite.set(sprite, cardId);
             }
     
             this.deckSprites.push(sprite);
@@ -464,6 +467,7 @@ export default class Sprite {
                 sprite = new Sprite(Sprite.deckContainer, faceTexture);
                 console.log(`new face sprite for card ${cardId}`);
                 Sprite.spriteForCardId.set(cardId, sprite);
+                Sprite.cardIdForSprite.set(sprite, cardId);
             }
 
             this.scoreSprites.push(sprite);
@@ -507,6 +511,7 @@ export default class Sprite {
                         sprite = new Sprite(container, faceTexture);
                         console.log(`new face sprite for card ${cardId}`);
                         Sprite.spriteForCardId.set(cardId, sprite);
+                        Sprite.cardIdForSprite.set(sprite, cardId);
                     }
 
                     faceSprites.push(sprite);
@@ -517,6 +522,7 @@ export default class Sprite {
                         sprite = new Sprite(container, backTexture);
                         console.log(`new back sprite for card ${cardId}`);
                         Sprite.spriteForCardId.set(cardId, sprite);
+                        Sprite.cardIdForSprite.set(sprite, cardId);
                     }
 
                     backSprites.push(sprite);
@@ -524,86 +530,95 @@ export default class Sprite {
             }
         }
 
-        function contains<T>(haystack: T[], needle: T): boolean {
-            for (const item of haystack) {
-                if (item === needle) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        function nestedContains<T>(haystackOfHaystacks: T[][], needle: T): boolean {
-            for (const haystack of haystackOfHaystacks) {
-                if (contains(haystack, needle)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        for (const sprite of new Array<Sprite>(...sprites)) {
-            this.deckSprites = [];
-            this.scoreSprites = [];
-            this.playerBackSprites = [];
-            this.playerFaceSprites = [];
-            
-            if (!contains(this.deckSprites, sprite) &&
-                !contains(this.scoreSprites, sprite) &&
-                !nestedContains(this.playerBackSprites, sprite) &&
-                !nestedContains(this.playerFaceSprites, sprite)
-            ) {
-                sprite.destroy();
-            }
-        }
-    }
-
-    public static async clearSprites(): Promise<void> {
         for (const sprite of sprites) {
-            sprite.destroy();
+            console.log(sprites.size, this.deckSprites.indexOf(sprite), this.deckSprites.length);
+            if (this.deckSprites.indexOf(sprite) === -1 &&
+                this.scoreSprites.indexOf(sprite) === -1 &&
+                this.playerBackSprites.map(s => s.indexOf(sprite) === -1).reduce((a, b) => a && b) &&
+                this.playerFaceSprites.map(s => s.indexOf(sprite) === -1).reduce((a, b) => a && b) &&
+                this.hoveredSprite !== sprite
+            ) {
+                try {
+                    sprite.destroy();
+                } catch (e) {
+                    console.error(e);
+                }
+            }
         }
-        
-        sprites.clear();
-        
-        this.deckSprites = [];
-        this.playerBackSprites = [];
-        this.playerFaceSprites = [];
     }
+
+    private static placeHolderTexture = PIXI.Texture.fromBuffer(new Uint8Array([0]), 1, 1);
 
     private _sprite: PIXI.Sprite;
 
     public get texture(): PIXI.Texture {
+        if (this._sprite.destroyed) {
+            return Sprite.placeHolderTexture;
+        }
+
         return this._sprite.texture;
     }
 
     public get position(): V.IVector2 {
+        if (this._sprite.destroyed) {
+            return { x: NaN, y: NaN };
+        }
+
         return this._sprite.position;
     }
 
     public set position(value: V.IVector2) {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         this._sprite.position.set(value.x, value.y);
     }
 
     public get rotation(): number {
+        if (this._sprite.destroyed) {
+            return NaN;
+        }
+
         return this._sprite.rotation;
     }
 
     public set rotation(value: number) {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         this._sprite.rotation = value;
     }
 
     public destroy(): void {
-        this._sprite.destroy();
+        if (!this._sprite.destroyed) {
+            this._sprite.destroy();
+        }
+
+        if (this !== Sprite.hoveredSprite) {
+            const cardId = Sprite.cardIdForSprite.get(this);
+            if (cardId === undefined) throw new Error();
+            Sprite.spriteForCardId.delete(cardId);
+            Sprite.cardIdForSprite.delete(this);
+        }
+
         sprites.delete(this);
     }
 
     public get selected(): boolean {
+        if (this._sprite.destroyed) {
+            return false;
+        }
+
         return this._sprite.tint == 0xffffff;
     }
 
     public set selected(value: boolean) {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         if (value) {
             this._sprite.tint = 0xd0d0ff;
         } else {
@@ -612,14 +627,26 @@ export default class Sprite {
     }
 
     public get zIndex(): number {
+        if (this._sprite.destroyed) {
+            return NaN;
+        }
+
         return this._sprite.zIndex;
     }
 
     public set zIndex(value: number) {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         this._sprite.zIndex = value;
     }
 
     public updateSize(): void {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         if (this === Sprite.hoveredSprite) {
             this._sprite.width = 2 * Sprite.width;
             this._sprite.height = 2 * Sprite.height;
@@ -694,6 +721,10 @@ export default class Sprite {
     }
 
     public transfer(parent: PIXI.Container, texture: PIXI.Texture): void {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         const oldParent = this._sprite.parent;
         //if (parent !== oldParent) console.log(oldParent.position);
         //if (parent !== oldParent) console.log(parent.position);
@@ -791,6 +822,10 @@ export default class Sprite {
 
     //anchorDot = new PIXI.Graphics();
     public setAnchorAt(worldPosition: V.IVector2): void {
+        if (this._sprite.destroyed) {
+            return;
+        }
+
         const localPosition = this._sprite.transform.worldTransform.applyInverse(worldPosition);
         this._sprite.anchor.set(
             this._sprite.anchor.x + localPosition.x / this._sprite.texture.width,
@@ -808,6 +843,10 @@ export default class Sprite {
     }
 
     public getTopLeftInWorld(): V.IVector2 {
+        if (this._sprite.destroyed) {
+            return { x: NaN, y : NaN };
+        }
+
         return this._sprite.transform.worldTransform.apply({
             x: -this._sprite.anchor.x * this._sprite.texture.width,
             y: -this._sprite.anchor.y * this._sprite.texture.height
