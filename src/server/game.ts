@@ -55,6 +55,8 @@ export default class Game {
             }
 
             this.deck.push(...gameState.deckCardIds);
+            this.score.push(...gameState.scoreCardIds);
+            this.nextCardId = gameState.nextCardId;
 
             for (let i = 0; i < gameState.playerStates.length; ++i) {
                 const playerState = gameState.playerStates[i];

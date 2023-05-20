@@ -69,17 +69,17 @@
     <body>
         <canvas id='canvas'></canvas>
         <div id='form'>
-            <label>Enter your name:</label>
+            <label>你的名字是</label>
             <input type='text' name='playerName' id='playerName' disabled=true>
             <br>
             <br>
-            <label>Join an existing game:</label>
+            <label>你可以</label>
+            <button id='joinGame' disabled=true>参加游戏号</button>
             <input type='text' name='gameId' id='gameId' disabled=true>
-            <button id='joinGame' disabled=true>Join Game</button>
             <br>
             <br>
-            <label>Or, create a</label>
-            <button id='newGame' disabled=true>New Game</button>
+            <label>或者</label>
+            <button id='newGame' disabled=true>开始一个新游戏</button>
             <progress id='loadingBar'></progress>
         </div>
         <div id='status'></div>

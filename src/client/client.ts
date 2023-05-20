@@ -98,16 +98,16 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
             if (!statusElement) continue;
 
             if (webSocket.readyState === WebSocket.CLOSED) {
-                statusElement.innerHTML = 'WebSocket closed.';
+                statusElement.innerHTML = '关闭了。';
             } else if (webSocket.readyState === WebSocket.CLOSING) {
-                statusElement.innerHTML = 'WebSocket closing...';
+                statusElement.innerHTML = '关闭……';
             } else if (webSocket.readyState === WebSocket.CONNECTING) {
-                statusElement.innerHTML = 'WebSocket connecting...';
+                statusElement.innerHTML = '链接……';
             } else if (webSocket.readyState === WebSocket.OPEN) {
                 if (gameState !== undefined) {
-                    statusElement.innerHTML = `Game: ${gameState.gameId}`;
+                    statusElement.innerHTML = `游戏号：${gameState.gameId}`;
                 } else {
-                    statusElement.innerHTML = `WebSocket connected.`;
+                    statusElement.innerHTML = `连接了。`;
                 }
             } else {
                 throw new Error();
