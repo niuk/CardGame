@@ -11,7 +11,8 @@ const suits = ['Club', 'Heart', 'Spade', 'Diamond', 'Joker'];
 const textures = new Map<string, PIXI.Texture>();
 const sprites = new Set<Sprite>();
 
-let background: PIXI.Sprite;
+let backgroundSprite: Sprite | undefined;
+
 let backgroundIndex = 0;
 const backgroundTextureNames = [
     'wood-364693',
@@ -30,326 +31,6 @@ function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
     Sprite.app.loader.add(src, () => {
         textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
     });
-}
-
-async function _load(gameState: Lib.GameState | undefined): Promise<void> {
-    if (Sprite.app === undefined) {
-        Sprite.app = new PIXI.Application(<PIXI.IApplicationOptions>{
-            view: <HTMLCanvasElement>document.getElementById('canvas')
-        });
-        Sprite.app.stage.sortableChildren = true;
-
-        Sprite.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
-        Sprite.deckContainer.zIndex = 1;
-        Sprite.deckContainer.sortableChildren = true;
-    }
-
-    if (loadedTextureCount < totalTextureCount) {
-        const bar = <HTMLProgressElement>document.getElementById('loadingBar');
-        bar.style.visibility = 'visible';
-        bar.max = totalTextureCount;
-
-        // load background textures
-        for (const backgroundTextureName of backgroundTextureNames) {
-            loadTexture(backgroundTextureName, `${backgroundTextureName}.jpg`);
-        }
-
-        // load textures for card faces
-        const cardTextureFrame = new PIXI.Rectangle(
-            397, 54,
-            1248, 1935
-        );
-        for (let suit = 0; suit <= 4; ++suit) {
-            for (let rank = 0; rank <= 14; ++rank) {
-                if (suit === Lib.Suit.Joker) {
-                    if (0 < rank && rank < 14) {
-                        continue;
-                    }
-                } else {
-                    if (rank < 1 || 13 < rank) {
-                        continue;
-                    }
-                }
-
-                loadTexture(
-                    JSON.stringify([suit, rank]),
-                    `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
-                    cardTextureFrame
-                );
-            }
-        }
-
-        // load textures for card backs
-        let i = 0;
-        for (const color of colorNames) {
-            loadTexture(
-                `Back${i++}`,
-                `PlayingCards/BackColor_${color}.png`,
-                cardTextureFrame
-            );
-        }
-
-        Sprite.app.loader.onProgress.add(() => {
-            bar.value = ++loadedTextureCount;
-        });
-
-        await new Promise(resolve => Sprite.app.loader.load(resolve));
-
-        bar.style.visibility = 'hidden';
-        console.log('all textures loaded');
-    }
-
-    // both the view (the canvas element) and the renderer must be resized
-    Sprite.app.view.width = document.body.clientWidth;
-    Sprite.app.view.height = document.body.clientHeight;
-    Sprite.app.renderer.resize(
-        document.body.clientWidth,
-        document.body.clientHeight
-    );
-
-    if (background === undefined) {
-        const dummySprite = new Sprite(new PIXI.Container(), new PIXI.Texture(new PIXI.BaseTexture()));
-        dummySprite.position = { x: -Sprite.width, y: -Sprite.height };
-
-        backgroundIndex = JSON.parse(Lib.getCookie('backgroundIndex') ?? '0');
-
-        const backgroundTextureName = backgroundTextureNames[backgroundIndex];
-        if (backgroundTextureName === undefined) throw new Error();
-        background = Sprite.app.stage.addChild(new PIXI.Sprite(Sprite.getTexture(backgroundTextureName)));
-        background.zIndex = 0;
-        background.position.set(0, 0);
-        background.interactive = true;
-        background.on('pointerdown', (event: PIXI.InteractionEvent) => Sprite.onDragStart(event.data.global, dummySprite), { passive: true });
-        background.on('pointerup', (event: PIXI.InteractionEvent) => Sprite.onDragEnd(event.data.global, dummySprite), { passive: true });
-
-        console.log('background set');
-    }
-
-    background.width = Sprite.app.view.width;
-    background.height = Sprite.app.view.height;
-
-    // get pixels per centimeter, which is constant
-    if (Sprite.pixelsPerCM === 0) {
-        const testElement = document.createElement('div');
-        testElement.style.width = '1cm';
-        document.body.appendChild(testElement);
-        Sprite.pixelsPerCM = testElement.offsetWidth;
-        document.body.removeChild(testElement);
-    }
-
-    Sprite.dragThreshold = 0.5 * Sprite.pixelsPerCM;
-    Sprite.pixelsPerPercent = Math.sqrt(Sprite.app.view.width * Sprite.app.view.height) / 100;
-    Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
-    Sprite.gap = 0.8 * Sprite.pixelsPerPercent;
-    Sprite.width = 5 * Sprite.pixelsPerPercent;
-    Sprite.height = 8 * Sprite.pixelsPerPercent;
-    for (const sprite of sprites) {
-        sprite.updateSize();
-    }
-
-    if (gameState) {
-        let playerContainer = Sprite.containers[gameState.playerIndex];
-        if (!playerContainer) {
-            console.log(`your playerContainer.index = ${gameState.playerIndex}`);
-            playerContainer = new PIXI.Container();
-            playerContainer.zIndex = 3;
-            playerContainer.sortableChildren = true;
-            Sprite.containers[gameState.playerIndex] = playerContainer;
-            Sprite.app.stage.addChild(playerContainer);
-        }
-
-        for (let i = 1; i < gameState.playerStates.length; ++i) {
-            const playerIndex = (gameState.playerIndex + i) % gameState.playerStates.length;
-            let playerContainer = Sprite.containers[playerIndex];
-            if (!playerContainer) {
-                console.log(`other playerContainer.index = ${i}`);
-                playerContainer = new PIXI.Container();
-                playerContainer.zIndex = 2;
-                playerContainer.sortableChildren = true;
-                Sprite.containers[playerIndex] = playerContainer;
-                Sprite.app.stage.addChild(playerContainer);
-            }
-        }
-
-        if (gameState.playerStates.length === 6) {
-            //    \______/
-            //    /      \
-            // __/        \__
-            //   \        /
-            //    \______/
-            //    /      \
-
-            // |<-arm->|<-leg->|
-            // |_|     \     |_|<-hand
-            // |\       \w     |t
-            // | \       \i    |o
-            // |  \       \d   |r
-            // |   \       \t  |s
-            // |    \       \h |o
-            // |     \       \ |
-            // |      \       \|_________width_________
-            // |       \       |he
-            // |               |ig
-            // |_______________|ht_____________________
-
-            const height = 2 * Sprite.height;
-            const torso = Sprite.app.view.height / 2 - height;
-
-            // let h = height, t = torso, and w = width
-            // using the pythagorean:
-            // w^2 = leg^2 + t^2
-            // leg = sqrt(w^2 - t^2)
-            // we also have two similar triangles, with hypothenuses at height and width:
-            // arm/t = h/w
-            // arm = t*h/w
-            // the top center and bottom center players take up width amount of screen space, so
-            // W = 2*arm + 2*leg + w
-            // where W is the width of the screen
-            // substituting arm and leg using formulas from above,
-            // W = 2*(t*h/w) + 2*sqrt(w^2 - t^2) + w
-            // W - 2*(t*h/w) - w = 2*sqrt(w^2 - t^2)
-            // W/2 - t*h/w - w/2 = sqrt(w^2 - t^2)
-            // h^2*t^2/w^2 - h*t*W/w + h*t + w^2/4 - w*W/2 + W^2/4 = w^2 - t^2
-            // we have to solve for the zeros of the polynomial:
-            // 0 = h^2*t^2/w^2 - h*t*W/w + h*t + t^2 - 3*w^2/4 - w*W/2 + W^2/4
-            // derivative w.r.t. w, so that we can apply newton's method:
-            // -2*h^2*t^2/w^3 + h*t*W/w^2 - 3*w/2 - W/2
-            const W = Sprite.app.view.width;
-            const h = height;
-            const t = torso;
-            const f = (w: number) => h*h*t*t/(w*w) - h*t*W/w + h*t + t*t - 3*w*w/4 - w*W/2 + W*W/4;
-            const df = (w: number) => -2*h*h*t*t/(w*w*w) + h*t*W/(w*w) - 3*w/2 - W/2;
-            let w0 = Sprite.app.view.width / 2; // an arbitrary starting point
-            let width = w0;
-            for (let i = 0; i < 100; ++i) {
-                //console.log(w0, '->', width);
-                width = w0 - f(w0)/df(w0);
-                if (Math.abs(width - w0) < 1) {
-                    break;
-                }
-
-                w0 = width;
-            }
-
-            const arm = torso*height/width;
-            const leg = Math.sqrt(width*width - torso*torso);
-            const hand = Math.sqrt(height*height - arm*arm);
-            const tilt = Math.acos(leg / width);
-
-            Sprite.reverse[gameState.playerIndex] = false;
-            Sprite.widths[gameState.playerIndex] = width;
-            playerContainer.position.set(arm + leg, Sprite.app.view.height - 2 * Sprite.height);
-
-            const bottomLeftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
-            Sprite.reverse[bottomLeftIndex] = false;
-            Sprite.widths[bottomLeftIndex] = width;
-            const bottomLeftContainer = Sprite.containers[bottomLeftIndex];
-            if (!bottomLeftContainer) throw new Error();
-            bottomLeftContainer.position.set(arm, Sprite.app.view.height / 2);
-            bottomLeftContainer.rotation = tilt;
-
-            const topLeftIndex = (gameState.playerIndex + 2) % gameState.playerStates.length;
-            Sprite.reverse[topLeftIndex] = true;
-            Sprite.widths[topLeftIndex] = width;
-            const topLeftContainer = Sprite.containers[topLeftIndex];
-            if (!topLeftContainer) throw new Error();
-            topLeftContainer.position.set(0, Sprite.app.view.height / 2 - hand);
-            topLeftContainer.rotation = -tilt;
-
-            const topIndex = (gameState.playerIndex + 3) % gameState.playerStates.length;
-            Sprite.reverse[topIndex] = true;
-            Sprite.widths[topIndex] = width;
-            const topContainer = Sprite.containers[topIndex];
-            if (!topContainer) throw new Error();
-            topContainer.position.set(arm + leg, 0);
-            topContainer.rotation = 0;
-
-            const topRightIndex = (gameState.playerIndex + 4) % gameState.playerStates.length;
-            Sprite.reverse[topRightIndex] = true;
-            Sprite.widths[topRightIndex] = width;
-            const topRightContainer = Sprite.containers[topRightIndex];
-            if (!topRightContainer) throw new Error();
-            const topRightPosition = V.sub({
-                x: arm + leg + width,
-                y: height
-            }, V.rotateClockwise(tilt, { x: 0, y: height }));
-            topRightContainer.position.set(topRightPosition.x, topRightPosition.y);
-            topRightContainer.rotation = tilt;
-
-            const bottomRightIndex = (gameState.playerIndex + 5) % gameState.playerStates.length;
-            Sprite.reverse[bottomRightIndex] = false;
-            Sprite.widths[bottomRightIndex] = width;
-            const bottomRightContainer = Sprite.containers[bottomRightIndex];
-            if (!bottomRightContainer) throw new Error();
-            bottomRightContainer.position.set(arm + leg + width, Sprite.app.view.height - height);
-            bottomRightContainer.rotation = -tilt;
-        } else {
-            const height = 2 * Sprite.height;
-            Sprite.reverse[gameState.playerIndex] = false;
-            Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * height;
-            playerContainer.position.set(height, Sprite.app.view.height - height);
-
-            const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
-            const leftContainer = Sprite.containers[leftIndex];
-            if (!leftContainer) throw new Error();
-            leftContainer.position.set(0, Sprite.app.view.height);
-            leftContainer.rotation = -Math.PI / 2;
-            Sprite.reverse[leftIndex] = true;
-            Sprite.widths[leftIndex] = Sprite.app.view.height;
-            if (gameState.playerStates.length > 4) {
-                Sprite.widths[leftIndex] -= height;
-            }
-
-            const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
-            const rightContainer = Sprite.containers[rightIndex];
-            if (!rightContainer) throw new Error();
-            rightContainer.rotation = Math.PI / 2;
-            rightContainer.position.set(Sprite.app.view.width, 0);
-            playerContainer.rotation = 0;
-            Sprite.reverse[rightIndex] = true;
-            Sprite.widths[rightIndex] = Sprite.app.view.height;
-            if (gameState.playerStates.length > 4) {
-                rightContainer.position.y += height
-                Sprite.widths[rightIndex] -= height;
-            }
-
-            //console.log(`gameState.playerStates.length = ${gameState.playerStates.length}`);
-            for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
-                const playerIndex = (leftIndex + i + 1) % gameState.playerStates.length;
-                const playerContainer = Sprite.containers[playerIndex];
-                if (!playerContainer) throw new Error();
-
-                Sprite.reverse[playerIndex] = true;
-
-                if (gameState.playerStates.length > 4) {
-                    const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
-                    playerContainer.position.set(i * width, 0);
-                    playerContainer.rotation = 0;
-                    Sprite.widths[playerIndex] = width;
-                } else {
-                    playerContainer.position.set(height, 0);
-                    playerContainer.rotation = 0;
-                    Sprite.widths[playerIndex] = Sprite.app.view.width - 2 * height;
-                }
-            }
-
-            for (let i = gameState.playerStates.length; i < Sprite.containers.length; ++i) {
-                const container = Sprite.containers[i];
-                if (container) {
-                    container.destroy({ children: true });
-                }
-            }
-        }
-    }
-
-    if (cachedOnTick !== Sprite.onTick) {
-        if (cachedOnTick !== undefined) {
-            Sprite.app.ticker.remove(cachedOnTick);
-        }
-        
-        Sprite.app.ticker.add(Sprite.onTick);
-        cachedOnTick = Sprite.onTick;
-    }
 }
 
 let loadPromise = Promise.resolve();
@@ -390,14 +71,327 @@ export default class Sprite {
     public static hoveredSprite: Sprite | undefined;
 
     public static cardForCardId = new Map<number, Lib.Card>();
-    public static spriteForCardId = new Map<number, Sprite>();
-    private static cardIdForSprite = new Map<Sprite, number>();
+    public static spriteForCardId = new Lib.Bijection<number, Sprite>();
+
+    private static async _load(gameState: Lib.GameState | undefined): Promise<void> {
+        if (Sprite.app === undefined) {
+            Sprite.app = new PIXI.Application(<PIXI.IApplicationOptions>{
+                view: <HTMLCanvasElement>document.getElementById('canvas')
+            });
+            Sprite.app.stage.sortableChildren = true;
+
+            Sprite.deckContainer = Sprite.app.stage.addChild(new PIXI.Container());
+            Sprite.deckContainer.zIndex = 1;
+            Sprite.deckContainer.sortableChildren = true;
+        }
+
+        if (loadedTextureCount < totalTextureCount) {
+            const bar = <HTMLProgressElement>document.getElementById('loadingBar');
+            bar.style.visibility = 'visible';
+            bar.max = totalTextureCount;
+
+            // load background textures
+            for (const backgroundTextureName of backgroundTextureNames) {
+                loadTexture(backgroundTextureName, `${backgroundTextureName}.jpg`);
+            }
+
+            // load textures for card faces
+            const cardTextureFrame = new PIXI.Rectangle(
+                397, 54,
+                1248, 1935
+            );
+            for (let suit = 0; suit <= 4; ++suit) {
+                for (let rank = 0; rank <= 14; ++rank) {
+                    if (suit === Lib.Suit.Joker) {
+                        if (0 < rank && rank < 14) {
+                            continue;
+                        }
+                    } else {
+                        if (rank < 1 || 13 < rank) {
+                            continue;
+                        }
+                    }
+
+                    loadTexture(
+                        JSON.stringify([suit, rank]),
+                        `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
+                        cardTextureFrame
+                    );
+                }
+            }
+
+            // load textures for card backs
+            let i = 0;
+            for (const color of colorNames) {
+                loadTexture(
+                    `Back${i++}`,
+                    `PlayingCards/BackColor_${color}.png`,
+                    cardTextureFrame
+                );
+            }
+
+            Sprite.app.loader.onProgress.add(() => {
+                bar.value = ++loadedTextureCount;
+            });
+
+            await new Promise(resolve => Sprite.app.loader.load(resolve));
+
+            bar.style.visibility = 'hidden';
+            console.log('all textures loaded');
+        }
+
+        // both the view (the canvas element) and the renderer must be resized
+        Sprite.app.view.width = document.body.clientWidth;
+        Sprite.app.view.height = document.body.clientHeight;
+        Sprite.app.renderer.resize(
+            document.body.clientWidth,
+            document.body.clientHeight
+        );
+
+        if (backgroundSprite === undefined) {
+            backgroundIndex = JSON.parse(Lib.getCookie('backgroundIndex') ?? '0');
+
+            const backgroundTextureName = backgroundTextureNames[backgroundIndex];
+            if (backgroundTextureName === undefined) throw new Error();
+
+            backgroundSprite = new Sprite(Sprite.app.stage, Sprite.getTexture(backgroundTextureName));
+            backgroundSprite.zIndex = 0;
+            backgroundSprite.position = { x: 0, y: 0 };
+            backgroundSprite._sprite.interactive = true;
+            backgroundSprite._sprite.cursor = 'auto';
+
+            console.log('background set');
+        }
+
+        // get pixels per centimeter, which is constant
+        if (Sprite.pixelsPerCM === 0) {
+            const testElement = document.createElement('div');
+            testElement.style.width = '1cm';
+            document.body.appendChild(testElement);
+            Sprite.pixelsPerCM = testElement.offsetWidth;
+            document.body.removeChild(testElement);
+        }
+
+        Sprite.dragThreshold = 0.5 * Sprite.pixelsPerCM;
+        Sprite.pixelsPerPercent = Math.sqrt(Sprite.app.view.width * Sprite.app.view.height) / 100;
+        Sprite.deckGap = 0.1 * Sprite.pixelsPerPercent;
+        Sprite.gap = 0.8 * Sprite.pixelsPerPercent;
+        Sprite.width = 5 * Sprite.pixelsPerPercent;
+        Sprite.height = 8 * Sprite.pixelsPerPercent;
+        for (const sprite of sprites) {
+            sprite.updateSize();
+        }
+
+        if (gameState) {
+            let playerContainer = Sprite.containers[gameState.playerIndex];
+            if (!playerContainer) {
+                console.log(`your playerContainer.index = ${gameState.playerIndex}`);
+                playerContainer = new PIXI.Container();
+                playerContainer.zIndex = 3;
+                playerContainer.sortableChildren = true;
+                Sprite.containers[gameState.playerIndex] = playerContainer;
+                Sprite.app.stage.addChild(playerContainer);
+            }
+
+            for (let i = 1; i < gameState.playerStates.length; ++i) {
+                const playerIndex = (gameState.playerIndex + i) % gameState.playerStates.length;
+                let playerContainer = Sprite.containers[playerIndex];
+                if (!playerContainer) {
+                    console.log(`other playerContainer.index = ${i}`);
+                    playerContainer = new PIXI.Container();
+                    playerContainer.zIndex = 2;
+                    playerContainer.sortableChildren = true;
+                    Sprite.containers[playerIndex] = playerContainer;
+                    Sprite.app.stage.addChild(playerContainer);
+                }
+            }
+
+            if (gameState.playerStates.length === 6) {
+                //    \______/
+                //    /      \
+                // __/        \__
+                //   \        /
+                //    \______/
+                //    /      \
+
+                // |<-arm->|<-leg->|
+                // |_|     \     |_|<-hand
+                // |\       \w     |t
+                // | \       \i    |o
+                // |  \       \d   |r
+                // |   \       \t  |s
+                // |    \       \h |o
+                // |     \       \ |
+                // |      \       \|_________width_________
+                // |       \       |he
+                // |               |ig
+                // |_______________|ht_____________________
+
+                const height = 2 * Sprite.height;
+                const torso = Sprite.app.view.height / 2 - height;
+
+                // let h = height, t = torso, and w = width
+                // using the pythagorean:
+                // w^2 = leg^2 + t^2
+                // leg = sqrt(w^2 - t^2)
+                // we also have two similar triangles, with hypothenuses at height and width:
+                // arm/t = h/w
+                // arm = t*h/w
+                // the top center and bottom center players take up width amount of screen space, so
+                // W = 2*arm + 2*leg + w
+                // where W is the width of the screen
+                // substituting arm and leg using formulas from above,
+                // W = 2*(t*h/w) + 2*sqrt(w^2 - t^2) + w
+                // W - 2*(t*h/w) - w = 2*sqrt(w^2 - t^2)
+                // W/2 - t*h/w - w/2 = sqrt(w^2 - t^2)
+                // h^2*t^2/w^2 - h*t*W/w + h*t + w^2/4 - w*W/2 + W^2/4 = w^2 - t^2
+                // we have to solve for the zeros of the polynomial:
+                // 0 = h^2*t^2/w^2 - h*t*W/w + h*t + t^2 - 3*w^2/4 - w*W/2 + W^2/4
+                // derivative w.r.t. w, so that we can apply newton's method:
+                // -2*h^2*t^2/w^3 + h*t*W/w^2 - 3*w/2 - W/2
+                const W = Sprite.app.view.width;
+                const h = height;
+                const t = torso;
+                const f = (w: number) => h*h*t*t/(w*w) - h*t*W/w + h*t + t*t - 3*w*w/4 - w*W/2 + W*W/4;
+                const df = (w: number) => -2*h*h*t*t/(w*w*w) + h*t*W/(w*w) - 3*w/2 - W/2;
+                let w0 = Sprite.app.view.width / 2; // an arbitrary starting point
+                let width = w0;
+                for (let i = 0; i < 100; ++i) {
+                    //console.log(w0, '->', width);
+                    width = w0 - f(w0)/df(w0);
+                    if (Math.abs(width - w0) < 1) {
+                        break;
+                    }
+
+                    w0 = width;
+                }
+
+                const arm = torso*height/width;
+                const leg = Math.sqrt(width*width - torso*torso);
+                const hand = Math.sqrt(height*height - arm*arm);
+                const tilt = Math.acos(leg / width);
+
+                Sprite.reverse[gameState.playerIndex] = false;
+                Sprite.widths[gameState.playerIndex] = width;
+                playerContainer.position.set(arm + leg, Sprite.app.view.height - 2 * Sprite.height);
+
+                const bottomLeftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
+                Sprite.reverse[bottomLeftIndex] = false;
+                Sprite.widths[bottomLeftIndex] = width;
+                const bottomLeftContainer = Sprite.containers[bottomLeftIndex];
+                if (!bottomLeftContainer) throw new Error();
+                bottomLeftContainer.position.set(arm, Sprite.app.view.height / 2);
+                bottomLeftContainer.rotation = tilt;
+
+                const topLeftIndex = (gameState.playerIndex + 2) % gameState.playerStates.length;
+                Sprite.reverse[topLeftIndex] = true;
+                Sprite.widths[topLeftIndex] = width;
+                const topLeftContainer = Sprite.containers[topLeftIndex];
+                if (!topLeftContainer) throw new Error();
+                topLeftContainer.position.set(0, Sprite.app.view.height / 2 - hand);
+                topLeftContainer.rotation = -tilt;
+
+                const topIndex = (gameState.playerIndex + 3) % gameState.playerStates.length;
+                Sprite.reverse[topIndex] = true;
+                Sprite.widths[topIndex] = width;
+                const topContainer = Sprite.containers[topIndex];
+                if (!topContainer) throw new Error();
+                topContainer.position.set(arm + leg, 0);
+                topContainer.rotation = 0;
+
+                const topRightIndex = (gameState.playerIndex + 4) % gameState.playerStates.length;
+                Sprite.reverse[topRightIndex] = true;
+                Sprite.widths[topRightIndex] = width;
+                const topRightContainer = Sprite.containers[topRightIndex];
+                if (!topRightContainer) throw new Error();
+                const topRightPosition = V.sub({
+                    x: arm + leg + width,
+                    y: height
+                }, V.rotateClockwise(tilt, { x: 0, y: height }));
+                topRightContainer.position.set(topRightPosition.x, topRightPosition.y);
+                topRightContainer.rotation = tilt;
+
+                const bottomRightIndex = (gameState.playerIndex + 5) % gameState.playerStates.length;
+                Sprite.reverse[bottomRightIndex] = false;
+                Sprite.widths[bottomRightIndex] = width;
+                const bottomRightContainer = Sprite.containers[bottomRightIndex];
+                if (!bottomRightContainer) throw new Error();
+                bottomRightContainer.position.set(arm + leg + width, Sprite.app.view.height - height);
+                bottomRightContainer.rotation = -tilt;
+            } else {
+                const height = 2 * Sprite.height;
+                Sprite.reverse[gameState.playerIndex] = false;
+                Sprite.widths[gameState.playerIndex] = Sprite.app.view.width - 2 * height;
+                playerContainer.position.set(height, Sprite.app.view.height - height);
+
+                const leftIndex = (gameState.playerIndex + 1) % gameState.playerStates.length;
+                const leftContainer = Sprite.containers[leftIndex];
+                if (!leftContainer) throw new Error();
+                leftContainer.position.set(0, Sprite.app.view.height);
+                leftContainer.rotation = -Math.PI / 2;
+                Sprite.reverse[leftIndex] = true;
+                Sprite.widths[leftIndex] = Sprite.app.view.height;
+                if (gameState.playerStates.length > 4) {
+                    Sprite.widths[leftIndex] -= height;
+                }
+
+                const rightIndex = (gameState.playerIndex + gameState.playerStates.length - 1) % gameState.playerStates.length;
+                const rightContainer = Sprite.containers[rightIndex];
+                if (!rightContainer) throw new Error();
+                rightContainer.rotation = Math.PI / 2;
+                rightContainer.position.set(Sprite.app.view.width, 0);
+                playerContainer.rotation = 0;
+                Sprite.reverse[rightIndex] = true;
+                Sprite.widths[rightIndex] = Sprite.app.view.height;
+                if (gameState.playerStates.length > 4) {
+                    rightContainer.position.y += height
+                    Sprite.widths[rightIndex] -= height;
+                }
+
+                //console.log(`gameState.playerStates.length = ${gameState.playerStates.length}`);
+                for (let i = 0; i < gameState.playerStates.length - 3; ++i) {
+                    const playerIndex = (leftIndex + i + 1) % gameState.playerStates.length;
+                    const playerContainer = Sprite.containers[playerIndex];
+                    if (!playerContainer) throw new Error();
+
+                    Sprite.reverse[playerIndex] = true;
+
+                    if (gameState.playerStates.length > 4) {
+                        const width = Sprite.app.view.width / (gameState.playerStates.length - 3);
+                        playerContainer.position.set(i * width, 0);
+                        playerContainer.rotation = 0;
+                        Sprite.widths[playerIndex] = width;
+                    } else {
+                        playerContainer.position.set(height, 0);
+                        playerContainer.rotation = 0;
+                        Sprite.widths[playerIndex] = Sprite.app.view.width - 2 * height;
+                    }
+                }
+
+                for (let i = gameState.playerStates.length; i < Sprite.containers.length; ++i) {
+                    const container = Sprite.containers[i];
+                    if (container) {
+                        container.destroy({ children: true });
+                    }
+                }
+            }
+        }
+
+        if (cachedOnTick !== Sprite.onTick) {
+            if (cachedOnTick !== undefined) {
+                Sprite.app.ticker.remove(cachedOnTick);
+            }
+
+            Sprite.app.ticker.add(Sprite.onTick);
+            cachedOnTick = Sprite.onTick;
+        }
+    }
 
     public static async load(gameState: Lib.GameState | undefined): Promise<void> {
         const previousPromise = loadPromise;
         loadPromise = (async () => {
             await previousPromise;
-            await _load(gameState);
+            await Sprite._load(gameState);
         })();
         await loadPromise;
     }
@@ -416,20 +410,26 @@ export default class Sprite {
 
         const backgroundTextureName = backgroundTextureNames[backgroundIndex];
         if (backgroundTextureName === undefined) throw new Error();
-        background.texture = this.getTexture(backgroundTextureName);
+
+        if (backgroundSprite !== undefined) {
+            backgroundSprite._sprite.texture = this.getTexture(backgroundTextureName);
+        }
 
         Lib.setCookie('backgroundIndex', JSON.stringify(backgroundIndex));
     }
-    
+
     public static backgroundForward(): void {
         --backgroundIndex;
         if (backgroundIndex < 0) {
             backgroundIndex = backgroundTextureNames.length - 1;
         }
-    
+
         const backgroundTextureName = backgroundTextureNames[backgroundIndex];
         if (backgroundTextureName === undefined) throw new Error();
-        background.texture = this.getTexture(backgroundTextureName);
+
+        if (backgroundSprite !== undefined) {
+            backgroundSprite._sprite.texture = this.getTexture(backgroundTextureName);
+        }
 
         Lib.setCookie('backgroundIndex', JSON.stringify(backgroundIndex));
     }
@@ -444,35 +444,35 @@ export default class Sprite {
 
         for (const cardId of gameState.deckCardIds) {
             const deckTexture = Sprite.getTexture('Back0');
-            let sprite = Sprite.spriteForCardId.get(cardId);
-            if (sprite) {
+            let sprite = Sprite.spriteForCardId.getB(cardId);
+            if (sprite !== undefined) {
                 sprite.transfer(Sprite.deckContainer, deckTexture);
             } else {
                 sprite = new Sprite(Sprite.deckContainer, deckTexture);
                 console.log(`new deck sprite for card ${cardId}`);
                 Sprite.spriteForCardId.set(cardId, sprite);
-                Sprite.cardIdForSprite.set(sprite, cardId);
             }
-    
+
             this.deckSprites.push(sprite);
         }
 
         for (const cardId of gameState.scoreCardIds) {
             const card = cardsById.get(cardId);
+            if (card === undefined) throw new Error();
+
             const faceTexture = Sprite.getTexture(JSON.stringify(card));
-            let sprite = Sprite.spriteForCardId.get(cardId);
-            if (sprite) {
+            let sprite = Sprite.spriteForCardId.getB(cardId);
+            if (sprite !== undefined) {
                 sprite.transfer(Sprite.deckContainer, faceTexture);
             } else {
                 sprite = new Sprite(Sprite.deckContainer, faceTexture);
                 console.log(`new face sprite for card ${cardId}`);
                 Sprite.spriteForCardId.set(cardId, sprite);
-                Sprite.cardIdForSprite.set(sprite, cardId);
             }
 
             this.scoreSprites.push(sprite);
         }
-    
+
         for (let playerIndex = 0; playerIndex < gameState.playerStates.length; ++playerIndex) {
             const playerState = gameState.playerStates[playerIndex];
             if (!playerState) continue;
@@ -499,30 +499,29 @@ export default class Sprite {
                     JSON.stringify(playerState.handCardIds)
                 }`);
 
-                let sprite = Sprite.spriteForCardId.get(cardId);
+                let sprite = Sprite.spriteForCardId.getB(cardId);
+
                 const card = cardsById.get(cardId);
-                if (card !== undefined && (
-                    playerIndex === gameState.playerIndex || cardIndex < playerState.revealCount
-                )) {
+                if (card === undefined) throw new Error();
+
+                if (playerIndex === gameState.playerIndex || cardIndex < playerState.revealCount) {
                     const faceTexture = Sprite.getTexture(JSON.stringify(card));
-                    if (sprite) {
+                    if (sprite !== undefined) {
                         sprite.transfer(container, faceTexture);
                     } else {
                         sprite = new Sprite(container, faceTexture);
                         console.log(`new face sprite for card ${cardId}`);
                         Sprite.spriteForCardId.set(cardId, sprite);
-                        Sprite.cardIdForSprite.set(sprite, cardId);
                     }
 
                     faceSprites.push(sprite);
                 } else {
-                    if (sprite) {
+                    if (sprite !== undefined) {
                         sprite.transfer(container, backTexture);
                     } else {
                         sprite = new Sprite(container, backTexture);
                         console.log(`new back sprite for card ${cardId}`);
                         Sprite.spriteForCardId.set(cardId, sprite);
-                        Sprite.cardIdForSprite.set(sprite, cardId);
                     }
 
                     backSprites.push(sprite);
@@ -531,12 +530,12 @@ export default class Sprite {
         }
 
         for (const sprite of sprites) {
-            console.log(sprites.size, this.deckSprites.indexOf(sprite), this.deckSprites.length);
             if (this.deckSprites.indexOf(sprite) === -1 &&
                 this.scoreSprites.indexOf(sprite) === -1 &&
                 this.playerBackSprites.map(s => s.indexOf(sprite) === -1).reduce((a, b) => a && b) &&
                 this.playerFaceSprites.map(s => s.indexOf(sprite) === -1).reduce((a, b) => a && b) &&
-                this.hoveredSprite !== sprite
+                sprite !== this.hoveredSprite &&
+                sprite !== backgroundSprite
             ) {
                 try {
                     sprite.destroy();
@@ -594,13 +593,12 @@ export default class Sprite {
     public destroy(): void {
         if (!this._sprite.destroyed) {
             this._sprite.destroy();
+        } else {
+            console.warn('destroying destroyed sprite');
         }
 
-        if (this !== Sprite.hoveredSprite) {
-            const cardId = Sprite.cardIdForSprite.get(this);
-            if (cardId === undefined) throw new Error();
-            Sprite.spriteForCardId.delete(cardId);
-            Sprite.cardIdForSprite.delete(this);
+        if (this !== Sprite.hoveredSprite && this !== backgroundSprite) {
+            Sprite.spriteForCardId.deleteB(this);
         }
 
         sprites.delete(this);
@@ -650,6 +648,9 @@ export default class Sprite {
         if (this === Sprite.hoveredSprite) {
             this._sprite.width = 2 * Sprite.width;
             this._sprite.height = 2 * Sprite.height;
+        } else if (this === backgroundSprite) {
+            this._sprite.width = Sprite.app.view.width;
+            this._sprite.height = Sprite.app.view.height;
         } else {
             this._sprite.width = Sprite.width;
             this._sprite.height = Sprite.height;
@@ -676,19 +677,19 @@ export default class Sprite {
 
         const onPointerDown = (event: PIXI.InteractionEvent) => {
             dragging = true;
-            Sprite.onDragStart?.(event.data.global.clone(), this);
+            Sprite.onDragStart(event.data.global.clone(), this);
         };
 
         const onPointerMove = (event: PIXI.InteractionEvent) => {
             if (dragging) {
-                Sprite.onDragMove?.(event.data.global.clone(), this);
+                Sprite.onDragMove(event.data.global.clone(), this);
             }
         };
 
         const onPointerUp = (event: PIXI.InteractionEvent) => {
             if (dragging) {
                 dragging = false;
-                Sprite.onDragEnd?.(event.data.global.clone(), this);
+                Sprite.onDragEnd(event.data.global.clone(), this);
             }
         };
 
@@ -696,6 +697,10 @@ export default class Sprite {
             if (Sprite.hoveredSprite) {
                 Sprite.hoveredSprite.destroy();
                 Sprite.hoveredSprite = undefined;
+            }
+
+            if (this === backgroundSprite) {
+                return;
             }
 
             Sprite.hoveredSprite = new Sprite(Sprite.deckContainer, this.texture);
@@ -800,7 +805,7 @@ export default class Sprite {
             if (this.easeRotationTime === 0) {
                 this.easeRotationDuration = 200;
             }
-            
+
             this.easeRotationTime += deltaTime;
             this.rotation = this.easeRotationStart - this.easeInOut(this.easeRotationTime / this.easeRotationDuration) * this.easeRotationStart;
         }

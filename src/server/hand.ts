@@ -42,6 +42,10 @@ export default class Hand<TKey, TValue> {
         //console.log('added', this);
     }
 
+    public includes(key: TKey): boolean {
+        return this.array.includes(key);
+    }
+
     public remove(key: TKey): void {
         if (!this.stationary.delete(key)) {
             throw new Error(`Key ${key} is moving or doesn't exist.`);

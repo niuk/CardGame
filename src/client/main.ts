@@ -39,7 +39,7 @@ function addCharsFromText(text: string) {
 
     if (missing) {
         const chars = Array.from(characters);
-    
+
         大字?.destroy();
         大字 = PIXI.BitmapFont.from('大字', { ...textStyle, fontSize: 26 }, { chars });
 
@@ -130,7 +130,7 @@ window.onload = async () => {
     if (playerName === undefined) {
         playerName = '';
     }
-    
+
     let gameId = Lib.getCookie('gameId');
     if (gameId === undefined) {
         gameId = '';
@@ -282,7 +282,7 @@ function addDeckLabels() {
         '小字',
         13,
         () => Client.addDeck());
-        
+
     i = 上下(deckLabels, Sprite.deckContainer, i,
         deckRatio * Sprite.app.view.width + Sprite.width / 2 + (1 + Sprite.spriteForCardId.size / 2) * Sprite.deckGap + 0.5 * Sprite.pixelsPerCM,
         Sprite.app.view.height / 2 - Sprite.gap - 0.5 * Sprite.pixelsPerCM,
@@ -351,7 +351,7 @@ function addScoreLabels() {
         Sprite.app.view.width / 2 - getOffset(Sprite.scoreSprites.length) - 0.548 * Sprite.pixelsPerCM,
         Sprite.app.view.height / 2 + Sprite.gap,
         `︵${数(getScore(gameState.scoreCardIds))}︶`, '小字', 13);
-        
+
     for (; i < scoreLabels.length; ++i) {
         scoreLabels[i]?.destroy();
         scoreLabels[i] = undefined;
@@ -418,8 +418,8 @@ function renderPlayers(deltaTime: number) {
             const cardId = playerState.handCardIds[cardIndex];
             if (cardId === undefined) throw new Error();
 
-            const sprite = Sprite.spriteForCardId.get(cardId);
-            if (!sprite) throw new Error();
+            const sprite = Sprite.spriteForCardId.getB(cardId);
+            if (sprite === undefined) throw new Error();
 
             if (Input.action.action === 'Take' &&
                 Input.action.playerIndex === playerIndex &&
@@ -460,7 +460,7 @@ function renderPlayers(deltaTime: number) {
                         sprite.target.x = handX + count * Sprite.gap;
                     }
                 }
-    
+
                 sprite.target.y = (cardIndex < playerState.revealCount) === reverse ? Sprite.height : 0;    
 
                 sprite.resetAnchor();
@@ -584,7 +584,7 @@ function addLabel(
     if (label.zIndex !== 1) {
         label.zIndex = 1;
     }
-    
+
     if (label.text !== text) {
         label.text = text;
     }
@@ -695,7 +695,7 @@ function addPlayerLabels(
     playerIsMe: boolean
 ) {
     const score = getScore(playerState.handCardIds.slice(0, shareCount));
-    
+
     let i = 0;
     const handX = reverse ? (1 - handRatio) * width : handRatio * width;
 

@@ -17,7 +17,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
     let heartbeat = 0;
     let gameId: string | undefined;
     let playerName: string | undefined;
-    
+
     while (true) {
         await Lib.delay(1000);
 
@@ -68,19 +68,19 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
 
                 const { newGameState,                       methodResult }:
                       { newGameState: Lib.GameState | null, methodResult: Lib.MethodResult | null } = JSON.parse(e.data);
-        
+
                 if (newGameState) {
                     //console.log('newGameState', newGameState);
 
                     gameState = newGameState;
                     cardsById = new Map<number, Lib.Card>(gameState.cardsById);
-                
+
                     Lib.setCookie('gameId', gameState.gameId);
-                
+
                     Input.linkWithCards(gameState);
                     await Sprite.linkWithCards(gameState, cardsById);
                 }
-        
+
                 if (methodResult) {
                     callbacks.get(methodResult.index)?.(methodResult);
                     callbacks.delete(methodResult.index);

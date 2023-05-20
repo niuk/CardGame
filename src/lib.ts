@@ -93,6 +93,7 @@ export interface GameState {
     deckCardIds: number[];
     scoreCardIds: number[];
     cardsById: [number, Card][];
+    nextCardId: number;
     playerIndex: number;
     playerStates: (PlayerState | null)[];
     dispensing: boolean;
@@ -232,4 +233,53 @@ export interface AddToScore extends MethodBase {
 export interface TakeFromScore extends MethodBase {
     methodName: 'TakeFromScore';
     cardId: number;
+}
+
+export class Bijection<A, B> {
+    aToB = new Map<A, B>();
+    bToA = new Map<B, A>();
+
+    constructor(...pairs: [A, B][]) {
+        pairs.forEach(([a, b]) => {
+            this.aToB.set(a, b);
+            this.bToA.set(b, a);
+        });
+    }
+
+    getA(b: B): A | undefined {
+        return this.bToA.get(b);
+    }
+
+    getB(a: A): B | undefined {
+        return this.aToB.get(a);
+    }
+
+    set(a: A, b: B): void {
+        this.aToB.set(a, b);
+        this.bToA.set(b, a);
+    }
+
+    deleteA(a: A): void {
+        const b = this.aToB.get(a);
+        if (b === undefined) {
+            throw new Error('No such A');
+        }
+
+        this.aToB.delete(a);
+        this.bToA.delete(b);
+    }
+
+    deleteB(b: B): void {
+        const a = this.bToA.get(b);
+        if (a === undefined) {
+            throw new Error('No such B');
+        }
+
+        this.aToB.delete(a);
+        this.bToA.delete(b);
+    }
+
+    get size(): number {
+        return this.aToB.size;
+    }
 }

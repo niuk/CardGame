@@ -32,7 +32,7 @@ let pruned = false;
 
 (async () => {
     const MS_PER_HOUR = 60 * 60 * 1000;
-    
+
     while (true) {
         // every hour, prune saved games that are older than a day
         await foreachSavedGame(async path => {
@@ -61,7 +61,12 @@ while (!pruned) {
 await foreachSavedGame(async path => {
     const gameFileContent = (await fs.readFile(path)).toString();
     console.log(`restoring game: ${gameFileContent}`);
-    new Game(JSON.parse(gameFileContent));
+    try {
+        new Game(JSON.parse(gameFileContent));
+    } catch (e) {
+        console.warn(`failed to restore game: ${path}, deleting it instead. Error:`, e);
+        await fs.rm(path);
+    }
 });
 
 const app = express();

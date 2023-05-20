@@ -68,7 +68,7 @@ export default class Player implements Lib.PlayerState {
                     throw new Error();
                 }
             };
-            
+
             ws.onclose = async (event: WebSocket.CloseEvent) => {
                 console.log('closed websocket connection: ', event.reason);
                 this.game?.broadcastStateExceptToPlayerAt(this.index);
@@ -114,7 +114,7 @@ export default class Player implements Lib.PlayerState {
                 if (player) {
                     player.game = undefined;
                     player.ws?.close();
-    
+
                     this.hand = player.hand;
                     this.shareCount = player.shareCount;
                     this.revealCount = player.revealCount;
@@ -147,7 +147,7 @@ export default class Player implements Lib.PlayerState {
 
         console.log(`'${this.name}' is no longer present`);
     }
-    
+
     private async invoke(method: Lib.Method) {
         if (method.methodName === 'SetPlayerName') {
             this.name = method.playerName;
@@ -157,7 +157,7 @@ export default class Player implements Lib.PlayerState {
             this.game = new Game();
             this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
             this.game.players[0] = this;
-            
+
             console.log(`player '${this.name}' created and joined game '${this.game.gameId}'`);
         } else if (method.methodName === 'JoinGame') {
             this.joinGame(method.gameId);

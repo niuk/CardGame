@@ -119,7 +119,20 @@ export default class Game {
     public removeDeck(): void {
         for (let i = 0; i < 54; ++i) {
             const cardId = --this.nextCardId;
-            this.deck.remove(cardId);
+
+            if (this.deck.includes(cardId)) {
+                this.deck.remove(cardId);
+            }
+
+            if (this.score.includes(cardId)) {
+                this.score.remove(cardId);
+            }
+
+            for (const player of this.players) {
+                if (player !== undefined && player.hand.includes(cardId)) {
+                    player.hand.remove(cardId);
+                }
+            }
         }
     }
 
@@ -191,7 +204,7 @@ export default class Game {
                 } else {
                     return;
                 }
-    
+
                 if (playerIndex < 0) {
                     playerIndex = this.numPlayers + playerIndex;
                 }
@@ -222,7 +235,7 @@ export default class Game {
             this.broadcastStateExceptToPlayerAt(-1);
         }
     }
-    
+
     public getStateForPlayerAt(playerIndex: number): Lib.GameState {
         const playerStates: (Lib.PlayerState | null)[] = [];
         for (const player of this.players) {
@@ -246,6 +259,7 @@ export default class Game {
             deckCardIds: this.deck.slice(),
             scoreCardIds: this.score.slice(),
             cardsById: [...this.stationaryCardsById, ...this.movingCardsById],
+            nextCardId: this.nextCardId,
             playerIndex,
             playerStates,
             dispensing: this.dispensing
