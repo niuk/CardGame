@@ -105,7 +105,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
                 statusElement.innerHTML = '链接……';
             } else if (webSocket.readyState === WebSocket.OPEN) {
                 if (gameState !== undefined) {
-                    statusElement.innerHTML = `游戏号：${gameState.gameId}`;
+                    statusElement.innerHTML = `游戏号${gameState.gameId}`;
                 } else {
                     statusElement.innerHTML = `连接了。`;
                 }

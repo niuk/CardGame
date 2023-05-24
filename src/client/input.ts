@@ -3,6 +3,8 @@ import * as Client from './client';
 import * as V from './vector';
 import Sprite from './sprite';
 
+import { Mutex } from 'async-mutex';
+
 interface None {
     action: 'None';
 }
@@ -162,7 +164,7 @@ Sprite.onDragStart = (position, sprite) => {
         sprite.setAnchorAt(position);
         action = { action: 'Draw' };
         drewFromDeck = true;
-        //console.log(`action is now draw`);
+        //console.log(`action is now Draw`);
     } else {
         const cardIndex = Sprite.scoreSprites.indexOf(sprite);
         if (cardIndex >= 0) {
@@ -175,6 +177,7 @@ Sprite.onDragStart = (position, sprite) => {
                 cardId
             };
             tookFromScore = true;
+            //console.log(`action is now TakeFromScore`);
         } else {
             action = { action: 'Deselect' };
 
@@ -229,7 +232,7 @@ Sprite.onDragStart = (position, sprite) => {
     }
 }
 
-let promise = new Promise<void>(resolve => resolve());
+const actionMutex = new Mutex();
 
 Sprite.onDragMove = async (position, sprite) => {
     mouseMovePosition = position;
@@ -246,46 +249,46 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'TakeFromScore'
     ) {
         if (exceededDragThreshold) {
-            if (await Lib.isDone(promise)) {
-                //console.log(`previous action is done`);
-                promise = (async () => {
-                    try {
-                        // the action might have changed after await
-                        if (action.action === 'Take') {
-                            await Client.takeFromOtherPlayer(
-                                action.playerIndex,
-                                action.cardId
-                            );
-                        } else if (action.action === 'Draw') {
-                            //console.log(`drawing...`);
-                            await Client.drawFromDeck();
-                            //console.log(`drew`);
-                        } else if (action.action === 'TakeFromScore') {
-                            await Client.takeFromScore(action.cardId);
-                        } else {
-                            const _: never = action;
-                        }
-
-                        const gameState = Client.gameState;
-                        if (!gameState) throw new Error();
-
-                        const playerState = gameState.playerStates[gameState.playerIndex];
-                        if (!playerState) throw new Error();
-
-                        // immediately select newly acquired card
-                        const cardId = playerState.handCardIds[playerState.handCardIds.length - 1];
-                        if (cardId === undefined) throw new Error();
-                        selectedCardIds.clear();
-                        selectedCardIds.add(cardId);
-                        action = { action: 'Reorder', cardId };
-                        //console.log(`set action to reorder`);
-                        await drag();
-                    } catch (e) {
-                        console.error(e);
-                        throw e;
+            (async () => {
+                if (actionMutex.isLocked()) return;
+                await actionMutex.acquire();
+                try {
+                    // the action might have changed after await
+                    if (action.action === 'Take') {
+                        await Client.takeFromOtherPlayer(
+                            action.playerIndex,
+                            action.cardId
+                        );
+                    } else if (action.action === 'Draw') {
+                        //console.log(`drawing...`);
+                        await Client.drawFromDeck();
+                        //console.log(`drew`);
+                    } else if (action.action === 'TakeFromScore') {
+                        //console.log(`taking from score...`);
+                        await Client.takeFromScore(action.cardId);
+                        //console.log(`took from score`);
+                    } else {
+                        const _: never = action;
                     }
-                })();
-            }
+
+                    const gameState = Client.gameState;
+                    if (!gameState) throw new Error();
+
+                    const playerState = gameState.playerStates[gameState.playerIndex];
+                    if (!playerState) throw new Error();
+
+                    // immediately select newly acquired card
+                    const cardId = playerState.handCardIds[playerState.handCardIds.length - 1];
+                    if (cardId === undefined) throw new Error();
+                    selectedCardIds.clear();
+                    selectedCardIds.add(cardId);
+                    action = { action: 'Reorder', cardId };
+                    //console.log(`set action to reorder`);
+                    await drag();
+                } finally {
+                    actionMutex.release();
+                }
+            })();
         }
     } else if (
         action.action === 'Give' ||
@@ -293,9 +296,15 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'Reorder' ||
         action.action === 'AddToScore'
     ) {
-        if (await Lib.isDone(promise)) {
-            promise = drag();
-        }
+        (async () => {
+            if (actionMutex.isLocked()) return;
+            await actionMutex.acquire();
+            try {
+                await drag();
+            } finally {
+                actionMutex.release();
+            }
+        })();
     } else if (
         action.action === 'ControlShiftClick' ||
         action.action === 'ControlClick' ||
@@ -303,8 +312,10 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'Click'
     ) {
         if (exceededDragThreshold) {
-            if (await Lib.isDone(promise)) {
-                promise = (async () => {
+            (async () => {
+                if (actionMutex.isLocked()) return;
+                await actionMutex.acquire();
+                try {
                     const gameState = Client.gameState;
                     if (!gameState) return;
 
@@ -349,8 +360,10 @@ Sprite.onDragMove = async (position, sprite) => {
                     }
 
                     await drag();
-                })();
-            }
+                } finally {
+                    actionMutex.release();
+                }
+            })();
         }
     } else {
         const _: never = action;
@@ -411,8 +424,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             previousClickIndex = -1;
             if (!endedOnBackground) {
                 const playerIndex = action.playerIndex;
-                await promise;
-                promise = Client.giveToOtherPlayer(playerIndex);
+                actionMutex.runExclusive(() => Client.giveToOtherPlayer(playerIndex));
             }
         } else if (action.action === 'Return') {
             if (drewFromDeck) {
@@ -420,8 +432,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             } else {
                 previousClickIndex = -1;
                 if (!endedOnBackground) {
-                    await promise;
-                    promise = Client.returnToDeck();
+                    actionMutex.runExclusive(() => Client.returnToDeck());
                 }
             }
         } else if (action.action === 'AddToScore') {
@@ -430,8 +441,7 @@ Sprite.onDragEnd = async (position, sprite) => {
             } else {
                 previousClickIndex = -1;
                 if (!endedOnBackground) {
-                    await promise;
-                    promise = Client.addToScore();
+                    actionMutex.runExclusive(() => Client.addToScore());
                 }
             }
         } else if (action.action === 'ControlShiftClick') {

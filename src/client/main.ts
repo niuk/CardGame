@@ -68,12 +68,14 @@ window.onload = async () => {
     const formElement = <HTMLDivElement>document.getElementById('form');
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
+    const showOrHideLogButton = <HTMLButtonElement>document.getElementById('showOrHideLog');
 
     joinGameButton.onclick = async e => {
         playerNameElement.disabled = true;
         gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
+        showOrHideLogButton.disabled = false;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -90,6 +92,7 @@ window.onload = async () => {
             gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
+            showOrHideLogButton.disabled = false;
         }
     };
 
@@ -98,6 +101,7 @@ window.onload = async () => {
         gameIdElement.disabled = true;
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
+        showOrHideLogButton.disabled = false;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -114,6 +118,7 @@ window.onload = async () => {
             gameIdElement.disabled = false;
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
+            showOrHideLogButton.disabled = false;
         }
     };
 
@@ -145,6 +150,7 @@ window.onload = async () => {
     gameIdElement.disabled = false;
     joinGameButton.disabled = false;
     newGameButton.disabled = false;
+    showOrHideLogButton.disabled = true;
 }
 
 // it takes a while for page elements to render at their new size,
@@ -797,7 +803,7 @@ function addPlayerLabels(
         i = addLabel(labels, container, i,
             0,
             2 * Sprite.height - 1.5 * Sprite.pixelsPerCM,
-            '分类(大小)',
+            '分类（大小）',
             '大字',
             26,
             Client.sortByRank
@@ -806,7 +812,7 @@ function addPlayerLabels(
         i = addLabel(labels, container, i,
             0,
             2 * Sprite.height - 0.75 * Sprite.pixelsPerCM,
-            '分类(花色)',
+            '分类（花色）',
             '大字',
             26,
             Client.sortBySuit

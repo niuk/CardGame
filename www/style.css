@@ -43,6 +43,18 @@ a {
     color: cyan;
 }
 
+#topLeft {
+    position: absolute;
+    cursor: pointer;
+    top: 0px;
+    left: 0px;
+    z-index: 1;
+}
+
+#log {
+    visibility: hidden;
+}
+
 #bottomLeft {
     position: absolute;
     cursor: pointer;

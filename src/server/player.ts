@@ -283,7 +283,7 @@ export default class Player implements Lib.PlayerState {
                 this.game.score.push(...method.cardIds);
             } else if (method.methodName === 'TakeFromScore') {
                 const cardIndex = this.game.score.indexOf(method.cardId);
-                if (cardIndex === undefined) {
+                if (cardIndex === -1) {
                     throw new Error(`score doesn't have card with id ${method.cardId}`);
                 }
 

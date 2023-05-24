@@ -2,7 +2,8 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "module": "es2022",
-    "outDir": "build"
+    "outDir": "build",
+    "strict": true
   },
   "exclude": [
     "src/client"

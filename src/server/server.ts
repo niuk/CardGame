@@ -113,6 +113,19 @@ app.post('/clientLogs', async (request, response) => {
     }
 });
 
+app.get('/serverLogs/:gameId', async (request, response) => {
+    try {
+        const logFile = await fs.open(path.join('games', `${request.params.gameId}.log`), 'r');
+        try {
+            response.contentType('text/plain').send(logFile.readFile());
+        } finally {
+            await logFile.close();
+        }
+    } catch (e) {
+        console.error(e);
+    }
+});
+
 // start receiving connections
 const [httpsServer, port] = await ((async () => {
     try {

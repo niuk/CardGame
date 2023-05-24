@@ -63,6 +63,34 @@
                 document.getElementById('showCredits').style.visibility = 'visible';
                 document.getElementById('credits').style.visibility = 'hidden';
             }
+
+            function showorHideLog() {
+                const matches = [...document.getElementById('status').innerHTML.matchAll(/游戏号(\d+)/g)];
+                if (matches.length != 1 || matches[0].length != 2) {
+                    console.error('Not yet in a game.', matches);
+                    return;
+                }
+
+                const log = document.getElementById('log');
+
+                const request = new XMLHttpRequest();
+                request.onload = function() {
+                    log.innerHTML = request.response;
+                };
+
+                request.onerror = function() {
+                    console.error(`could not send logs`);
+                };
+
+                request.open("GET", `/serverLogs/${matches[0][1]}`);
+                request.send(JSON.stringify(messages));
+
+                if (log.style.visibility === 'visible') {
+                    log.style.visibility = 'hidden';
+                } else {
+                    log.style.visibility = 'visible';
+                }
+            }
         </script>
         <script src='script.js'></script>
     </head>
@@ -81,6 +109,10 @@
             <label>或者</label>
             <button id='newGame' disabled=true>开始一个新游戏</button>
             <progress id='loadingBar'></progress>
+        </div>
+        <div id='topLeft'>
+            <button id='showOrHideLog' disabled=true onclick='showorHideLog()'>记录</button>
+            <div id='log'>...</div>
         </div>
         <div id='status'></div>
         <div id='credits'>
