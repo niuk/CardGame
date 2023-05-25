@@ -4,7 +4,8 @@
     "extends": ["plugin:@typescript-eslint/recommended"],
     "rules": {
         "@typescript-eslint/no-unused-vars": "off",
-        "@typescript-eslint/strict-boolean-expressions": 2
+        "@typescript-eslint/strict-boolean-expressions": 2,
+        "@typescript-eslint/no-unnecessary-condition": ["error", { "allowConstantLoopConditions": true }]
     },
     "env": {
         "browser": true,

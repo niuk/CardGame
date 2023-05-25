@@ -263,6 +263,7 @@ Sprite.onDragMove = async (position, sprite) => {
                         //console.log(`drawing...`);
                         await Client.drawFromDeck();
                         //console.log(`drew`);
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                     } else if (action.action === 'TakeFromScore') {
                         //console.log(`taking from score...`);
                         await Client.takeFromScore(action.cardId);
@@ -309,6 +310,7 @@ Sprite.onDragMove = async (position, sprite) => {
         action.action === 'ControlShiftClick' ||
         action.action === 'ControlClick' ||
         action.action === 'ShiftClick' ||
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         action.action === 'Click'
     ) {
         if (exceededDragThreshold) {
@@ -479,6 +481,7 @@ Sprite.onDragEnd = async (position, sprite) => {
                 if (cardId === undefined) throw new Error();
                 selectedCardIds.add(cardId);
             }
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         } else if (action.action === 'Click') {
             previousClickIndex = playerState.handCardIds.indexOf(action.cardId);
 
@@ -497,6 +500,8 @@ Sprite.onDragEnd = async (position, sprite) => {
 async function drag(): Promise<void> {
     const gameState = Client.gameState;
     if (!gameState) throw new Error();
+
+    if (Sprite.app === undefined) throw new Error();
 
     const playerState = gameState.playerStates[gameState.playerIndex];
     const container = Sprite.containers[gameState.playerIndex];

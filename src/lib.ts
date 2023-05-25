@@ -15,14 +15,6 @@ export function getParam(name: string): string | undefined {
     return window.location.search.split(`${name}=`)[1]?.split("&")[0];
 }
 
-export function pick<T, K extends keyof T>(obj: T, ...keys: K[]): Pick<T, K> {
-    const ret: any = {};
-    keys.forEach(key => {
-        ret[key] = obj[key];
-    })
-    return ret;
-}
-
 export function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -34,9 +26,11 @@ export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<b
             await delay(milliseconds ?? 0);
             return 'Timeout';
         })() as Promise<T | 'Timeout'>]) !== 'Timeout';
-    } finally {
-        return done;
+    } catch {
+        done = true;
     }
+
+    return done;
 }
 
 export enum Suit {

@@ -173,7 +173,7 @@ export default class Player implements Lib.PlayerState {
                 }
 
                 const cardIndex = otherPlayer.hand.indexOf(method.cardId);
-                if (cardIndex === undefined) {
+                if (cardIndex === -1) {
                     throw new Error(`player '${otherPlayer.name}' doesn't have card with id ${method.cardId}`);
                 }
 
@@ -226,7 +226,7 @@ export default class Player implements Lib.PlayerState {
                 let i = 0;
                 for (const newCard of method.newCardIds) {
                     const cardIndex = this.hand.indexOf(newCard);
-                    if (cardIndex === undefined) {
+                    if (cardIndex === -1) {
                         throw new Error();
                     }
 
@@ -281,6 +281,7 @@ export default class Player implements Lib.PlayerState {
             } else if (method.methodName === 'AddToScore') {
                 this.disown(method.cardIds);
                 this.game.score.push(...method.cardIds);
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             } else if (method.methodName === 'TakeFromScore') {
                 const cardIndex = this.game.score.indexOf(method.cardId);
                 if (cardIndex === -1) {

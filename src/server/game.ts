@@ -231,6 +231,8 @@ export default class Game {
                 }
 
                 --playerIndex;
+            // this.dispensing can be set in another promise
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             } while (this.dispensing && this.deck.length > remainder);
         } finally {
             this.dispensing = false;

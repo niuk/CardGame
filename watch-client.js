@@ -2,6 +2,7 @@ import fs from 'fs';
 import browserify from 'browserify';
 import watchify from 'watchify';
 import tsify from 'tsify';
+import console from 'console';
 
 const b = browserify({ cache: {}, packageCache: {}, debug: true })
     .add('src/client/main.ts')

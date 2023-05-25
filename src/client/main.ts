@@ -175,6 +175,8 @@ window.onresize = async () => {
 };
 
 function renderHovered(deltaTime: number) {
+    if (Sprite.app === undefined) throw new Error()
+
     if (Sprite.hoveredSprite) {
         const position = {
             x: Sprite.app.view.width * (1 - deckRatio) - 2 * Sprite.width / 2,
@@ -193,6 +195,8 @@ const deckLabels: (PIXI.BitmapText | undefined)[] = [];
 const deckDealDuration = 1000;
 let deckDealTime: number | undefined = undefined;
 function renderDeck(deltaTime: number) {
+    if (Sprite.app === undefined) throw new Error()
+
     if (deckDealTime === undefined) {
         deckDealTime = performance.now();
     }
@@ -226,6 +230,8 @@ function renderDeck(deltaTime: number) {
 }
 
 function addDeckLines() {
+    if (Sprite.app === undefined) throw new Error()
+
     const gameState = Client.gameState;
     if (!gameState) return;
 
@@ -244,6 +250,8 @@ function addDeckLines() {
 }
 
 function addDeckLabels() {
+    if (Sprite.app === undefined) throw new Error()
+
     const gameState = Client.gameState;
     if (!gameState) return;
 
@@ -304,6 +312,8 @@ function addDeckLabels() {
 }
 
 function renderScore(deltaTime: number) {
+    if (Sprite.app === undefined) throw new Error()
+
     const gameState = Client.gameState;
     if (!gameState) return;
 
@@ -335,6 +345,8 @@ const scoreLines: (PIXI.Graphics | undefined)[] = [];
 const scoreLabels: (PIXI.BitmapText | undefined)[] = [];
 
 function addScoreLines() {
+    if (Sprite.app === undefined) throw new Error()
+
     let i = addLine(scoreLines, Sprite.deckContainer, 0,
         (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap + Sprite.height,
         (deckRatio - (0.5 - deckRatio)) * Sprite.app.view.width, Sprite.app.view.height / 2 + Sprite.gap);
@@ -352,6 +364,8 @@ function addScoreLines() {
 function addScoreLabels() {
     const gameState = Client.gameState;
     if (!gameState) return;
+
+    if (Sprite.app === undefined) throw new Error();
 
     let i = 上下(scoreLabels, Sprite.deckContainer, 0,
         Sprite.app.view.width / 2 - getOffset(Sprite.scoreSprites.length) - 0.548 * Sprite.pixelsPerCM,
@@ -572,13 +586,13 @@ function addLabel(
     }
 
     // workaround for a bug
-    if (label && label.transform === null) {
+    /*if (label && label.transform === null) {
         labelsUsingCurrentFontsWithCallbacks.delete(label);
         label.destroy();
         label = undefined;
         labels[i] = undefined;
         //console.log(`destroyed ${text} at ${i} because of bug`);
-    }
+    }*/
 
     if (!label) {
         //console.log(`creating ${text} at ${i} because of null or undefined label`, label, labelsUsingCurrentFontsWithCallbacks);
@@ -622,12 +636,12 @@ function addLabel(
     }
 
     // check for valid transform to work around a bug
-    if (label.transform !== null && (
+    /*if (label.transform !== null && (
         label.position.x !== positionX ||
         label.position.y !== positionY
     )) {
         label.position.set(positionX, positionY);
-    }
+    }*/
 
     return i + 1;
 }

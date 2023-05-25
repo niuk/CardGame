@@ -27,17 +27,17 @@ const backgroundTextureNames = [
 let loadedTextureCount = 0;
 const totalTextureCount = backgroundTextureNames.length + 4 * 13 + 2 + colorNames.length;
 
-function loadTexture(key: string, src: string, frame?: PIXI.Rectangle) {
-    Sprite.app.loader.add(src, () => {
+function loadTexture(app: PIXI.Application, key: string, src: string, frame?: PIXI.Rectangle) {
+    app.loader.add(src, () => {
         textures.set(key, new PIXI.Texture(PIXI.BaseTexture.from(src), frame));
     });
 }
 
 let loadPromise = Promise.resolve();
-let cachedOnTick: (deltaTime: number) => void | undefined;
+let cachedOnTick: ((deltaTime: number) => void) | undefined;
 
 export default class Sprite {
-    public static app: PIXI.Application;
+    public static app: PIXI.Application | undefined;
 
     public static onTick: (deltaTime: number) => void;
     public static onDragStart: (position: V.IVector2, sprite: Sprite) => void;
@@ -92,7 +92,7 @@ export default class Sprite {
 
             // load background textures
             for (const backgroundTextureName of backgroundTextureNames) {
-                loadTexture(backgroundTextureName, `${backgroundTextureName}.jpg`);
+                loadTexture(Sprite.app, backgroundTextureName, `${backgroundTextureName}.jpg`);
             }
 
             // load textures for card faces
@@ -113,6 +113,7 @@ export default class Sprite {
                     }
 
                     loadTexture(
+                        Sprite.app,
                         JSON.stringify([suit, rank]),
                         `PlayingCards/${suits[suit]}${rank < 10 ? '0' : ''}${rank}.png`,
                         cardTextureFrame
@@ -124,6 +125,7 @@ export default class Sprite {
             let i = 0;
             for (const color of colorNames) {
                 loadTexture(
+                    Sprite.app,
                     `Back${i++}`,
                     `PlayingCards/BackColor_${color}.png`,
                     cardTextureFrame
@@ -134,7 +136,8 @@ export default class Sprite {
                 bar.value = ++loadedTextureCount;
             });
 
-            await new Promise(resolve => Sprite.app.loader.load(resolve));
+            const app = Sprite.app;
+            await new Promise(resolve => app.loader.load(resolve));
 
             bar.style.visibility = 'hidden';
             console.log('all textures loaded');
@@ -179,7 +182,7 @@ export default class Sprite {
         Sprite.width = 5 * Sprite.pixelsPerPercent;
         Sprite.height = 8 * Sprite.pixelsPerPercent;
         for (const sprite of sprites) {
-            sprite.updateSize();
+            sprite.updateSize(Sprite.app);
         }
 
         if (gameState) {
@@ -640,7 +643,7 @@ export default class Sprite {
         this._sprite.zIndex = value;
     }
 
-    public updateSize(): void {
+    public updateSize(app: PIXI.Application): void {
         if (this._sprite.destroyed) {
             return;
         }
@@ -649,8 +652,8 @@ export default class Sprite {
             this._sprite.width = 2 * Sprite.width;
             this._sprite.height = 2 * Sprite.height;
         } else if (this === backgroundSprite) {
-            this._sprite.width = Sprite.app.view.width;
-            this._sprite.height = Sprite.app.view.height;
+            this._sprite.width = app.view.width;
+            this._sprite.height = app.view.height;
         } else {
             this._sprite.width = Sprite.width;
             this._sprite.height = Sprite.height;
