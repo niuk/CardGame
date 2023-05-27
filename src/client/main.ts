@@ -639,9 +639,9 @@ function addLabel(
     /*if (label.transform !== null && (
         label.position.x !== positionX ||
         label.position.y !== positionY
-    )) {
+    )) {*/
         label.position.set(positionX, positionY);
-    }*/
+    //}
 
     return i + 1;
 }
