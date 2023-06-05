@@ -310,7 +310,7 @@ export default class Sprite {
                 const topRightPosition = V.sub({
                     x: arm + leg + width,
                     y: height
-                }, V.rotateClockwise(tilt, { x: 0, y: height }));
+                }, V.rotateCounterClockwise(tilt, { x: 0, y: height }));
                 topRightContainer.position.set(topRightPosition.x, topRightPosition.y);
                 topRightContainer.rotation = tilt;
 
