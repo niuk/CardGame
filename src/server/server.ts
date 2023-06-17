@@ -12,6 +12,7 @@ import Game from './game.js';
 import Player from './player.js';
 
 const HEAPDUMP_DIR = 'heapdumps';
+const CLIENTLOGS_DIR = 'clientLogs';
 
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -97,7 +98,7 @@ app.get('/', async (_, response) => {
 });
 
 app.post('/clientLogs', async (request, response) => {
-    const f = await fs.open(path.join('logs', `${
+    const f = await fs.open(path.join(CLIENTLOGS_DIR, `${
         new Date().toLocaleString()
             .replace(/ /g, '')
             .replace(/\//g, '-')
