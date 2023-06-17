@@ -14,8 +14,6 @@ export default class Game {
     static gamesById = new Map<string, Game>();
 
     public static get(gameId: string): Game {
-        console.log('games:', Game.gamesById);
-
         const game = this.gamesById.get(gameId);
         if (game === undefined) {
             throw new Error(`there's no game with id ${gameId}`);

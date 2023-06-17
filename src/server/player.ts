@@ -88,7 +88,7 @@ export default class Player implements Lib.PlayerState {
         this.game = Game.get(gameId);
         this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
 
-        console.log(`looking for existing player with name "${this.name}"...`, this.game.players.map(p => p?.name));
+        console.log(`looking for existing player with name "${this.name}"...`);
         const i = this.game.players.findIndex(player => player?.name === this.name);
         const player = this.game.players[i];
         if (player) {
@@ -104,7 +104,7 @@ export default class Player implements Lib.PlayerState {
             this.notes = player.notes;
 
             this.game.players[i] = this;
-            console.log(`player '${this.name}' rejoined '${this.game.gameId}`);
+            console.log(`player '${this.name}' rejoined ${this.game.gameId}`);
             return;
         }
 
