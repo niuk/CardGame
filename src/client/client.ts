@@ -39,11 +39,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
                 //Sprite.clearSprites();
             }
 
-            // avoid immediately reconnecting if we haven't received a heartbeat yet
-            heartbeat = Date.now();
-
             // reconnect
-            console.log(window.location.protocol)
             const url = `${
                 window.location.protocol === 'https:' ? 'wss:' : 'ws:'
             }//${
@@ -54,6 +50,7 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
                 playerName !== undefined ? playerName : ''
             }`;
             console.log(`webSocket.url = ${url}, isNative = ${Capacitor.isNative}`);
+
             webSocket = new WebSocket(url);
             webSocket.onmessage = async e => {
                 if (typeof(e.data) !== 'string') {
@@ -86,6 +83,9 @@ const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
                     callbacks.delete(methodResult.index);
                 }
             };
+
+            // avoid immediately reconnecting if we haven't received a heartbeat yet
+            heartbeat = Date.now();
         }
 
         if (webSocket) {
