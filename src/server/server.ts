@@ -5,12 +5,30 @@ import fs from 'fs/promises';
 import path from 'path';
 import WebSocket from 'ws';
 import bodyParser from 'body-parser';
+import heapdump from 'heapdump';
 
 import * as Lib from '../lib.js';
 import Game from './game.js';
 import Player from './player.js';
 
+const HEAPDUMP_DIR = 'heapdumps';
+
+const MS_PER_MINUTE = 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+(async () => {
+    await fs.mkdir(HEAPDUMP_DIR, { recursive: true });
+
+    while (true) {
+        await Lib.delay(5 * MS_PER_MINUTE);
+
+        heapdump.writeSnapshot(path.join(HEAPDUMP_DIR, `${new Date().toISOString()}.heapsnapshot`));
+    }
+})().catch(e => console.error(e));
+
 async function foreachSavedGame(cb: (path: string) => Promise<void>): Promise<void> {
+    await fs.mkdir(Game.SAVEDIR, { recursive: true });
+
     const gamesDir = await fs.opendir(Game.SAVEDIR);
     try {
         while (true) {
@@ -31,8 +49,6 @@ async function foreachSavedGame(cb: (path: string) => Promise<void>): Promise<vo
 let pruned = false;
 
 (async () => {
-    const MS_PER_HOUR = 60 * 60 * 1000;
-
     while (true) {
         // every hour, prune saved games that are older than a day
         await foreachSavedGame(async path => {
@@ -40,7 +56,7 @@ let pruned = false;
                 console.log(`deleting game: ${path}`);
                 fs.rm(path);
             } else {
-                console.log(`game is too recent: ${path}`);
+                console.log(`game is too recent to be deleted: ${path}`);
             }
         });
 
@@ -63,6 +79,7 @@ await foreachSavedGame(async path => {
     console.log(`restoring game: ${gameFileContent}`);
     try {
         new Game(JSON.parse(gameFileContent));
+        console.log(`restored game: ${path}`);
     } catch (e) {
         console.warn(`failed to restore game: ${path}, deleting it instead. Error:`, e);
         await fs.rm(path);

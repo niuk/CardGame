@@ -88,10 +88,12 @@ export default class Player implements Lib.PlayerState {
         this.game = Game.get(gameId);
         this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
 
-        console.log(`looking for existing player with name "${this.name}"...`);
+        console.log(`looking for existing player with name "${this.name}"...`, this.game.players.map(p => p?.name));
         const i = this.game.players.findIndex(player => player?.name === this.name);
         const player = this.game.players[i];
         if (player) {
+            console.log(`found existing player with name "${this.name}" at index ${i}...`);
+
             player.game = undefined; // disallow absent player from affecting game
             player.ws?.close(); // stop receiving messages for absent player
 
