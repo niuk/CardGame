@@ -32,6 +32,8 @@ export default class Game {
         return this.players.filter(player => player != null).length;
     }
 
+    public heartbeat: number
+
     mutex = new Mutex();
     stationaryCardsById = new Map<number, Lib.Card>();
     movingCardsById = new Map<number, Lib.Card>();
@@ -46,6 +48,8 @@ export default class Game {
     dispensing = false;
 
     public constructor(gameState?: Lib.GameState) {
+        this.heartbeat = Date.now();
+
         if (gameState !== undefined) {
             this._gameId = gameState.gameId;
             Game.gamesById.set(this.gameId, this);

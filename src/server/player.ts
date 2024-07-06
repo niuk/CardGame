@@ -42,6 +42,9 @@ export default class Player implements Lib.PlayerState {
                 if (typeof(event.data) === 'string') {
                     if (event.data.startsWith('time = ')) {
                         this.heartbeat = Date.now();
+                        if (this.game) {
+                            this.game.heartbeat = Date.now();
+                        }
                     } else {
                         console.log(`method: ${event.data}`);
                         const method = <Lib.Method>JSON.parse(event.data);
@@ -95,7 +98,7 @@ export default class Player implements Lib.PlayerState {
             console.log(`found existing player with name "${this.name}" at index ${i}...`);
 
             player.game = undefined; // disallow absent player from affecting game
-            player.ws?.close(); // stop receiving messages for absent player
+            player.ws?.close(); // stop receiving messages from absent player
 
             this.hand = player.hand;
             this.shareCount = player.shareCount;
