@@ -24,7 +24,7 @@ const MS_PER_HOUR = 60 * MS_PER_MINUTE;
     while (true) {
         await Lib.delay(5 * MS_PER_MINUTE);
 
-        heapdump.writeSnapshot(path.join(HEAPDUMP_DIR, `${new Date().toISOString()}.heapsnapshot`));
+	//heapdump.writeSnapshot(path.join(HEAPDUMP_DIR, `${new Date().toISOString()}.heapsnapshot`));
     }
 })().catch(e => console.error(e));
 
