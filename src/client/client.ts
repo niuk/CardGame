@@ -152,9 +152,10 @@ export function setPlayerName(playerName: string): Promise<void> {
     });
 }
 
-export function newGame(): Promise<void> {
+export function newGame(password: string): Promise<void> {
     return setup<Lib.NewGame>({
-        methodName: 'NewGame'
+        methodName: 'NewGame',
+        password
     });
 }
 

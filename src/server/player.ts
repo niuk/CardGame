@@ -156,6 +156,10 @@ export default class Player implements Lib.PlayerState {
 
             console.log(`player name set to "${method.playerName}"`);
         } else if (method.methodName === 'NewGame') {
+            if (method.password !== 'pukepai') {
+                throw new Error('incorrect password');
+            }
+
             this.game = new Game();
             this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
             this.game.players[0] = this;

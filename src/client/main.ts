@@ -69,6 +69,9 @@ window.onload = async () => {
     const joinGameButton = <HTMLButtonElement>document.getElementById('joinGame');
     const newGameButton = <HTMLButtonElement>document.getElementById('newGame');
     const showOrHideLogButton = <HTMLButtonElement>document.getElementById('showOrHideLog');
+    const passwordElement = <HTMLInputElement>document.getElementById('password');
+
+    console.log(`passwordElement: ${passwordElement}`);
 
     joinGameButton.onclick = async e => {
         playerNameElement.disabled = true;
@@ -76,6 +79,7 @@ window.onload = async () => {
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         showOrHideLogButton.disabled = false;
+        passwordElement.disabled = true;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
@@ -93,6 +97,7 @@ window.onload = async () => {
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
             showOrHideLogButton.disabled = false;
+            passwordElement.disabled = false;
         }
     };
 
@@ -102,11 +107,12 @@ window.onload = async () => {
         joinGameButton.disabled = true;
         newGameButton.disabled = true;
         showOrHideLogButton.disabled = false;
+        passwordElement.disabled = true;
         try {
             Lib.setCookie('playerName', playerNameElement.value);
 
             await Client.setPlayerName(playerNameElement.value);
-            await Client.newGame();
+            await Client.newGame(passwordElement.value);
 
             while (!Client.gameState) {
                 await Lib.delay(100);
@@ -119,6 +125,7 @@ window.onload = async () => {
             joinGameButton.disabled = false;
             newGameButton.disabled = false;
             showOrHideLogButton.disabled = false;
+            passwordElement.disabled = false;
         }
     };
 
@@ -151,6 +158,7 @@ window.onload = async () => {
     joinGameButton.disabled = false;
     newGameButton.disabled = false;
     showOrHideLogButton.disabled = true;
+    passwordElement.disabled = false;
 }
 
 // it takes a while for page elements to render at their new size,

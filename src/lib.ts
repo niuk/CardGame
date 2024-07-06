@@ -153,6 +153,7 @@ export interface SetPlayerName extends MethodBase {
 
 export interface NewGame extends MethodBase {
     methodName: 'NewGame';
+    password: string;
 }
 
 export interface JoinGame extends MethodBase {
