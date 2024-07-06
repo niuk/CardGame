@@ -14,8 +14,9 @@ import Player from './player.js';
 const HEAPDUMP_DIR = 'heapdumps';
 const CLIENTLOGS_DIR = 'clientLogs';
 
-const MS_PER_MINUTE = 60 * 1000;
-const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 
 (async () => {
     await fs.mkdir(HEAPDUMP_DIR, { recursive: true });
@@ -53,7 +54,7 @@ let pruned = false;
     while (true) {
         // every hour, prune saved games that are older than a day
         await foreachSavedGame(async path => {
-            if (new Date().getTime() - (await fs.lstat(path)).mtimeMs > 24 * MS_PER_HOUR) {
+            if (Date.now() - (await fs.lstat(path)).mtimeMs > 24 * MS_PER_HOUR) {
                 console.log(`deleting game: ${path}`);
                 fs.rm(path);
             } else {
@@ -71,7 +72,7 @@ let pruned = false;
 // since each game almost immediately persists itself,
 // doing so would bump their modification timestamps
 while (!pruned) {
-    await Lib.delay(1000);
+    await Lib.delay(1 * MS_PER_SECOND);
 }
 
 // now we can restore saved games
@@ -187,6 +188,26 @@ webSocketServer.on('connection', (ws, request) => {
 webSocketServer.on('close', (ws: WebSocket.Server) => {
     console.log(`closed websocket connection`);
 });
+
+(async () => {
+    while (true) {
+        // every 5 minutes, destroy games that have had no active players for 5 minutes
+        await Lib.delay(15 * MS_PER_MINUTE);
+
+        console.log('pruning games with no active players...');
+        const gamesToRemove: Game[] = [];
+        for (const game of Game.gamesById.values()) {
+            if (Date.now() - game.heartbeat >= 15 * MS_PER_MINUTE) {
+                console.log(`destroying game: ${game.gameId}`);
+                gamesToRemove.push(game);
+            }
+        }
+
+        for (const gameToRemove of gamesToRemove) {
+            Game.gamesById.delete(gameToRemove.gameId);
+        }
+    }
+})();
 
 console.log(`listening on port ${port}...`);
 httpsServer.listen(port);
