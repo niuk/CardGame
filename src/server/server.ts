@@ -150,8 +150,8 @@ const [httpsServer, port] = await ((async () => {
     try {
         return [
             https.createServer({
-                key: await fs.readFile('../key.pem'),
-                cert: await fs.readFile('../cert.pem'),
+                key: await fs.readFile('/etc/letsencrypt/live/haruspex.io/privkey.pem'),
+                cert: await fs.readFile('/etc/letsencrypt/live/haruspex.io/cert.pem'),
             }, app),
             443
         ];
