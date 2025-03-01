@@ -1,6 +1,6 @@
 #!/bin/bash
 
-kill `pidof node`
+kill `pidof node` || true
 
 while ps -A | grep -E '(npm|node)'
 do
