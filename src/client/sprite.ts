@@ -4,8 +4,7 @@ import * as V from './vector';
 
 const decayPerSecond = 1 / 5;
 
-const colors = [0x000000, 0x0000ff, 0xff0000, 0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
-const colorNames = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow'];
+const colorNames = ['Black', 'Blue', 'Red', 'Green', 'Cyan', 'Purple', 'Yellow', 'Orange', 'Pink', 'Brown'];
 const suits = ['Club', 'Heart', 'Spade', 'Diamond', 'Joker'];
 
 const textures = new Map<string, PIXI.Texture>();

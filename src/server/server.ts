@@ -157,7 +157,7 @@ const [httpsServer, port] = await ((async () => {
         ];
     } catch (e) {
         console.error(e);
-        console.log('HTTP server creation failed. Creating HTTP server...');
+        console.log('HTTPS server creation failed. Creating HTTP server...');
         return [
             http.createServer(app),
             8080

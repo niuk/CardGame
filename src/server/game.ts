@@ -29,7 +29,7 @@ export default class Game {
 
     players: (Player | undefined)[] = [undefined, undefined, undefined, undefined];
     get numPlayers(): number {
-        return this.players.filter(player => player != null).length;
+        return this.players.filter(player => player != undefined).length;
     }
 
     public heartbeat: number
@@ -203,6 +203,24 @@ export default class Game {
                     } else if (this.numDecks === 3) {
                         remainder = 6;
                     } else if (this.numDecks === 4) {
+                        remainder = 6;
+                    } else {
+                        return;
+                    }
+                } else if (this.numPlayers === 7) {
+                    if (this.numDecks === 3) {
+                        remainder = 8;
+                    } else if (this.numDecks === 4) {
+                        remainder = 6;
+                    } else {
+                        return;
+                    }
+                } else if (this.numPlayers === 8) {
+                    if (this.numDecks === 3) {
+                        remainder = 10;
+                    } else if (this.numDecks === 4) {
+                        remainder = 8;
+                    } else if (this.numDecks === 5) {
                         remainder = 6;
                     } else {
                         return;

@@ -133,7 +133,7 @@ export default class Player implements Lib.PlayerState {
             }
         }
 
-        if (this.game.players.length < 6) {
+        if (this.game.players.length < 9) {
             console.log('joining at new slot...');
             this.game.players[this.game.players.length] = this;
             console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
