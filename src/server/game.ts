@@ -1,17 +1,21 @@
+import * as fs from 'fs/promises';
+import path from 'path';
 import { Mutex } from 'async-mutex';
 import { customAlphabet } from 'nanoid';
 const nanoid = customAlphabet('0123456789', 5);
 
 import * as Lib from '../lib.js';
-import Player from './player';
+import Hand from './hand.js';
+import Player from './player.js';
 
 export default class Game {
-    public static mutex = new Mutex();
-    private static gamesById = new Map<string, Game>();
+    public static readonly SAVEDIR = 'games';
+
+    static gamesById = new Map<string, Game>();
 
     public static get(gameId: string): Game {
         const game = this.gamesById.get(gameId);
-        if (!game) {
+        if (game === undefined) {
             throw new Error(`there's no game with id ${gameId}`);
         }
 
@@ -19,190 +23,280 @@ export default class Game {
     }
 
     private _gameId: string;
-
-    public get gameId(): string {
+    get gameId(): string {
         return this._gameId;
     }
 
-    public tick = 0;
-    public numPlayers: 4 | 5 | 6;
-    public numDecks: 1 | 2 | 3;
-    public players: (Player | undefined)[] = []
-    public deckCardsWithOrigins: [Lib.Card, Lib.Origin][] = [];
+    players: (Player | undefined)[] = [undefined, undefined, undefined, undefined];
+    get numPlayers(): number {
+        return this.players.filter(player => player != undefined).length;
+    }
 
-    public constructor(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3) {
-        do {
-            this._gameId = nanoid();
-        } while (Game.gamesById.has(this.gameId));
-        Game.gamesById.set(this.gameId, this);
+    public heartbeat: number
 
-        this.numPlayers = numPlayers;
-        this.numDecks = numDecks;
+    mutex = new Mutex();
+    stationaryCardsById = new Map<number, Lib.Card>();
+    movingCardsById = new Map<number, Lib.Card>();
+    nextCardId = 0;
+    deck = new Hand<number, Lib.Card>(this.stationaryCardsById, this.movingCardsById);
+    score = new Hand<number, Lib.Card>(this.stationaryCardsById, this.movingCardsById);
 
-        for (let i = 0; i < numPlayers; ++i) {
-            this.players[i] = undefined;
-        }
+    get numDecks(): number {
+        return (this.stationaryCardsById.size + this.movingCardsById.size) / 54;
+    }
 
-        for (let i = 0; i < numDecks; ++i) {
-            for (let j = 0; j < 4; ++j) {
-                for (let k = 0; k < 13; ++k) {
-                    this.deckCardsWithOrigins.push([[j, k + 1], {
-                        origin: 'Deck',
-                        deckIndex: this.deckCardsWithOrigins.length
-                    }]);
+    dispensing = false;
+
+    public constructor(gameState?: Lib.GameState) {
+        this.heartbeat = Date.now();
+
+        if (gameState !== undefined) {
+            this._gameId = gameState.gameId;
+            Game.gamesById.set(this.gameId, this);
+
+            for (const [cardId, card] of gameState.cardsById) {
+                this.movingCardsById.set(cardId, card);
+            }
+
+            this.deck.push(...gameState.deckCardIds);
+            this.score.push(...gameState.scoreCardIds);
+            this.nextCardId = gameState.nextCardId;
+
+            for (let i = 0; i < gameState.playerStates.length; ++i) {
+                const playerState = gameState.playerStates[i];
+                if (playerState !== null && playerState !== undefined) {
+                    const player = new Player(playerState.name, undefined, this.gameId);
+                    player.hand.push(...playerState.handCardIds);
+                    player.shareCount = playerState.shareCount;
+                    player.revealCount = playerState.revealCount;
+                    player.groupCount = playerState.groupCount;
+                    player.notes = playerState.notes;
                 }
             }
 
-            this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Big], {
-                origin: 'Deck',
-                deckIndex: this.deckCardsWithOrigins.length
-            }]);
-            this.deckCardsWithOrigins.push([[Lib.Suit.Joker, Lib.Rank.Small], {
-                origin: 'Deck',
-                deckIndex: this.deckCardsWithOrigins.length
-            }]);
+            if (this.movingCardsById.size > 0) {
+                throw new Error(`not all cards distributed to players, ${this.movingCardsById.size} remaining`);
+            }
+
+            this.broadcastStateExceptToPlayerAt(-1);
+        } else {
+            do {
+                this._gameId = nanoid();
+            } while (Game.gamesById.has(this.gameId));
+            Game.gamesById.set(this.gameId, this);
+
+            this.addDeck();
         }
 
-        this.shuffleDeck();
+        this.persist();
+    }
+
+    private async persist(): Promise<void> {
+        let savedState: string | undefined;
+        while (true) {
+            await Lib.delay(1000);
+
+            const state = JSON.stringify(this.getStateForPlayerAt(-1));
+
+            if (savedState !== state) {
+                savedState = state;
+
+                console.log(`persisting game: ${state}`);
+                await fs.writeFile(path.join(Game.SAVEDIR, `${this.gameId}`), state);
+            }
+        }
+    }
+
+    public addDeck(): void {
+        for (const suit of [Lib.Suit.Club, Lib.Suit.Diamond, Lib.Suit.Heart, Lib.Suit.Spade]) {
+            for (let rank = Lib.Rank.Small + 1; rank < Lib.Rank.Big; ++rank) {
+                const cardId = this.nextCardId++;
+                this.deck.add(cardId, [suit, rank]);
+            }
+        }
+
+        let cardId = this.nextCardId++;
+        this.deck.add(cardId, [Lib.Suit.Joker, Lib.Rank.Small]);
+
+        cardId = this.nextCardId++;
+        this.deck.add(cardId, [Lib.Suit.Joker, Lib.Rank.Big]);
+    }
+
+    public removeDeck(): void {
+        for (let i = 0; i < 54; ++i) {
+            const cardId = --this.nextCardId;
+
+            if (this.deck.includes(cardId)) {
+                this.deck.remove(cardId);
+            }
+
+            if (this.score.includes(cardId)) {
+                this.score.remove(cardId);
+            }
+
+            for (const player of this.players) {
+                if (player !== undefined && player.hand.includes(cardId)) {
+                    player.hand.remove(cardId);
+                }
+            }
+        }
     }
 
     public shuffleDeck(): void {
-        for (let i = this.deckCardsWithOrigins.length - 1; i >= 1; --i) {
+        for (let i = this.deck.length - 1; i >= 1; --i) {
             const j = Math.floor(Math.random() * i);
             //console.log(`${i} <-> ${j}`);
 
-            const iCardWithOrigin = this.deckCardsWithOrigins[i];
-            if (!iCardWithOrigin) throw new Error();
-            
-            const jCardWithOrigin = this.deckCardsWithOrigins[j];
-            if (!jCardWithOrigin) throw new Error();
+            const [iCardId] = this.deck.splice(i, 1);
+            if (iCardId === undefined) {
+                throw new Error();
+            }
 
-            this.deckCardsWithOrigins[i] = jCardWithOrigin;
-            this.deckCardsWithOrigins[j] = iCardWithOrigin;
+            const [jCardId] = this.deck.splice(j, 1, iCardId);
+            if (jCardId === undefined) {
+                throw new Error();
+            }
+
+            this.deck.splice(i, 0, jCardId);
         }
     }
 
     public async dispense(playerIndex: number): Promise<void> {
-        let remainder: number;
-        if (this.numPlayers === 4) {
-            if (this.numDecks === 1) {
-                remainder = 6;
-            } else if (this.numDecks === 2) {
-                remainder = 8;
-            } else if (this.numDecks === 3) {
-                remainder = 8;
-            } else {
-                const _: never = this.numDecks;
-                throw new Error();
-            }
-        } else if (this.numPlayers === 5) {
-            if (this.numDecks === 1) {
-                remainder = 9;
-            } else if (this.numDecks === 2) {
-                remainder = 8;
-            } else if (this.numDecks === 3) {
-                remainder = 7;
-            } else {
-                const _: never = this.numDecks;
-                throw new Error();
-            }
-        } else if (this.numPlayers === 6) {
-            if (this.numDecks === 1) {
-                remainder = 6;
-            } else if (this.numDecks === 2) {
-                remainder = 6;
-            } else if (this.numDecks === 3) {
-                remainder = 6;
-            } else {
-                const _: never = this.numDecks;
-                throw new Error();
-            }
-        } else {
-            const _: never = this.numPlayers;
-            throw new Error();
+        if (this.dispensing) {
+            this.dispensing = false;
+            return;
         }
 
-        while (this.deckCardsWithOrigins.length > remainder) {
-            const player = this.players[playerIndex % this.numPlayers];
-            if (player) {
-                const release = await Game.mutex.acquire();
-                try {
-                    this.resetCardOrigins();
-                    const deckIndex = this.deckCardsWithOrigins.length - 1;
-                    const card = this.deckCardsWithOrigins.splice(deckIndex, 1)[0]?.[0];
-                    if (!card) {
-                        throw new Error(`deck ran out of cards!`);
+        this.dispensing = true;
+        try {
+            let remainder: number;
+            do {
+                if (this.numPlayers === 4) {
+                    if (this.numDecks === 1) {
+                        remainder = 6;
+                    } else if (this.numDecks === 2) {
+                        remainder = 8;
+                    } else if (this.numDecks === 3) {
+                        remainder = 6;
+                    } else if (this.numDecks === 4) {
+                        remainder = 8;
+                    } else {
+                        return;
                     }
-                    
-                    player.cardsWithOrigins.push([card, { origin: 'Deck', deckIndex }]);
-                    ++this.tick;
-                    this.broadcastStateExceptToPlayerAt(-1);
-                } finally {
-                    release();
+                } else if (this.numPlayers === 5) {
+                    if (this.numDecks === 1) {
+                        remainder = 9;
+                    } else if (this.numDecks === 2) {
+                        remainder = 8;
+                    } else if (this.numDecks === 3) {
+                        remainder = 7;
+                    } else if (this.numDecks === 4) {
+                        remainder = 6;
+                    } else {
+                        return;
+                    }
+                } else if (this.numPlayers === 6) {
+                    if (this.numDecks === 1) {
+                        remainder = 6;
+                    } else if (this.numDecks === 2) {
+                        remainder = 6;
+                    } else if (this.numDecks === 3) {
+                        remainder = 6;
+                    } else if (this.numDecks === 4) {
+                        remainder = 6;
+                    } else {
+                        return;
+                    }
+                } else if (this.numPlayers === 7) {
+                    if (this.numDecks === 3) {
+                        remainder = 8;
+                    } else if (this.numDecks === 4) {
+                        remainder = 6;
+                    } else {
+                        return;
+                    }
+                } else if (this.numPlayers === 8) {
+                    if (this.numDecks === 3) {
+                        remainder = 10;
+                    } else if (this.numDecks === 4) {
+                        remainder = 8;
+                    } else if (this.numDecks === 5) {
+                        remainder = 6;
+                    } else {
+                        return;
+                    }
+                } else {
+                    return;
                 }
 
-                await Lib.delay(1000);
-            }
+                if (playerIndex < 0) {
+                    playerIndex = this.numPlayers + playerIndex;
+                }
 
-            ++playerIndex;
+                const player = this.players[playerIndex % this.numPlayers];
+                if (player !== undefined && 'ws' in player) {
+                    const release = await this.mutex.acquire();
+                    try {
+                        const deckIndex = this.deck.length - 1;
+                        const [card] = this.deck.splice(deckIndex, 1);
+                        if (card === undefined) {
+                            throw new Error(`deck ran out of cards!`);
+                        }
+
+                        player.hand.push(card);
+                        this.broadcastStateExceptToPlayerAt(-1);
+                    } finally {
+                        release();
+                    }
+
+                    await Lib.delay(500);
+                }
+
+                --playerIndex;
+            // this.dispensing can be set in another promise
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            } while (this.dispensing && this.deck.length > remainder);
+        } finally {
+            this.dispensing = false;
+            this.broadcastStateExceptToPlayerAt(-1);
         }
     }
 
-    public resetCardOrigins(): void {
-        let deckIndex = 0;
-        for (const deckCardWithOrigin of this.deckCardsWithOrigins) {
-            deckCardWithOrigin[1] = { origin: 'Deck', deckIndex };
-            ++deckIndex;
-        }
-
-        for (const player of this.players) {
-            player?.resetCardOrigins();
-        }
-    }
-    
     public getStateForPlayerAt(playerIndex: number): Lib.GameState {
         const playerStates: (Lib.PlayerState | null)[] = [];
         for (const player of this.players) {
             if (!player) {
                 playerStates.push(null);
-            } else if (player.index === playerIndex) {
-                playerStates.push({
-                    name: player.name,
-                    shareCount: player.shareCount,
-                    revealCount: player.revealCount,
-                    groupCount: player.groupCount,
-                    cardsWithOrigins: player.cardsWithOrigins
-                });
             } else {
                 playerStates.push({
                     name: player.name,
                     shareCount: player.shareCount,
                     revealCount: player.revealCount,
                     groupCount: player.groupCount,
-                    cardsWithOrigins: player.cardsWithOrigins
-                        .slice(0, player.revealCount)
-                        .concat(player.cardsWithOrigins
-                            .slice(player.revealCount)
-                            .map(([_, previousLocation]) => [null, previousLocation]))
-                });
+                    handCardIds: player.handCardIds,
+                    present: player.present,
+                    notes: player.notes
+                } as Lib.PlayerState);
             }
         }
-        
+
         return {
             gameId: this.gameId,
-            deckOrigins: this.deckCardsWithOrigins.map(([_, origin]) => origin),
+            deckCardIds: this.deck.slice(),
+            scoreCardIds: this.score.slice(),
+            cardsById: [...this.stationaryCardsById, ...this.movingCardsById],
+            nextCardId: this.nextCardId,
             playerIndex,
             playerStates,
-            tick: this.tick
+            dispensing: this.dispensing
         };
     }
 
     public broadcastStateExceptToPlayerAt(playerIndex: number): void {
         for (const player of this.players) {
-            if (player !== undefined && player.index !== playerIndex) {
-                player.ws.send(JSON.stringify({
-                    newGameState: this.getStateForPlayerAt(player.index),
-                    methodResult: null
+            if (player !== undefined && 'ws' in player && player.index !== playerIndex) {
+                player.ws?.send(JSON.stringify(<Lib.ServerResponse>{
+                    newGameState: this.getStateForPlayerAt(player.index)
                 }));
             }
         }

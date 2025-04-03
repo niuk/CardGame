@@ -1,142 +1,178 @@
 import WebSocket from 'ws';
+import Hand from './hand.js';
 
-import * as Lib from '../lib';
+import * as Lib from '../lib.js';
 import Game from './game.js';
 
 export default class Player implements Lib.PlayerState {
-    ws: WebSocket;
+    ws?: WebSocket;
+    heartbeat: number;
+
+    get present(): boolean {
+        return Date.now() - this.heartbeat < 3 * 1000;
+    }
 
     game: Game | undefined = undefined;
-    index = -1;
+    hand = new Hand<number, Lib.Card>(new Map<number, Lib.Card>(), new Map<number, Lib.Card>());
+
+    public get handCardIds(): number[] {
+        return this.hand.slice();
+    }
+
+    public get index(): number {
+        return this.game?.players.findIndex(player => this === player) ?? -1;
+    }
 
     // Lib.PlayerState properties
-    name = '';
+    name: string;
     shareCount = 0;
     revealCount = 0;
     groupCount = 0;
-    cardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
+    notes = '';
 
-    constructor(ws: WebSocket) {
+    constructor(name: string, ws?: WebSocket, gameId?: string) {
+        this.name = name;
         this.ws = ws;
+        this.heartbeat = Date.now();
 
-        ws.onmessage = async messageEvent => {
-            const release = await Game.mutex.acquire();
-            let errorDescription: string | undefined = undefined;
-            const method = <Lib.Method>JSON.parse(messageEvent.data.toString());
-            try {
-                this.game?.resetCardOrigins();
-                await this.invoke(method);
-            } catch (e) {
-                console.error(e);
-                errorDescription = e.message;
-            } finally {
-                ws.send(JSON.stringify({
-                    newGameState: this.game?.getStateForPlayerAt(this.index),
-                    methodResult: { methodName: method.methodName, errorDescription }
-                }));
-    
-                this.game?.broadcastStateExceptToPlayerAt(this.index);
+        if (ws) {
+            ws.onmessage = async (event: WebSocket.MessageEvent) => {
+                let errorDescription: string | undefined = undefined;
 
-                release();
-            }
-        };
-        
-        ws.onclose = async closeEvent => {
-            console.log('closed websocket connection');
-        };
-    }
+                if (typeof(event.data) === 'string') {
+                    if (event.data.startsWith('time = ')) {
+                        this.heartbeat = Date.now();
+                        if (this.game) {
+                            this.game.heartbeat = Date.now();
+                        }
+                    } else {
+                        console.log(`method: ${event.data}`);
+                        const method = <Lib.Method>JSON.parse(event.data);
+                        const release = await this.game?.mutex.acquire();
+                        try {
+                            await this.invoke(method);
+                        } catch (e) {
+                            console.error(e);
+                            if (e instanceof Error) {
+                                errorDescription = e.message;
+                            }
+                        } finally {
+                            ws.send(JSON.stringify(<Lib.ServerResponse>{
+                                newGameState: this.game?.getStateForPlayerAt(this.index),
+                                methodResult: { index: method.index, errorDescription }
+                            }));
 
-    public resetCardOrigins(): void {
-        let cardIndex = 0;
-        for (const cardWithOrigin of this.cardsWithOrigins) {
-            cardWithOrigin[1] = {
-                origin: 'Hand',
-                playerIndex: this.index,
-                cardIndex
+                            this.game?.broadcastStateExceptToPlayerAt(this.index);
+
+                            release?.();
+                        }
+                    }
+                } else {
+                    throw new Error();
+                }
             };
 
-            cardIndex++;
+            ws.onclose = async (event: WebSocket.CloseEvent) => {
+                console.log('closed websocket connection: ', event.reason);
+                this.game?.broadcastStateExceptToPlayerAt(this.index);
+            };
         }
+
+        if (gameId !== undefined) {
+            this.joinGame(gameId);
+            this.game?.broadcastStateExceptToPlayerAt(-1);
+        }
+
+        this.monitor();
     }
-    
-    private async invoke(method: Lib.Method) {
-        if (method.methodName === 'SetPlayerName') {
-            this.name = method.playerName;
-        } else if (method.methodName === 'NewGame') {
-            this.game = new Game(method.numPlayers, method.numDecks);
-            this.game.players[0] = this;
-            this.index = 0;
-            
-            console.log(`player '${this.name}' created and joined game '${this.game.gameId}'`);
-        } else if (method.methodName === 'JoinGame') {
-            this.game = Game.get(method.gameId);
-            this.game.resetCardOrigins();
 
-            console.log(`player '${this.name}' is trying to join game '${this.game.gameId}'...`);
+    private joinGame(gameId: string): void {
+        console.log(`player (re)joining game ${gameId}...`);
+        this.game = Game.get(gameId);
+        this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
 
-            let joined = false;
+        console.log(`looking for existing player with name "${this.name}"...`);
+        const i = this.game.players.findIndex(player => player?.name === this.name);
+        const player = this.game.players[i];
+        if (player) {
+            console.log(`found existing player with name "${this.name}" at index ${i}...`);
 
-            // get unoccupied indices and indices of disconnected players
-            const available = [];
-            for (let i = 0; i < this.game.numPlayers; ++i) {
+            player.game = undefined; // disallow absent player from affecting game
+            player.ws?.close(); // stop receiving messages from absent player
+
+            this.hand = player.hand;
+            this.shareCount = player.shareCount;
+            this.revealCount = player.revealCount;
+            this.groupCount = player.groupCount;
+            this.notes = player.notes;
+
+            this.game.players[i] = this;
+            console.log(`player '${this.name}' rejoined ${this.game.gameId}`);
+            return;
+        }
+
+        console.log('looking for empty slot...');
+        for (let i = 0; i < this.game.players.length; ++i) {
+            const player = this.game.players[i];
+            if (!player || !player.present) {
                 const player = this.game.players[i];
-                if (player === this) {
-                    joined = true;
-                    available.splice(0, available.length);
-                    break;
-                }
+                if (player) {
+                    player.game = undefined;
+                    player.ws?.close();
 
-                if (!player || player.ws.readyState !== WebSocket.OPEN) {
-                    available.push(i);
-                }
-            }
-
-            // try to join at index of a disconnected player with the same name
-            for (const i of available) {
-                const player = this.game.players[i];
-                if (player && player.name === this.name) {
+                    this.hand = player.hand;
                     this.shareCount = player.shareCount;
                     this.revealCount = player.revealCount;
                     this.groupCount = player.groupCount;
-                    this.cardsWithOrigins = player.cardsWithOrigins;
-                    this.game.players[i] = this;
-                    this.index = i;
-                    joined = true;
-                    break;
+                    this.notes = player.notes;
                 }
+
+                this.game.players[i] = this;
+                console.log(`player '${this.name}' joined '${this.game.gameId} at empty index ${this.index}`);
+                return;
+            }
+        }
+
+        if (this.game.players.length < 9) {
+            console.log('joining at new slot...');
+            this.game.players[this.game.players.length] = this;
+            console.log(`player '${this.name}' joined game '${this.game.gameId}' at new index ${this.index}`);
+            return;
+        }
+
+        throw new Error(`can't join this game`);
+    }
+
+    private async monitor() {
+        while (this.present) {
+            await Lib.delay(1000);
+
+            this.ws?.send(`time = ${this.heartbeat}`);
+        }
+
+        console.log(`'${this.name}' is no longer present`);
+    }
+
+    private async invoke(method: Lib.Method) {
+        if (method.methodName === 'SetPlayerName') {
+            this.name = method.playerName;
+
+            console.log(`player name set to "${method.playerName}"`);
+        } else if (method.methodName === 'NewGame') {
+            if (method.password !== 'pukepai1990') {
+                throw new Error('incorrect password');
             }
 
-            // just try to join at any available index
-            if (!joined) {
-                const i = available[0];
-                if (i !== undefined) {
-                    const player = this.game.players[i];
-                    if (player) {
-                        this.shareCount = player.shareCount;
-                        this.revealCount = player.revealCount;
-                        this.groupCount = player.groupCount;
-                        this.cardsWithOrigins = player.cardsWithOrigins;
-                    }
+            this.game = new Game();
+            this.hand = new Hand(this.game.stationaryCardsById, this.game.movingCardsById);
+            this.game.players[0] = this;
 
-                    this.game.players[i] = this;
-                    this.index = i;
-                    joined = true;
-                }
-            }
-
-            if (!joined) {
-                throw new Error(`could not join game '${this.game.gameId}'`);
-            }
-
-            ++this.game.tick;
-            console.log(`player '${this.name}' joined game '${this.game.gameId}' at ${this.index}`);
+            console.log(`player '${this.name}' created and joined game '${this.game.gameId}'`);
+        } else if (method.methodName === 'JoinGame') {
+            this.joinGame(method.gameId);
         } else {
             if (!this.game) {
                 throw new Error('you are not in a game');
-            }
-
-            if (method.tick !== this.game.tick) {
-                throw new Error(`method.tick ${method.tick} != game.tick ${this.game.tick}`);
             }
 
             if (method.methodName === 'TakeFromOtherPlayer') {
@@ -145,168 +181,148 @@ export default class Player implements Lib.PlayerState {
                     throw new Error(`game ${this.game.gameId} has no player at index ${method.playerIndex}`);
                 }
 
-                if (method.cardIndex < 0 || otherPlayer.shareCount <= method.cardIndex) {
-                    throw new Error(`player '${otherPlayer.name}' doesn't have a shared card at index ${method.cardIndex}`);
+                const cardIndex = otherPlayer.hand.indexOf(method.cardId);
+                if (cardIndex === -1) {
+                    throw new Error(`player '${otherPlayer.name}' doesn't have card with id ${method.cardId}`);
                 }
 
-                if (method.cardIndex < otherPlayer.shareCount) {
+                if (cardIndex < 0 || otherPlayer.shareCount <= cardIndex) {
+                    throw new Error(`player '${otherPlayer.name}' doesn't share card at index ${cardIndex}`);
+                }
+
+                if (cardIndex < otherPlayer.shareCount) {
                     --otherPlayer.shareCount;
                 }
 
-                if (method.cardIndex < otherPlayer.revealCount) {
+                if (cardIndex < otherPlayer.revealCount) {
                     --otherPlayer.revealCount;
                 }
 
-                if (method.cardIndex < otherPlayer.groupCount) {
+                if (cardIndex < otherPlayer.groupCount) {
                     --otherPlayer.groupCount;
                 }
 
-                const card = otherPlayer.cardsWithOrigins.splice(method.cardIndex, 1)[0]?.[0];
-                if (!card) throw new Error();
+                const [cardId] = otherPlayer.hand.splice(cardIndex, 1);
+                if (cardId === undefined) throw new Error();
 
-                this.cardsWithOrigins.push([card, {
-                    origin: 'Hand',
-                    playerIndex: method.playerIndex,
-                    cardIndex: method.cardIndex
-                }]);
-
-                console.log(`player '${this.name}' took card ${card} from player '${otherPlayer.name}'`);
+                this.hand.push(cardId);
             } else if (method.methodName === 'DrawFromDeck') {
-                const deckIndex = this.game.deckCardsWithOrigins.length - 1;
-                const card = this.game.deckCardsWithOrigins.splice(deckIndex, 1)[0]?.[0];
-                if (!card) {
-                    throw new Error(`deck has no cards (${this.game.deckCardsWithOrigins.length} remaining)`);
+                const deckIndex = this.game.deck.length - 1;
+                const [cardId] = this.game.deck.splice(deckIndex, 1);
+                if (cardId === undefined) {
+                    throw new Error(`deck has no cards (${this.game.deck.length} remaining)`);
                 }
 
-                this.cardsWithOrigins.push([card, { origin: 'Deck', deckIndex }]);
-                
-                console.log(`player '${this.name}' drew card ${
-                    JSON.stringify(card)
-                }, cardsWithOrigins: ${JSON.stringify(this.cardsWithOrigins)}`);
+                this.hand.push(cardId);
             } else if (method.methodName === 'GiveToOtherPlayer') {
                 const otherPlayer = this.game.players[method.playerIndex]
                 if (!otherPlayer) throw new Error(`no player at index ${method.playerIndex}`);
 
-                const disownedCardsWithOrigins = this.disownCardsWithOrigins(method.cardIndicesToGiveToOtherPlayer);
+                this.disown(method.cardIds);
 
-                otherPlayer.shareCount += disownedCardsWithOrigins.length;
-                otherPlayer.revealCount += disownedCardsWithOrigins.length;
-                otherPlayer.groupCount += disownedCardsWithOrigins.length;
-                otherPlayer.cardsWithOrigins.unshift(...disownedCardsWithOrigins);
-
-                console.log(
-                    `player ${this.index} gave cards to player ${otherPlayer.index}:`, disownedCardsWithOrigins,
-                    '\r\ncardsWithOrigins:', this.cardsWithOrigins,
-                    'shareCount', this.shareCount,
-                    'revealCount', this.revealCount,
-                    'groupCount', this.groupCount
-                );
+                otherPlayer.shareCount += method.cardIds.length;
+                otherPlayer.revealCount += method.cardIds.length;
+                otherPlayer.groupCount += method.cardIds.length;
+                otherPlayer.hand.unshift(...method.cardIds);
             } else if (method.methodName === 'ReturnToDeck') {
-                const disownedCardsWithOrigins = this.disownCardsWithOrigins(method.cardIndicesToReturnToDeck);
-
-                this.game.deckCardsWithOrigins.push(...disownedCardsWithOrigins);
-
-                console.log(`'${this.name}' returned cards: ${
-                    JSON.stringify(disownedCardsWithOrigins)
-                }, cards: ${
-                    JSON.stringify(this.cardsWithOrigins)
-                }`);
+                this.disown(method.cardIds);
+                this.game.deck.push(...method.cardIds);
             } else if (method.methodName === 'Reorder') {
-                const cardFlags: boolean[] = [];
-                const newCardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
-                for (const cardIndex of method.newOriginIndices) {
-                    const cardFlag = cardFlags[cardIndex];
-                    if (cardFlag !== undefined && cardFlag) {
-                        throw new Error(`already moved card at index ${cardIndex}`);
-                    }
-
-                    cardFlags[cardIndex] = true;
-
-                    const newCard = this.cardsWithOrigins[cardIndex]?.[0];
-                    if (!newCard) {
-                        throw new Error(`no card at index ${cardIndex}`);
-                    }
-
-                    newCardsWithOrigins.push([newCard, {
-                        origin: 'Hand',
-                        playerIndex: this.index,
-                        cardIndex
-                    }]);
+                if (JSON.stringify(this.handCardIds.sort()) !== JSON.stringify(method.newCardIds.slice().sort())) {
+                    throw new Error(`new card order isn't a permutation of the old`);
                 }
 
-                console.log('cardsWithOrigins', this.cardsWithOrigins);
-                console.log('newOriginIndices', method.newOriginIndices);
-                console.log('newCardsWithOrigins', newCardsWithOrigins);
+                let i = 0;
+                for (const newCard of method.newCardIds) {
+                    const cardIndex = this.hand.indexOf(newCard);
+                    if (cardIndex === -1) {
+                        throw new Error();
+                    }
 
-                this.cardsWithOrigins = newCardsWithOrigins;
+                    this.hand.splice(cardIndex, 1);
+                    this.hand.push(newCard);
+                    ++i;
+                }
+
                 this.shareCount = method.newShareCount;
                 this.revealCount = method.newRevealCount;
                 this.groupCount = method.newGroupCount;
-                
-                console.log(`player '${this.name}' reordered cards: ${
-                    JSON.stringify(this.cardsWithOrigins)
-                }\r\nshareCount: ${this.shareCount}, revealCount: ${this.revealCount}, groupCount: ${this.groupCount}`);
             } else if (method.methodName === 'ShuffleDeck') {
                 this.game.shuffleDeck();
             } else if (method.methodName === 'Dispense') {
                 this.game.dispense(this.index);
+            } else if (method.methodName === 'Reset') {
+                for (const player of this.game.players) {
+                    if (!player) continue;
+
+                    const cardIds = player.handCardIds;
+                    player.disown(cardIds);
+                    this.game.deck.push(...cardIds);
+                }
+
+                const cardIds = this.game.score.splice(0, this.game.score.length);
+                this.game.deck.push(...cardIds);
+            } else if (method.methodName === 'Kick') {
+                const player = this.game.players[method.playerIndex];
+                if (!player) return;
+
+                const cardIds = player.handCardIds;
+                player.disown(player.handCardIds);
+                this.game.deck.push(...cardIds);
+
+                this.game.players.splice(method.playerIndex, 1);
+
+                console.log(`'${this.name}' kicked player '${player.name}', returning cards: ${
+                    JSON.stringify(cardIds)
+                }`);
+            } else if (method.methodName === 'SetPlayerNotes') {
+                this.notes = method.notes;
+
+                console.log(`'${this.name}' noted: ${method.notes}`);
+            } else if (method.methodName === 'AddDeck') {
+                this.game.addDeck();
+
+                console.log(`'${this.name}' added a deck.`);
+            } else if (method.methodName === 'RemoveDeck') {
+                this.game.removeDeck();
+
+                console.log(`'${this.name}' removed a deck.`);
+            } else if (method.methodName === 'AddToScore') {
+                this.disown(method.cardIds);
+                this.game.score.push(...method.cardIds);
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            } else if (method.methodName === 'TakeFromScore') {
+                const cardIndex = this.game.score.indexOf(method.cardId);
+                if (cardIndex === -1) {
+                    throw new Error(`score doesn't have card with id ${method.cardId}`);
+                }
+
+                const [cardId] = this.game.score.splice(cardIndex, 1);
+                if (cardId === undefined) throw new Error();
+
+                this.hand.push(cardId);
             } else {
                 const _: never = method;
             }
-
-            ++this.game.tick;
         }
     }
 
-    private disownCardsWithOrigins(cardIndices: number[]): [Lib.Card, Lib.Origin][] {
-        // use a set to for checking membership
-        const cardIndexSet = new Set<number>(cardIndices);
+    private disown(cardIds: number[]) {
+        for (const cardId of cardIds) {
+            const cardIndex = this.hand.indexOf(cardId);
+            this.hand.splice(cardIndex, 1);
 
-        // the result
-        const disownedCards: [Lib.Card, Lib.Origin][] = [];
-
-        // use temporaries so that errors don't result in corrupt state
-        const newCardsWithOrigins: [Lib.Card | null, Lib.Origin][] = [];
-        let newShareCount = this.shareCount;
-        let newRevealCount = this.revealCount;
-        let newGroupCount = this.groupCount;
-
-        let cardIndex = 0;
-        for (const [card, origin] of this.cardsWithOrigins) {
-            if (!card) throw new Error();
-
-            const newOrigin: Lib.Origin = {
-                origin: 'Hand',
-                playerIndex: this.index,
-                cardIndex
-            };
-
-            if (cardIndexSet.has(cardIndex)) {
-                disownedCards.push([card, newOrigin]);
-
-                if (cardIndex < this.shareCount) {
-                    --newShareCount;
-                }
-
-                if (cardIndex < this.revealCount) {
-                    --newRevealCount;
-                }
-
-                if (cardIndex < this.groupCount) {
-                    --newGroupCount;
-                }
-            } else {
-                newCardsWithOrigins.push([card, newOrigin]);
+            if (cardIndex < this.shareCount) {
+                --this.shareCount;
             }
 
-            ++cardIndex;
+            if (cardIndex < this.revealCount) {
+                --this.revealCount;
+            }
+
+            if (cardIndex < this.groupCount) {
+                --this.groupCount;
+            }
         }
-
-        this.cardsWithOrigins = newCardsWithOrigins;
-        this.shareCount = newShareCount;
-        this.revealCount = newRevealCount;
-        this.groupCount = newGroupCount;
-
-        return disownedCards;
     }
 }

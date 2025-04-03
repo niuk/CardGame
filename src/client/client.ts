@@ -5,193 +5,237 @@ import { Capacitor } from '@capacitor/core';
 
 // the most recently received game state, if any
 export let gameState: Lib.GameState | undefined;
+export let cardsById: Map<number, Lib.Card> | undefined;
 
-// open websocket connection to get game state updates
-const webSocket = new WebSocket(`wss://${Capacitor.isNative ? 'haruspex.io': window.location.hostname}/`);
+let webSocket: WebSocket | undefined = undefined;
 
-export async function connect(): Promise<void> {
-    console.log(`webSocket.url = ${webSocket.url}, isNative = ${Capacitor.isNative}`);
+let nextCallbackIndex = 0;
+const callbacks = new Map<number, (result: Lib.MethodResult) => void>();
 
-    // wait for connection
-    while (webSocket.readyState != WebSocket.OPEN) {
-        //console.log(`webSocket.readyState: ${webSocket.readyState}, WebSocket.OPEN: ${WebSocket.OPEN}`);
-
-        await Lib.delay(100);
-    }
-}
-
-webSocket.onmessage = async e => {
-    const { newGameState,                       methodResult }:
-          { newGameState: Lib.GameState | null, methodResult: Lib.Result | null } = JSON.parse(e.data);
-
-    if (newGameState) {
-        console.log('newGameState', newGameState);
-
-        if (!gameState || gameState.tick === newGameState.tick - 1) {
-            const previousGameState = gameState;
-            gameState = newGameState;
-    
-            Lib.setCookie('gameId', gameState.gameId);
-    
-            Input.linkWithCards(gameState);
-            await Sprite.linkWithCards(previousGameState, gameState);
-        }
-    }
-
-    if (methodResult) {
-        const callbacks = callbacksForMethodType.get(methodResult.methodName);
-        if (!callbacks || callbacks.length === 0) {
-            throw new Error(`no callbacks found for method: ${methodResult.methodName}`);
-        }
-
-        const callback = callbacks.shift();
-        if (!callback) {
-            throw new Error(`callback is undefined for method: ${methodResult.methodName}`);
-        }
-
-        callback(methodResult);
-    }
-};
-
+// websocket connection to get game state updates
 (async () => {
-    while (true) {
-        await Lib.delay(100);
+    let heartbeat = 0;
+    let gameId: string | undefined;
+    let playerName: string | undefined;
 
-        const statusElement = <HTMLDivElement | null>document.getElementById('status');
-        if (!statusElement) continue;
-        
-        if (webSocket.readyState === WebSocket.CLOSED) {
-            statusElement.innerHTML = 'WebSocket closed.';
-        } else if (webSocket.readyState === WebSocket.CLOSING) {
-            statusElement.innerHTML = 'WebSocket closing.';
-        } else if (webSocket.readyState === WebSocket.CONNECTING) {
-            statusElement.innerHTML = 'WebSocket connecting...';
-        } else if (webSocket.readyState === WebSocket.OPEN) {
-            if (gameState !== undefined) {
-                statusElement.innerHTML = `Game: ${gameState.gameId}`;
-            } else {
-                statusElement.innerHTML = `WebSocket connected.`;
+    while (true) {
+        await Lib.delay(1000);
+
+        if (heartbeat < Date.now() - 3 * 1000) {
+            if (webSocket) {
+                // abort existing connection attempt
+                webSocket.close();
             }
-        } else {
-            throw new Error();
+
+            if (gameState) {
+                // keep info for rejoins
+                gameId = gameState.gameId;
+                playerName = gameState.playerStates[gameState.playerIndex]?.name;
+
+                // clear previous gameState
+                gameState = undefined;
+
+                // also clear card sprites, since we'll be getting a competely new gameState
+                //Sprite.clearSprites();
+            }
+
+            // reconnect
+            const url = `${
+                window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+            }//${
+                Capacitor.isNative !== undefined && Capacitor.isNative ? 'haruspex.io': window.location.hostname
+            }/${
+                gameId !== undefined ? gameId : ''
+            }/${
+                playerName !== undefined ? playerName : ''
+            }`;
+            console.log(`webSocket.url = ${url}, isNative = ${Capacitor.isNative}`);
+
+            webSocket = new WebSocket(url);
+            webSocket.onmessage = async e => {
+                if (typeof(e.data) !== 'string') {
+                    throw new Error();
+                }
+
+                if (e.data.startsWith('time = ')) {
+                    //console.log(`received heartbeat: ${e.data}`);
+                    heartbeat = Date.now();
+                    return;
+                }
+
+                const { newGameState,                       methodResult }:
+                      { newGameState: Lib.GameState | null, methodResult: Lib.MethodResult | null } = JSON.parse(e.data);
+
+                if (newGameState) {
+                    //console.log('newGameState', newGameState);
+
+                    gameState = newGameState;
+                    cardsById = new Map<number, Lib.Card>(gameState.cardsById);
+
+                    Lib.setCookie('gameId', gameState.gameId);
+
+                    Input.linkWithCards(gameState);
+                    await Sprite.linkWithCards(gameState, cardsById);
+                }
+
+                if (methodResult) {
+                    callbacks.get(methodResult.index)?.(methodResult);
+                    callbacks.delete(methodResult.index);
+                }
+            };
+
+            // avoid immediately reconnecting if we haven't received a heartbeat yet
+            heartbeat = Date.now();
+        }
+
+        if (webSocket) {
+            if (webSocket.readyState === WebSocket.OPEN) {
+                //console.log('sending heartbeat');
+                webSocket.send(`time = ${heartbeat}`);
+            }
+
+            const statusElement = <HTMLDivElement | null>document.getElementById('status');
+            if (!statusElement) continue;
+
+            if (webSocket.readyState === WebSocket.CLOSED) {
+                statusElement.innerHTML = '关闭了。';
+            } else if (webSocket.readyState === WebSocket.CLOSING) {
+                statusElement.innerHTML = '关闭……';
+            } else if (webSocket.readyState === WebSocket.CONNECTING) {
+                statusElement.innerHTML = '链接……';
+            } else if (webSocket.readyState === WebSocket.OPEN) {
+                if (gameState !== undefined) {
+                    statusElement.innerHTML = `游戏号${gameState.gameId}`;
+                } else {
+                    statusElement.innerHTML = `连接了。`;
+                }
+            } else {
+                throw new Error();
+            }
         }
     }
 })();
 
-const callbacksForMethodType = new Map<Lib.MethodName, ((result: Lib.Result) => void)[]>();
-function addCallback(methodName: Lib.MethodName, resolve: () => void, reject: (reason: string) => void) {
-    console.log(`adding callback for method '${methodName}'`);
-
-    let callbacks = callbacksForMethodType.get(methodName);
-    if (!callbacks) {
-        callbacks = [];
-        callbacksForMethodType.set(methodName, callbacks);
-    }
-
-    callbacks.push(result => {
-        console.log(`invoking callback for method '${methodName}'`);
-        if ('errorDescription' in result && result.errorDescription !== undefined) {
-            reject(result.errorDescription);
-        } else {
-            resolve();
+function setup<TMethod extends Lib.Method>(method: Omit<TMethod, 'index'>): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (!webSocket) {
+            reject('not connected');
+            return;
         }
+
+        const index = nextCallbackIndex++;
+        callbacks.set(index, result => {
+            if (result.errorDescription !== undefined) {
+                console.error(result.errorDescription);
+                reject(result.errorDescription);
+            } else {
+                resolve();
+            }
+        });
+
+        webSocket.send(JSON.stringify(<TMethod>{ index, ...method }));
+
+        // timeout
+        (async () => {
+            await Lib.delay(3000);
+
+            callbacks.get(index)?.({ index, errorDescription: 'timed out' });
+            callbacks.delete(index);
+        })();
     });
 }
 
 export function setPlayerName(playerName: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('SetPlayerName', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.SetPlayerName>{
-            methodName: 'SetPlayerName',
-            playerName
-        }))
-    })
+    return setup<Lib.SetPlayerName>({
+        methodName: 'SetPlayerName',
+        playerName
+    });
+}
+
+export function newGame(password: string): Promise<void> {
+    return setup<Lib.NewGame>({
+        methodName: 'NewGame',
+        password
+    });
 }
 
 export function joinGame(gameId: string): Promise<void> {
-    // try to join the game
-    return new Promise<void>((resolve, reject) => {
-        addCallback('JoinGame', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.JoinGame>{
-            methodName: 'JoinGame',
-            gameId
-        }));
+    return setup<Lib.JoinGame>({
+        methodName: 'JoinGame',
+        gameId
     });
 }
 
-export function newGame(numPlayers: 4 | 5 | 6, numDecks: 1 | 2 | 3): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('NewGame', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.NewGame>{
-            methodName: 'NewGame',
-            numPlayers,
-            numDecks
-        }));
+export function addDeck(): Promise<void> {
+    return setup<Lib.AddDeck>({
+        methodName: 'AddDeck'
     });
 }
 
-export function takeFromOtherPlayer(playerIndex: number, cardIndex: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('TakeFromOtherPlayer', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.TakeFromOtherPlayer>{
-            methodName: 'TakeFromOtherPlayer',
-            playerIndex,
-            cardIndex,
-            tick: gameState?.tick
-        }));
+export function removeDeck(): Promise<void> {
+    return setup<Lib.RemoveDeck>({
+        methodName: 'RemoveDeck'
+    });
+}
+
+export function takeFromOtherPlayer(playerIndex: number, cardId: number): Promise<void> {
+    return setup<Lib.TakeFromOtherPlayer>({
+        methodName: 'TakeFromOtherPlayer',
+        playerIndex,
+        cardId
     });
 }
 
 export function drawFromDeck(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('DrawFromDeck', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.DrawFromDeck>{
-            methodName: 'DrawFromDeck',
-            tick: gameState?.tick
-        }));
+    return setup<Lib.DrawFromDeck>({
+        methodName: 'DrawFromDeck'
     });
 }
 
 export function giveToOtherPlayer(playerIndex: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('GiveToOtherPlayer', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.GiveToOtherPlayer>{
-            methodName: 'GiveToOtherPlayer',
-            playerIndex,
-            cardIndicesToGiveToOtherPlayer: Input.selectedIndices.slice(),
-            tick: gameState?.tick
-        }));
-    })
+    return setup<Lib.GiveToOtherPlayer>({
+        methodName: 'GiveToOtherPlayer',
+        playerIndex,
+        cardIds: Array.from(Input.selectedCardIds)
+    });
 }
 
 export function returnToDeck(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('ReturnToDeck', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.ReturnToDeck>{
-            methodName: 'ReturnToDeck',
-            cardIndicesToReturnToDeck: Input.selectedIndices.slice(),
-            tick: gameState?.tick
-        }));
+    return setup<Lib.ReturnToDeck>({
+        methodName: 'ReturnToDeck',
+        cardIds: Array.from(Input.selectedCardIds)
     });
 }
 
 export function shuffleDeck(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('ShuffleDeck', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.ShuffleDeck>{
-            methodName: 'ShuffleDeck',
-            tick: gameState?.tick
-        }));
+    return setup<Lib.ShuffleDeck>({
+        methodName: 'ShuffleDeck'
     });
 }
 
 export function dispense(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('Dispense', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.Dispense>{
-            methodName: 'Dispense',
-            tick: gameState?.tick
-        }));
+    return setup<Lib.Dispense>({
+        methodName: 'Dispense'
+    });
+}
+
+export function reset(): Promise<void> {
+    return setup<Lib.Reset>({
+        methodName: 'Reset'
+    });
+}
+
+export function kickPlayer(playerIndex: number): Promise<void> {
+    return setup<Lib.Kick>({
+        methodName: 'Kick',
+        playerIndex
+    });
+}
+
+export function setPlayerNotes(notes: string): Promise<void> {
+    return setup<Lib.SetPlayerNotes>({
+        methodName: 'SetPlayerNotes',
+        notes
     });
 }
 
@@ -199,18 +243,28 @@ export function reorderCards(
     newShareCount: number,
     newRevealCount: number,
     newGroupCount: number,
-    newOriginIndices: number[]
+    newCardIds: number[]
 ): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        addCallback('Reorder', resolve, reject);
-        webSocket.send(JSON.stringify(<Lib.Reorder>{
-            methodName: 'Reorder',
-            newShareCount,
-            newRevealCount,
-            newGroupCount,
-            newOriginIndices,
-            tick: gameState?.tick
-        }));
+    return setup<Lib.Reorder>({
+        methodName: 'Reorder',
+        newShareCount,
+        newRevealCount,
+        newGroupCount,
+        newCardIds
+    });
+}
+
+export function takeFromScore(cardId: number): Promise<void> {
+    return setup<Lib.TakeFromScore>({
+        methodName: 'TakeFromScore',
+        cardId,
+    });
+}
+
+export function addToScore(): Promise<void> {
+    return setup<Lib.AddToScore>({
+        methodName: 'AddToScore',
+        cardIds: Array.from(Input.selectedCardIds)
     });
 }
 
@@ -256,20 +310,21 @@ async function sortCards(compareFn: (a: [Lib.Card, number], b: [Lib.Card, number
     const player = gameState.playerStates[gameState.playerIndex];
     if (!player) throw new Error();
 
-    const cardsWithOriginIndices: [Lib.Card, number][] = player.cardsWithOrigins.map(([card, origin], index) => {
+    const cardsWithIds: [Lib.Card, number][] = player.handCardIds.map(cardId => {
+        const card = cardsById?.get(cardId);
         if (!card) throw new Error();
-        return [card, index];
+        return [card, cardId];
     });
 
-    sortSection(cardsWithOriginIndices, 0, player.shareCount, compareFn);
-    sortSection(cardsWithOriginIndices, player.shareCount, player.revealCount, compareFn);
-    sortSection(cardsWithOriginIndices, player.revealCount, player.groupCount, compareFn);
-    sortSection(cardsWithOriginIndices, player.groupCount, player.cardsWithOrigins.length, compareFn);
+    sortSection(cardsWithIds, 0, player.shareCount, compareFn);
+    sortSection(cardsWithIds, player.shareCount, player.revealCount, compareFn);
+    sortSection(cardsWithIds, player.revealCount, player.groupCount, compareFn);
+    sortSection(cardsWithIds, player.groupCount, cardsWithIds.length, compareFn);
     await reorderCards(
         player.shareCount,
         player.revealCount,
         player.groupCount,
-        cardsWithOriginIndices.map(([card, index]) => index)
+        cardsWithIds.map(([card, index]) => index)
     );
 }
 

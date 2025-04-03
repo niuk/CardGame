@@ -1,4 +1,5 @@
 build
+games
 
 # Logs
 logs
@@ -107,3 +108,5 @@ dist
 
 # MacOS files
 .DS_Store
+
+.vs

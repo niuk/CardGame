@@ -43,7 +43,27 @@ a {
     color: cyan;
 }
 
-#showCredits {
+#topLeft {
+    position: absolute;
+    cursor: pointer;
+    top: 0px;
+    left: 0px;
+    z-index: 1;
+}
+
+#log {
+    visibility: hidden;
+}
+
+#bottomLeft {
+    position: absolute;
+    cursor: pointer;
+    bottom: 0px;
+    left: 0px;
+    z-index: 1;
+}
+
+#bottomRight {
     position: absolute;
     cursor: help;
     bottom: 0px;

@@ -6,14 +6,90 @@
         <meta name='viewport' content='width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=0'>
         <link rel='stylesheet' href='style.css'>
         <script>
+            messages = [];
+            function pushMessage(arguments) {
+                const stack = new Error().stack;
+                const frames = stack.split('\n');
+                frames.splice(0, 2);
+
+                messages.push([...Array.from(arguments), ...frames]);
+            }
+
+            defaultLog = console.log.bind(console);
+            console.log = function() {
+                defaultLog.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            defaultError = console.error.bind(console);
+            console.error = function() {
+                defaultError.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            defaultWarn = console.warn.bind(console);
+            console.warn = function() {
+                defaultWarn.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            defaultDebug = console.debug.bind(console);
+            console.debug = function() {
+                defaultDebug.apply(console, arguments);
+                pushMessage(arguments);
+            }
+
+            function sendLogs() {
+                const request = new XMLHttpRequest();
+                request.onload = function() {
+                    console.log(`HTTP ${request.status}: ${request.response}`);
+                };
+
+                request.onerror = function() {
+                    console.error(`could not send logs`);
+                };
+
+                request.open("POST", "/clientLogs");
+                request.setRequestHeader("Content-type", "application/json");
+                request.send(JSON.stringify(messages));
+            }
+
             function showCredits() {
                 document.getElementById('showCredits').style.visibility = 'hidden';
                 document.getElementById('credits').style.visibility = 'visible';
             }
-    
+
             function hideCredits() {
                 document.getElementById('showCredits').style.visibility = 'visible';
                 document.getElementById('credits').style.visibility = 'hidden';
+            }
+
+            function showorHideLog() {
+                const matches = [...document.getElementById('status').innerHTML.matchAll(/游戏号(\d+)/g)];
+                if (matches.length != 1 || matches[0].length != 2) {
+                    console.error('Not yet in a game.', matches);
+                    return;
+                }
+
+                const log = document.getElementById('log');
+
+                const request = new XMLHttpRequest();
+                request.onload = function() {
+                    log.innerHTML = request.response;
+                };
+
+                request.onerror = function() {
+                    console.error(`could not send logs`);
+                };
+
+                request.open("GET", `/serverLogs/${matches[0][1]}`);
+                request.send(JSON.stringify(messages));
+
+                if (log.style.visibility === 'visible') {
+                    log.style.visibility = 'hidden';
+                } else {
+                    log.style.visibility = 'visible';
+                }
             }
         </script>
         <script src='script.js'></script>
@@ -21,31 +97,23 @@
     <body>
         <canvas id='canvas'></canvas>
         <div id='form'>
-            <label>Enter your name:</label>
-            <input type='text' name='playerName' id='playerName'>
+            <label>名字</label>
+            <input type='text' name='playerName' id='playerName' disabled=true>
             <br>
             <br>
-            <label>Join an existing game:</label>
-            <input type='text' name='gameId' id='gameId'>
-            <button id='joinGame'>Join Game</button>
+            <label>你可以</label>
+            <button id='joinGame' disabled=true>加入游戏：</button>
+            <input type='text' name='gameId' id='gameId' disabled=true>
             <br>
             <br>
-            <label>Or, create a</label>
-            <button id='newGame'>New Game</button>
-            <label>with</label>
-            <select id='numPlayers'>
-                <option>4</option>
-                <option>5</option>
-                <option>6</option>
-            </select>
-            <label>players and</label>
-            <select id='numDecks'>
-                <option>1</option>
-                <option>2</option>
-                <option>3</option>
-            </select>
-            <label>deck(s)</label>
+            <label>或者</label>
+            <button id='newGame' disabled=true>开始一个新游戏：</button>
+            <input type='password' name='password' id='password' disabled=false>
             <progress id='loadingBar'></progress>
+        </div>
+        <div id='topLeft'>
+            <button id='showOrHideLog' disabled=true onclick='showorHideLog()'>记录</button>
+            <div id='log'>...</div>
         </div>
         <div id='status'></div>
         <div id='credits'>
@@ -58,6 +126,13 @@
             <br>
             Other backgrounds by <a href='https://unsplash.com/@custodiancontent?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText'>Kalle Kortelainen</a> and <a href='https://unsplash.com/@scottwebb?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText'>Scott Webb</a> on <a href='https://unsplash.com/backgrounds/desktop?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText'>Unsplash</a>
         </div>
-        <a id='showCredits' onclick='showCredits()'>©</a>
+        <div id='bottomLeft'>
+            <a id='sendLogs' onclick='sendLogs()'>🐞</a>
+        </div>
+        <div id='bottomRight'>
+            <a id='backgroundLeft'>&lt;</a>
+            <a id='backgroundRight'>&gt;</a>
+            <a id='showCredits' onclick='showCredits()'>©</a>
+        </div>
     </body>
 </html>

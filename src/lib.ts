@@ -19,6 +19,20 @@ export function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
+    let done = true;
+    try {
+        done = await Promise.race<T | 'Timeout'>([p, (async () => {
+            await delay(milliseconds ?? 0);
+            return 'Timeout';
+        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
+    } catch {
+        done = true;
+    }
+
+    return done;
+}
+
 export enum Suit {
     Club, // 0
     Heart,
@@ -47,8 +61,6 @@ export enum Rank {
 
 export type Card = [Suit, Rank];
 
-export type Origin = Deck | Hand;
-
 export interface Deck {
     origin: 'Deck';
     deckIndex: number;
@@ -65,48 +77,73 @@ export interface PlayerState {
     shareCount: number;
     revealCount: number;
     groupCount: number;
-    cardsWithOrigins: [Card | null, Origin][];
+    handCardIds: number[];
+    present: boolean;
+    notes: string;
 }
 
 export interface GameState {
     gameId: string;
-    deckOrigins: Origin[];
+    deckCardIds: number[];
+    scoreCardIds: number[];
+    cardsById: [number, Card][];
+    nextCardId: number;
     playerIndex: number;
     playerStates: (PlayerState | null)[];
-    tick: number;
+    dispensing: boolean;
 }
 
 export type Method =
     SetPlayerName |
     NewGame |
     JoinGame |
+    AddDeck |
+    RemoveDeck |
     TakeFromOtherPlayer |
     GiveToOtherPlayer |
     DrawFromDeck |
     ReturnToDeck |
     Reorder |
     ShuffleDeck |
-    Dispense;
+    Dispense |
+    Reset |
+    Kick |
+    SetPlayerNotes |
+    AddToScore |
+    TakeFromScore;
 
 export type MethodName =
     'SetPlayerName' |
     'NewGame' |
     'JoinGame' |
+    'AddDeck' |
+    'RemoveDeck' |
     'TakeFromOtherPlayer' |
     'GiveToOtherPlayer' |
     'DrawFromDeck' |
     'ReturnToDeck' |
     'Reorder' |
     'ShuffleDeck' |
-    'Dispense';
+    'Dispense' |
+    'Reset' |
+    'Kick' |
+    'SetPlayerNotes' |
+    'AddToScore' |
+    'TakeFromScore';
 
-export interface Result {
-    methodName: MethodName;
+export interface ServerResponse {
+    newGameState?: GameState;
+    methodResult?: MethodResult;
+}
+
+export interface MethodResult {
+    index: number;
     errorDescription?: string;
 }
 
 interface MethodBase {
     methodName: MethodName;
+    index: number;
 }
 
 export interface SetPlayerName extends MethodBase {
@@ -116,8 +153,7 @@ export interface SetPlayerName extends MethodBase {
 
 export interface NewGame extends MethodBase {
     methodName: 'NewGame';
-    numPlayers: 4 | 5 | 6;
-    numDecks: 1 | 2 | 3;
+    password: string;
 }
 
 export interface JoinGame extends MethodBase {
@@ -125,29 +161,33 @@ export interface JoinGame extends MethodBase {
     gameId: string;
 }
 
+export interface AddDeck extends MethodBase {
+    methodName: 'AddDeck';
+}
+
+export interface RemoveDeck extends MethodBase {
+    methodName: 'RemoveDeck';
+}
+
 export interface TakeFromOtherPlayer extends MethodBase {
     methodName: 'TakeFromOtherPlayer';
     playerIndex: number;
-    cardIndex: number;
-    tick: number;
+    cardId: number;
 }
 
 export interface GiveToOtherPlayer extends MethodBase {
     methodName: 'GiveToOtherPlayer';
     playerIndex: number;
-    cardIndicesToGiveToOtherPlayer: number[];
-    tick: number;
+    cardIds: number[];
 }
 
 export interface DrawFromDeck extends MethodBase {
     methodName: 'DrawFromDeck';
-    tick: number;
 }
 
 export interface ReturnToDeck extends MethodBase {
     methodName: 'ReturnToDeck';
-    cardIndicesToReturnToDeck: number[];
-    tick: number;
+    cardIds: number[];
 }
 
 export interface Reorder extends MethodBase {
@@ -155,28 +195,86 @@ export interface Reorder extends MethodBase {
     newShareCount: number;
     newRevealCount: number;
     newGroupCount: number;
-    newOriginIndices: number[];
-    tick: number;
+    newCardIds: number[];
 }
 
 export interface ShuffleDeck extends MethodBase {
     methodName: 'ShuffleDeck';
-    tick: number;
 }
 
 export interface Dispense extends MethodBase {
     methodName: 'Dispense';
-    tick: number;
 }
 
-export async function isDone<T>(p: Promise<T>, milliseconds?: number): Promise<boolean> {
-    let done = true;
-    try {
-        done = await Promise.race<T | 'Timeout'>([p, (async () => {
-            await delay(milliseconds ?? 0);
-            return 'Timeout';
-        })() as Promise<T | 'Timeout'>]) !== 'Timeout';
-    } finally {
-        return done;
+export interface Reset extends MethodBase {
+    methodName: 'Reset';
+}
+
+export interface Kick extends MethodBase {
+    methodName: 'Kick';
+    playerIndex: number;
+}
+
+export interface SetPlayerNotes extends MethodBase {
+    methodName: 'SetPlayerNotes';
+    notes: string;
+}
+
+export interface AddToScore extends MethodBase {
+    methodName: 'AddToScore';
+    cardIds: number[];
+}
+
+export interface TakeFromScore extends MethodBase {
+    methodName: 'TakeFromScore';
+    cardId: number;
+}
+
+export class Bijection<A, B> {
+    aToB = new Map<A, B>();
+    bToA = new Map<B, A>();
+
+    constructor(...pairs: [A, B][]) {
+        pairs.forEach(([a, b]) => {
+            this.aToB.set(a, b);
+            this.bToA.set(b, a);
+        });
+    }
+
+    getA(b: B): A | undefined {
+        return this.bToA.get(b);
+    }
+
+    getB(a: A): B | undefined {
+        return this.aToB.get(a);
+    }
+
+    set(a: A, b: B): void {
+        this.aToB.set(a, b);
+        this.bToA.set(b, a);
+    }
+
+    deleteA(a: A): void {
+        const b = this.aToB.get(a);
+        if (b === undefined) {
+            throw new Error('No such A');
+        }
+
+        this.aToB.delete(a);
+        this.bToA.delete(b);
+    }
+
+    deleteB(b: B): void {
+        const a = this.bToA.get(b);
+        if (a === undefined) {
+            throw new Error('No such B');
+        }
+
+        this.aToB.delete(a);
+        this.bToA.delete(b);
+    }
+
+    get size(): number {
+        return this.aToB.size;
     }
 }
