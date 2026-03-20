@@ -209,8 +209,8 @@ try {
     console.error(e);
     console.log(`failed to listen on port ${httpsPort}, trying port ${httpPort} instead...`);
     try {
-        httpServer.listen(httpPort);
         console.log(`listening on port ${httpPort}...`);
+        httpServer.listen(httpPort);
     } catch (e) {
         console.error(e);
         console.log(`failed to listen on port ${httpPort} as well, exiting...`);
