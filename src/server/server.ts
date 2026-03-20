@@ -1,4 +1,5 @@
 import express from 'express';
+import { once } from 'events';
 import https from 'https';
 import http from 'http';
 import fs from 'fs/promises';
@@ -144,21 +145,42 @@ app.get('/serverLogs/:gameId', async (request, response) => {
     }
 });
 
-// start receiving connections
-const [httpsServer, httpsPort] = await ((async () => [
-    https.createServer({
+async function createHttpsServer(): Promise<https.Server> {
+    return https.createServer({
         key: await fs.readFile('../privkey.pem'),
         cert: await fs.readFile('../cert.pem'),
-    }, app),
-    443
-])());
+    }, app);
+}
 
-const [httpServer, httpPort] = await ((async () => [
-    http.createServer(app),
-    8080
-])());
+async function createHttpServer(): Promise<http.Server> {
+    return http.createServer(app);
+}
 
-const webSocketServer = new WebSocket.Server({ server: httpsServer });
+async function listen(server: http.Server | https.Server, port: number): Promise<void> {
+    console.log(`listening on port ${port}...`);
+    server.listen(port);
+    await once(server, 'listening');
+}
+
+const httpPort = 8080;
+const httpsPort = 443;
+let activeServer: http.Server | https.Server;
+try {
+    activeServer = await createHttpsServer();
+    await listen(activeServer, httpsPort);
+} catch (e) {
+    console.error(e);
+    console.log(`failed to start HTTPS on port ${httpsPort}, trying port ${httpPort} instead...`);
+    try {
+        activeServer = await createHttpServer();
+        await listen(activeServer, httpPort);
+    } catch (e) {
+        console.error(e);
+        throw new Error(`failed to listen on ports ${httpsPort} and ${httpPort}`);
+    }
+}
+
+const webSocketServer = new WebSocket.Server({ server: activeServer });
 
 webSocketServer.on('connection', (ws, request) => {
     try {
@@ -201,18 +223,3 @@ webSocketServer.on('close', (ws: WebSocket.Server) => {
         }
     }
 })();
-
-try {
-    console.log(`listening on port ${httpsPort}...`);
-    httpsServer.listen(httpsPort);
-} catch (e) {
-    console.error(e);
-    console.log(`failed to listen on port ${httpsPort}, trying port ${httpPort} instead...`);
-    try {
-        console.log(`listening on port ${httpPort}...`);
-        httpServer.listen(httpPort);
-    } catch (e) {
-        console.error(e);
-        console.log(`failed to listen on port ${httpPort} as well, exiting...`);
-    }
-}
