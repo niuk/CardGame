@@ -1,5 +1,7 @@
 build
 games
+heapdumps
+*.debug
 
 # Logs
 logs
