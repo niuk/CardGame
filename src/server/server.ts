@@ -24,7 +24,7 @@ const MS_PER_HOUR = 60 * MS_PER_MINUTE;
     while (true) {
         await Lib.delay(5 * MS_PER_MINUTE);
 
-	//heapdump.writeSnapshot(path.join(HEAPDUMP_DIR, `${new Date().toISOString()}.heapsnapshot`));
+        //heapdump.writeSnapshot(path.join(HEAPDUMP_DIR, `${new Date().toISOString()}.heapsnapshot`));
     }
 })().catch(e => console.error(e));
 
@@ -99,12 +99,11 @@ app.get('/', async (_, response) => {
 });
 
 app.post('/clientLogs', async (request, response) => {
-    const f = await fs.open(path.join(CLIENTLOGS_DIR, `${
-        new Date().toLocaleString()
-            .replace(/ /g, '')
-            .replace(/\//g, '-')
-            .replace(/:/g, '-')
-            .replace(/,/g, '_')
+    const f = await fs.open(path.join(CLIENTLOGS_DIR, `${new Date().toLocaleString()
+        .replace(/ /g, '')
+        .replace(/\//g, '-')
+        .replace(/:/g, '-')
+        .replace(/,/g, '_')
         }.log`),
         'w'
     );
@@ -146,24 +145,18 @@ app.get('/serverLogs/:gameId', async (request, response) => {
 });
 
 // start receiving connections
-const [httpsServer, port] = await ((async () => {
-    try {
-        return [
-            https.createServer({
-                key: await fs.readFile('../privkey.pem'),
-                cert: await fs.readFile('../cert.pem'),
-            }, app),
-            443
-        ];
-    } catch (e) {
-        console.error(e);
-        console.log('HTTPS server creation failed. Creating HTTP server...');
-        return [
-            http.createServer(app),
-            8080
-        ];
-    }
-})());
+const [httpsServer, httpsPort] = await ((async () => [
+    https.createServer({
+        key: await fs.readFile('../privkey.pem'),
+        cert: await fs.readFile('../cert.pem'),
+    }, app),
+    443
+])());
+
+const [httpServer, httpPort] = await ((async () => [
+    http.createServer(app),
+    8080
+])());
 
 const webSocketServer = new WebSocket.Server({ server: httpsServer });
 
@@ -209,5 +202,17 @@ webSocketServer.on('close', (ws: WebSocket.Server) => {
     }
 })();
 
-console.log(`listening on port ${port}...`);
-httpsServer.listen(port);
+try {
+    console.log(`listening on port ${httpsPort}...`);
+    httpsServer.listen(httpsPort);
+} catch (e) {
+    console.error(e);
+    console.log(`failed to listen on port ${httpsPort}, trying port ${httpPort} instead...`);
+    try {
+        httpServer.listen(httpPort);
+        console.log(`listening on port ${httpPort}...`);
+    } catch (e) {
+        console.error(e);
+        console.log(`failed to listen on port ${httpPort} as well, exiting...`);
+    }
+}
